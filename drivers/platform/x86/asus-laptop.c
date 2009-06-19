@@ -207,13 +207,17 @@ MODULE_DEVICE_TABLE(acpi, asus_device_ids);
 
 static int asus_hotk_add(struct acpi_device *device);
 static int asus_hotk_remove(struct acpi_device *device, int type);
+static void asus_hotk_notify(struct acpi_device *device, u32 event);
+
 static struct acpi_driver asus_hotk_driver = {
 	.name = ASUS_HOTK_NAME,
 	.class = ASUS_HOTK_CLASS,
 	.ids = asus_device_ids,
+	.flags = ACPI_DRIVER_ALL_NOTIFY_EVENTS,
 	.ops = {
 		.add = asus_hotk_add,
 		.remove = asus_hotk_remove,
+		.notify = asus_hotk_notify,
 		},
 };
 
@@ -812,7 +816,7 @@ static int asus_setkeycode(struct input_dev *dev, int scancode, int keycode)
 	return -EINVAL;
 }
 
-static void asus_hotk_notify(acpi_handle handle, u32 event, void *data)
+static void asus_hotk_notify(struct acpi_device *device, u32 event)
 {
 	static struct key_entry *key;
 	u16 count;
@@ -1124,7 +1128,6 @@ static int asus_hotk_found;
 
 static int asus_hotk_add(struct acpi_device *device)
 {
-	acpi_status status = AE_OK;
 	int result;
 
 	if (!device)
@@ -1148,15 +1151,6 @@ static int asus_hotk_add(struct acpi_device *device)
 		goto end;
 
 	asus_hotk_add_fs();
-
-	/*
-	 * We install the handler, it will receive the hotk in parameter, so, we
-	 * could add other data to the hotk struct
-	 */
-	status = acpi_install_notify_handler(hotk->handle, ACPI_ALL_NOTIFY,
-					     asus_hotk_notify, hotk);
-	if (ACPI_FAILURE(status))
-		printk(ASUS_ERR "Error installing notify handler\n");
 
 	asus_hotk_found = 1;
 
@@ -1198,15 +1192,8 @@ end:
 
 static int asus_hotk_remove(struct acpi_device *device, int type)
 {
-	acpi_status status = 0;
-
 	if (!device || !acpi_driver_data(device))
 		return -EINVAL;
-
-	status = acpi_remove_notify_handler(hotk->handle, ACPI_ALL_NOTIFY,
-					    asus_hotk_notify);
-	if (ACPI_FAILURE(status))
-		printk(ASUS_ERR "Error removing notify handler\n");
 
 	kfree(hotk->name);
 	kfree(hotk);
@@ -1334,7 +1321,6 @@ out:
 
 static int __init asus_laptop_init(void)
 {
-	struct device *dev;
 	int result;
 
 	if (acpi_disabled)
@@ -1356,23 +1342,9 @@ static int __init asus_laptop_init(void)
 		return -ENODEV;
 	}
 
-	dev = acpi_get_physical_device(hotk->device->handle);
-
-	if (!acpi_video_backlight_support()) {
-		result = asus_backlight_init(dev);
-		if (result)
-			goto fail_backlight;
-	} else
-		printk(ASUS_INFO "Brightness ignored, must be controlled by "
-		       "ACPI video driver\n");
-
 	result = asus_input_init();
 	if (result)
 		goto fail_input;
-
-	result = asus_led_init(dev);
-	if (result)
-		goto fail_led;
 
 	/* Register platform stuff */
 	result = platform_driver_register(&asuspf_driver);
@@ -1394,7 +1366,26 @@ static int __init asus_laptop_init(void)
 	if (result)
 		goto fail_sysfs;
 
+	result = asus_led_init(&asuspf_device->dev);
+	if (result)
+		goto fail_led;
+
+	if (!acpi_video_backlight_support()) {
+		result = asus_backlight_init(&asuspf_device->dev);
+		if (result)
+			goto fail_backlight;
+	} else
+		printk(ASUS_INFO "Brightness ignored, must be controlled by "
+		       "ACPI video driver\n");
+
 	return 0;
+
+fail_backlight:
+       asus_led_exit();
+
+fail_led:
+       sysfs_remove_group(&asuspf_device->dev.kobj,
+			  &asuspf_attribute_group);
 
 fail_sysfs:
 	platform_device_del(asuspf_device);
@@ -1406,15 +1397,9 @@ fail_platform_device1:
 	platform_driver_unregister(&asuspf_driver);
 
 fail_platform_driver:
-	asus_led_exit();
-
-fail_led:
 	asus_input_exit();
 
 fail_input:
-	asus_backlight_exit();
-
-fail_backlight:
 
 	return result;
 }
