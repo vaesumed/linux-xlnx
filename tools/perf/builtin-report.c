@@ -36,18 +36,28 @@ static int		show_mask = SHOW_KERNEL | SHOW_USER | SHOW_HV;
 
 static int		dump_trace = 0;
 #define dprintf(x...)	do { if (dump_trace) printf(x); } while (0)
+#define cdprintf(x...)	do { if (dump_trace) color_fprintf(stdout, color, x); } while (0)
 
 static int		verbose;
 static int		full_paths;
+static int		collapse_syscalls;
 
 static unsigned long	page_size;
 static unsigned long	mmap_window = 32;
+
+struct ip_chain_event {
+	__u16 nr;
+	__u16 hv;
+	__u16 kernel;
+	__u16 user;
+	__u64 ips[];
+};
 
 struct ip_event {
 	struct perf_event_header header;
 	__u64 ip;
 	__u32 pid, tid;
-	__u64 period;
+	unsigned char __more_data[];
 };
 
 struct mmap_event {
@@ -944,9 +954,13 @@ process_overflow_event(event_t *event, unsigned long offset, unsigned long head)
 	__u64 ip = event->ip.ip;
 	__u64 period = 1;
 	struct map *map = NULL;
+	void *more_data = event->ip.__more_data;
+	struct ip_chain_event *chain;
 
-	if (event->header.type & PERF_SAMPLE_PERIOD)
-		period = event->ip.period;
+	if (event->header.type & PERF_SAMPLE_PERIOD) {
+		period = *(__u64 *)more_data;
+		more_data += sizeof(__u64);
+	}
 
 	dprintf("%p [%p]: PERF_EVENT (IP, %d): %d: %p period: %Ld\n",
 		(void *)(offset + head),
@@ -955,6 +969,31 @@ process_overflow_event(event_t *event, unsigned long offset, unsigned long head)
 		event->ip.pid,
 		(void *)(long)ip,
 		(long long)period);
+
+	if (event->header.type & PERF_SAMPLE_CALLCHAIN) {
+		int i;
+
+		chain = (void *)more_data;
+
+		if (dump_trace) {
+			dprintf("... chain: u:%d, k:%d, nr:%d\n",
+				chain->user,
+				chain->kernel,
+				chain->nr);
+
+			for (i = 0; i < chain->nr; i++)
+				dprintf("..... %2d: %016Lx\n", i, chain->ips[i]);
+		}
+		if (collapse_syscalls) {
+			/*
+			 * Find the all-but-last kernel entry
+			 * amongst the call-chains - to get
+			 * to the level of system calls:
+			 */
+			if (chain->kernel >= 2)
+				ip = chain->ips[chain->kernel-2];
+		}
+	}
 
 	dprintf(" ... thread: %s:%d\n", thread->comm, thread->pid);
 
@@ -1095,9 +1134,47 @@ process_period_event(event_t *event, unsigned long offset, unsigned long head)
 	return 0;
 }
 
+static void trace_event(event_t *event)
+{
+	unsigned char *raw_event = (void *)event;
+	char *color = PERF_COLOR_BLUE;
+	int i, j;
+
+	if (!dump_trace)
+		return;
+
+	dprintf(".");
+	cdprintf("\n. ... raw event: size %d bytes\n", event->header.size);
+
+	for (i = 0; i < event->header.size; i++) {
+		if ((i & 15) == 0) {
+			dprintf(".");
+			cdprintf("  %04x: ", i);
+		}
+
+		cdprintf(" %02x", raw_event[i]);
+
+		if (((i & 15) == 15) || i == event->header.size-1) {
+			cdprintf("  ");
+			for (j = 0; j < 15-(i & 15); j++)
+				cdprintf("   ");
+			for (j = 0; j < (i & 15); j++) {
+				if (isprint(raw_event[i-15+j]))
+					cdprintf("%c", raw_event[i-15+j]);
+				else
+					cdprintf(".");
+			}
+			cdprintf("\n");
+		}
+	}
+	dprintf(".\n");
+}
+
 static int
 process_event(event_t *event, unsigned long offset, unsigned long head)
 {
+	trace_event(event);
+
 	if (event->header.misc & PERF_EVENT_MISC_OVERFLOW)
 		return process_overflow_event(event, offset, head);
 
@@ -1204,7 +1281,7 @@ more:
 
 	size = event->header.size;
 
-	dprintf("%p [%p]: event: %d\n",
+	dprintf("\n%p [%p]: event: %d\n",
 			(void *)(offset + head),
 			(void *)(long)event->header.size,
 			event->header.type);
@@ -1276,6 +1353,8 @@ static const struct option options[] = {
 		   "sort by key(s): pid, comm, dso, symbol. Default: pid,symbol"),
 	OPT_BOOLEAN('P', "full-paths", &full_paths,
 		    "Don't shorten the pathnames taking into account the cwd"),
+	OPT_BOOLEAN('S', "syscalls", &collapse_syscalls,
+		    "show per syscall summary overhead, using call graph"),
 	OPT_END()
 };
 
