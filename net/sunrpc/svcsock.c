@@ -240,42 +240,76 @@ out:
 /*
  * Report socket names for nfsdfs
  */
-static int one_sock_name(char *buf, struct svc_sock *svsk)
+static int svc_one_sock_name(struct svc_sock *svsk, char *buf, int remaining)
 {
+	const struct sock *sk = svsk->sk_sk;
+	const char *proto_name = sk->sk_protocol == IPPROTO_UDP ?
+							"udp" : "tcp";
 	int len;
 
-	switch(svsk->sk_sk->sk_family) {
-	case AF_INET:
-		len = sprintf(buf, "ipv4 %s %pI4 %d\n",
-			      svsk->sk_sk->sk_protocol == IPPROTO_UDP ?
-			      "udp" : "tcp",
-			      &inet_sk(svsk->sk_sk)->rcv_saddr,
-			      inet_sk(svsk->sk_sk)->num);
+	switch (sk->sk_family) {
+	case PF_INET:
+		len = snprintf(buf, remaining, "ipv4 %s %pI4 %d\n",
+				proto_name,
+				&inet_sk(sk)->rcv_saddr,
+				inet_sk(sk)->num);
+		break;
+	case PF_INET6:
+		len = snprintf(buf, remaining, "ipv6 %s %pI6 %d\n",
+				proto_name,
+				&inet6_sk(sk)->rcv_saddr,
+				inet_sk(sk)->num);
 		break;
 	default:
-		len = sprintf(buf, "*unknown-%d*\n",
-			       svsk->sk_sk->sk_family);
+		len = snprintf(buf, remaining, "*unknown-%d*\n",
+				sk->sk_family);
+	}
+
+	if (len >= remaining) {
+		*buf = '\0';
+		return -ENAMETOOLONG;
 	}
 	return len;
 }
 
-int
-svc_sock_names(char *buf, struct svc_serv *serv, char *toclose)
+/**
+ * svc_sock_names - construct a list of listener names in a string
+ * @serv: pointer to RPC service
+ * @buf: pointer to a buffer to fill in with socket names
+ * @buflen: size of the buffer to be filled
+ * @toclose: pointer to '\0'-terminated C string containing the name
+ *		of a listener to be closed
+ *
+ * Fills in @buf with a '\n'-separated list of names of listener
+ * sockets.  If @toclose is not NULL, the socket named by @toclose
+ * is closed, and is not included in the output list.
+ *
+ * Returns positive length of the socket name string, or a negative
+ * errno value on error.
+ */
+int svc_sock_names(struct svc_serv *serv, char *buf, const size_t buflen,
+		   const char *toclose)
 {
 	struct svc_sock *svsk, *closesk = NULL;
 	int len = 0;
 
 	if (!serv)
 		return 0;
+
 	spin_lock_bh(&serv->sv_lock);
 	list_for_each_entry(svsk, &serv->sv_permsocks, sk_xprt.xpt_list) {
-		int onelen = one_sock_name(buf+len, svsk);
-		if (toclose && strcmp(toclose, buf+len) == 0)
+		int onelen = svc_one_sock_name(svsk, buf + len, buflen - len);
+		if (onelen < 0) {
+			len = onelen;
+			break;
+		}
+		if (toclose && strcmp(toclose, buf + len) == 0)
 			closesk = svsk;
 		else
 			len += onelen;
 	}
 	spin_unlock_bh(&serv->sv_lock);
+
 	if (closesk)
 		/* Should unregister with portmap, but you cannot
 		 * unregister just one protocol...
@@ -427,13 +461,14 @@ static int svc_udp_recvfrom(struct svc_rqst *rqstp)
 		long		all[SVC_PKTINFO_SPACE / sizeof(long)];
 	} buffer;
 	struct cmsghdr *cmh = &buffer.hdr;
-	int		err, len;
 	struct msghdr msg = {
 		.msg_name = svc_addr(rqstp),
 		.msg_control = cmh,
 		.msg_controllen = sizeof(buffer),
 		.msg_flags = MSG_DONTWAIT,
 	};
+	size_t len;
+	int err;
 
 	if (test_and_clear_bit(XPT_CHNGBUF, &svsk->sk_xprt.xpt_flags))
 	    /* udp sockets need large rcvbuf as all pending
@@ -465,8 +500,8 @@ static int svc_udp_recvfrom(struct svc_rqst *rqstp)
 		return -EAGAIN;
 	}
 	len = svc_addr_len(svc_addr(rqstp));
-	if (len < 0)
-		return len;
+	if (len == 0)
+		return -EAFNOSUPPORT;
 	rqstp->rq_addrlen = len;
 	if (skb->tstamp.tv64 == 0) {
 		skb->tstamp = ktime_get_real();
@@ -1148,9 +1183,19 @@ static struct svc_sock *svc_setup_socket(struct svc_serv *serv,
 	return svsk;
 }
 
-int svc_addsock(struct svc_serv *serv,
-		int fd,
-		char *name_return)
+/**
+ * svc_addsock - add a listener socket to an RPC service
+ * @serv: pointer to RPC service to which to add a new listener
+ * @fd: file descriptor of the new listener
+ * @name_return: pointer to buffer to fill in with name of listener
+ * @len: size of the buffer
+ *
+ * Fills in socket name and returns positive length of name if successful.
+ * Name is terminated with '\n'.  On error, returns a negative errno
+ * value.
+ */
+int svc_addsock(struct svc_serv *serv, const int fd, char *name_return,
+		const size_t len)
 {
 	int err = 0;
 	struct socket *so = sockfd_lookup(fd, &err);
@@ -1190,7 +1235,7 @@ int svc_addsock(struct svc_serv *serv,
 		sockfd_put(so);
 		return err;
 	}
-	return one_sock_name(name_return, svsk);
+	return svc_one_sock_name(svsk, name_return, len);
 }
 EXPORT_SYMBOL_GPL(svc_addsock);
 
