@@ -1,0 +1,115 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.30
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 07a2039b8eb0af4ff464efd3dfd95de5c02648c6
+HEAD is now at 07a2039 Linux 2.6.30
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-core-01-kill-client_register_unregister.patch
+i2c-core-02-kill-legacy-binding-model.patch
+i2c-core-03-kill-i2c_probe.patch
+i2c-core-04-merge-i2c_attach_client.patch
+i2c-core-05-kill-is_newstyle_driver.patch
+i2c-core-06-kill-per-adapter-client-list.patch
+i2c-core-07-limit-locking.patch
+error: patch failed: drivers/i2c/i2c-core.c:418
+error: drivers/i2c/i2c-core.c: patch does not apply
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.30-git11
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 65795efbd380a832ae508b04dba8f8e53f0b84d9
+HEAD is now at 65795ef Merge branch 'next-i2c' of git://aeryn.fluff.org.uk/bjdooks/linux
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-core-01-kill-client_register_unregister.patch
+i2c-core-02-kill-legacy-binding-model.patch
+i2c-core-03-kill-i2c_probe.patch
+i2c-core-04-merge-i2c_attach_client.patch
+i2c-core-05-kill-is_newstyle_driver.patch
+i2c-core-06-kill-per-adapter-client-list.patch
+i2c-core-07-limit-locking.patch
+i2c-sysfs-interface-to-instantiate-devices.patch
+i2c-use-rwsem-instead-of-mutex.patch
+i2c-functions-depend-on-CONFIG_I2C.patch
+i2c-new-macro-to-initialize-i2c-address-lists-on-the-fly.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 2a36e43...b868bcb master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-git12
+$ cd ../quilt-tmp
+$ git reset --hard 3fe0344faf7fdcb158bd5c1a9aec960a8d70c8e8
+HEAD is now at 3fe0344 Merge branch 'kmemleak' of git://linux-arm.org/linux-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-vid-limit-AMD-0Fh-6-bit-VID.patch
+hwmon-abituguru3-dmi-probing-for-ab9-ab9-quadqt-and-ix38-quadgt.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 0028f38...8f31872 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+$ cd ../quilt-tmp
+$ git reset --hard e8fdbdda2d4f722609777947c7c9b589da5cc9d3
+HEAD is now at e8fdbdd writeback: use spin_trylock() in bdi_writeback_all() for WB_SYNC_NONE
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+dm-sysfs-skip-output-when-device-is-being-destroyed.patch
+dm-mpath-change-attached-scsi_dh.patch
+dm-mpath-call-activate-fn-for-each-path-in-pg_init.patch
+dm-raid1-keep-retrying-alloc-if-mempool_alloc-failed.patch
+dm-mpath-flush-keventd-queue-in-destructor.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries.patch
+dm-use-i_size_read.patch
+dm-exception-store-fix-exstore-lookup-to-be-case-insensitive.patch
+dm-rename-suspended_bdev-to-bdev.patch
+dm-always-hold-bdev-reference.patch
+dm-make-dm_flush-return-void.patch
+dm-process-requeue-in-dm_wq_work.patch
+dm-store-only-first-barrier-error.patch
+dm-remove-EOPNOTSUPP-for-barriers.patch
+dm-remove-check-that-prevents-mapping-empty-bios.patch
+dm-introduce-num_flush_requests.patch
+dm-initialise-tio-in-alloc_tio.patch
+dm-send-empty-barriers-to-targets-in-dm_flush.patch
+dm-linear-support-flush.patch
+dm-stripe-support-flush.patch
+dm-crypt-support-flush.patch
+dm-delay-support-barriers.patch
+dm-mpath-support-barriers.patch
+dm-snapshot-support-barriers.patch
+dm-io-record-eopnotsupp.patch
+dm-io-retry-after-barrier-error.patch
+dm-snapshot-use-barrier-when-writing-exception-store.patch
+dm-mpath-add-start_io-and-nr_bytes-to-path-selectors.patch
+dm-mpath-add-queue-length-load-balancer.patch
+dm-mpath-add-service-time-load-balancer.patch
+dm-table-improve-warning-message-when-devices-not-freed-before-destruction.patch
+dm-sysfs-add-suspended-attribute.patch
+dm-ioctl-support-cookies-for-udev.patch
+dm-table-ensure-targets-are-aligned-to-logical_block_size.patch
+dm-table-validate-device-logical_block_size.patch
+dm-table-replace-struct-io_restrictions-with-struct-queue_limits.patch
+dm-table-establish-queue-limits-by-copying-table-limits.patch
+dm-targets-introduce-iterate-devices-fn.patch
+dm-log-fix-create_log_context-to-use-logical_block_size-of-log-device.patch
+dm-calculate-queue-limits-during-resume-not-load.patch
+dm-raid1-add-userspace-log.patch
+dm-prepare-for-request-based-option.patch
+dm-enable-request-based-option.patch
+dm-do-not-set-QUEUE_ORDERED_DRAIN-if-request-based.patch
+dm-disable-interrupt-when-taking-map_lock.patch
+dm-mpath-change-to-be-request-based.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 56303c2...58242ef master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
