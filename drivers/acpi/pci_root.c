@@ -63,9 +63,10 @@ static struct acpi_driver acpi_pci_root_driver = {
 
 struct acpi_pci_root {
 	struct list_head node;
-	struct acpi_device * device;
-	struct acpi_pci_id id;
+	struct acpi_device *device;
 	struct pci_bus *bus;
+	u16 segment;
+	u8 bus_nr;
 
 	u32 osc_support_set;	/* _OSC state of support bits */
 	u32 osc_control_set;	/* _OSC state of control bits */
@@ -82,7 +83,7 @@ static DEFINE_MUTEX(osc_lock);
 int acpi_pci_register_driver(struct acpi_pci_driver *driver)
 {
 	int n = 0;
-	struct list_head *entry;
+	struct acpi_pci_root *root;
 
 	struct acpi_pci_driver **pptr = &sub_driver;
 	while (*pptr)
@@ -92,9 +93,7 @@ int acpi_pci_register_driver(struct acpi_pci_driver *driver)
 	if (!driver->add)
 		return 0;
 
-	list_for_each(entry, &acpi_pci_roots) {
-		struct acpi_pci_root *root;
-		root = list_entry(entry, struct acpi_pci_root, node);
+	list_for_each_entry(root, &acpi_pci_roots, node) {
 		driver->add(root->device->handle);
 		n++;
 	}
@@ -106,7 +105,7 @@ EXPORT_SYMBOL(acpi_pci_register_driver);
 
 void acpi_pci_unregister_driver(struct acpi_pci_driver *driver)
 {
-	struct list_head *entry;
+	struct acpi_pci_root *root;
 
 	struct acpi_pci_driver **pptr = &sub_driver;
 	while (*pptr) {
@@ -120,23 +119,19 @@ void acpi_pci_unregister_driver(struct acpi_pci_driver *driver)
 	if (!driver->remove)
 		return;
 
-	list_for_each(entry, &acpi_pci_roots) {
-		struct acpi_pci_root *root;
-		root = list_entry(entry, struct acpi_pci_root, node);
+	list_for_each_entry(root, &acpi_pci_roots, node)
 		driver->remove(root->device->handle);
-	}
 }
 
 EXPORT_SYMBOL(acpi_pci_unregister_driver);
 
 acpi_handle acpi_get_pci_rootbridge_handle(unsigned int seg, unsigned int bus)
 {
-	struct acpi_pci_root *tmp;
+	struct acpi_pci_root *root;
 	
-	list_for_each_entry(tmp, &acpi_pci_roots, node) {
-		if ((tmp->id.segment == (u16) seg) && (tmp->id.bus == (u16) bus))
-			return tmp->device->handle;
-	}
+	list_for_each_entry(root, &acpi_pci_roots, node)
+		if ((root->segment == (u16) seg) && (root->bus_nr == (u16) bus))
+			return root->device->handle;
 	return NULL;		
 }
 
@@ -185,19 +180,22 @@ get_root_bridge_busnr_callback(struct acpi_resource *resource, void *data)
 	return AE_OK;
 }
 
-static acpi_status try_get_root_bridge_busnr(acpi_handle handle, int *busnum)
+static acpi_status try_get_root_bridge_busnr(acpi_handle handle,
+					     unsigned long long *bus)
 {
 	acpi_status status;
+	int busnum;
 
-	*busnum = -1;
+	busnum = -1;
 	status =
 	    acpi_walk_resources(handle, METHOD_NAME__CRS,
-				get_root_bridge_busnr_callback, busnum);
+				get_root_bridge_busnr_callback, &busnum);
 	if (ACPI_FAILURE(status))
 		return status;
 	/* Check if we really get a bus number from _CRS */
-	if (*busnum == -1)
+	if (busnum == -1)
 		return AE_ERROR;
+	*bus = busnum;
 	return AE_OK;
 }
 
@@ -322,6 +320,7 @@ static acpi_status acpi_pci_osc_support(struct acpi_pci_root *root, u32 flags)
 static struct acpi_pci_root *acpi_pci_find_root(acpi_handle handle)
 {
 	struct acpi_pci_root *root;
+
 	list_for_each_entry(root, &acpi_pci_roots, node) {
 		if (root->device->handle == handle)
 			return root;
@@ -468,25 +467,42 @@ EXPORT_SYMBOL(acpi_pci_osc_control_set);
 
 static int __devinit acpi_pci_root_add(struct acpi_device *device)
 {
-	int result = 0;
-	struct acpi_pci_root *root = NULL;
-	struct acpi_pci_root *tmp;
-	acpi_status status = AE_OK;
-	unsigned long long value = 0;
-	acpi_handle handle = NULL;
+	unsigned long long segment, bus;
+	acpi_status status;
+	int result;
+	struct acpi_pci_root *root;
+	acpi_handle handle;
 	struct acpi_device *child;
 	u32 flags, base_flags;
 
+	segment = 0;
+	status = acpi_evaluate_integer(device->handle, METHOD_NAME__SEG, NULL,
+				       &segment);
+	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND) {
+		printk(KERN_ERR PREFIX "can't evaluate _SEG\n");
+		return -ENODEV;
+	}
 
-	if (!device)
-		return -EINVAL;
+	/* Check _CRS first, then _BBN.  If no _BBN, default to zero. */
+	bus = 0;
+	status = try_get_root_bridge_busnr(device->handle, &bus);
+	if (ACPI_FAILURE(status)) {
+		status = acpi_evaluate_integer(device->handle, METHOD_NAME__BBN,					       NULL, &bus);
+		if (ACPI_FAILURE(status) && status != AE_NOT_FOUND) {
+			printk(KERN_ERR PREFIX
+			     "no bus number in _CRS and can't evaluate _BBN\n");
+			return -ENODEV;
+		}
+	}
 
 	root = kzalloc(sizeof(struct acpi_pci_root), GFP_KERNEL);
 	if (!root)
 		return -ENOMEM;
-	INIT_LIST_HEAD(&root->node);
 
+	INIT_LIST_HEAD(&root->node);
 	root->device = device;
+	root->segment = segment & 0xFFFF;
+	root->bus_nr = bus & 0xFF;
 	strcpy(acpi_device_name(device), ACPI_PCI_ROOT_DEVICE_NAME);
 	strcpy(acpi_device_class(device), ACPI_PCI_ROOT_CLASS);
 	device->driver_data = root;
@@ -498,79 +514,6 @@ static int __devinit acpi_pci_root_add(struct acpi_device *device)
 	flags = base_flags = OSC_PCI_SEGMENT_GROUPS_SUPPORT;
 	acpi_pci_osc_support(root, flags);
 
-	/* 
-	 * Segment
-	 * -------
-	 * Obtained via _SEG, if exists, otherwise assumed to be zero (0).
-	 */
-	status = acpi_evaluate_integer(device->handle, METHOD_NAME__SEG, NULL,
-				       &value);
-	switch (status) {
-	case AE_OK:
-		root->id.segment = (u16) value;
-		break;
-	case AE_NOT_FOUND:
-		ACPI_DEBUG_PRINT((ACPI_DB_INFO,
-				  "Assuming segment 0 (no _SEG)\n"));
-		root->id.segment = 0;
-		break;
-	default:
-		ACPI_EXCEPTION((AE_INFO, status, "Evaluating _SEG"));
-		result = -ENODEV;
-		goto end;
-	}
-
-	/* 
-	 * Bus
-	 * ---
-	 * Obtained via _BBN, if exists, otherwise assumed to be zero (0).
-	 */
-	status = acpi_evaluate_integer(device->handle, METHOD_NAME__BBN, NULL,
-				       &value);
-	switch (status) {
-	case AE_OK:
-		root->id.bus = (u16) value;
-		break;
-	case AE_NOT_FOUND:
-		ACPI_DEBUG_PRINT((ACPI_DB_INFO, "Assuming bus 0 (no _BBN)\n"));
-		root->id.bus = 0;
-		break;
-	default:
-		ACPI_EXCEPTION((AE_INFO, status, "Evaluating _BBN"));
-		result = -ENODEV;
-		goto end;
-	}
-
-	/* Some systems have wrong _BBN */
-	list_for_each_entry(tmp, &acpi_pci_roots, node) {
-		if ((tmp->id.segment == root->id.segment)
-		    && (tmp->id.bus == root->id.bus)) {
-			int bus = 0;
-			acpi_status status;
-
-			printk(KERN_ERR PREFIX
-				    "Wrong _BBN value, reboot"
-				    " and use option 'pci=noacpi'\n");
-
-			status = try_get_root_bridge_busnr(device->handle, &bus);
-			if (ACPI_FAILURE(status))
-				break;
-			if (bus != root->id.bus) {
-				printk(KERN_INFO PREFIX
-				       "PCI _CRS %d overrides _BBN 0\n", bus);
-				root->id.bus = bus;
-			}
-			break;
-		}
-	}
-	/*
-	 * Device & Function
-	 * -----------------
-	 * Obtained from _ADR (which has already been evaluated for us).
-	 */
-	root->id.device = device->pnp.bus_address >> 16;
-	root->id.function = device->pnp.bus_address & 0xFFFF;
-
 	/*
 	 * TBD: Need PCI interface for enumeration/configuration of roots.
 	 */
@@ -580,7 +523,7 @@ static int __devinit acpi_pci_root_add(struct acpi_device *device)
 
 	printk(KERN_INFO PREFIX "%s [%s] (%04x:%02x)\n",
 	       acpi_device_name(device), acpi_device_bid(device),
-	       root->id.segment, root->id.bus);
+	       root->segment, root->bus_nr);
 
 	/*
 	 * Scan the Root Bridge
@@ -589,11 +532,11 @@ static int __devinit acpi_pci_root_add(struct acpi_device *device)
 	 * PCI namespace does not get created until this call is made (and 
 	 * thus the root bridge's pci_dev does not exist).
 	 */
-	root->bus = pci_acpi_scan_root(device, root->id.segment, root->id.bus);
+	root->bus = pci_acpi_scan_root(device, segment, bus);
 	if (!root->bus) {
 		printk(KERN_ERR PREFIX
 			    "Bus %04x:%02x not present in PCI namespace\n",
-			    root->id.segment, root->id.bus);
+			    root->segment, root->bus_nr);
 		result = -ENODEV;
 		goto end;
 	}
@@ -633,42 +576,28 @@ static int __devinit acpi_pci_root_add(struct acpi_device *device)
 	if (flags != base_flags)
 		acpi_pci_osc_support(root, flags);
 
-      end:
-	if (result) {
-		if (!list_empty(&root->node))
-			list_del(&root->node);
-		kfree(root);
-	}
+	return 0;
 
+end:
+	if (!list_empty(&root->node))
+		list_del(&root->node);
+	kfree(root);
 	return result;
 }
 
 static int acpi_pci_root_start(struct acpi_device *device)
 {
-	struct acpi_pci_root *root;
+	struct acpi_pci_root *root = acpi_driver_data(device);
 
-
-	list_for_each_entry(root, &acpi_pci_roots, node) {
-		if (root->device == device) {
-			pci_bus_add_devices(root->bus);
-			return 0;
-		}
-	}
-	return -ENODEV;
+	pci_bus_add_devices(root->bus);
+	return 0;
 }
 
 static int acpi_pci_root_remove(struct acpi_device *device, int type)
 {
-	struct acpi_pci_root *root = NULL;
-
-
-	if (!device || !acpi_driver_data(device))
-		return -EINVAL;
-
-	root = acpi_driver_data(device);
+	struct acpi_pci_root *root = acpi_driver_data(device);
 
 	kfree(root);
-
 	return 0;
 }
 
