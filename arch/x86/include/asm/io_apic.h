@@ -150,11 +150,14 @@ extern int timer_through_8259;
 #define io_apic_assign_pci_irqs \
 	(mp_irq_entries && !skip_ioapic_setup && io_apic_irqs)
 
-#ifdef CONFIG_ACPI
+#if defined(CONFIG_ACPI) || defined(CONFIG_SFI)
 extern int io_apic_get_unique_id(int ioapic, int apic_id);
 extern int io_apic_get_version(int ioapic);
 extern int io_apic_get_redir_entries(int ioapic);
-#endif /* CONFIG_ACPI */
+#endif /* CONFIG_ACPI || CONFIG_SFI */
+
+extern int io_apic_set_pci_routing(int ioapic, int pin, int irq,
+				   int edge_level, int active_high_low);
 
 struct io_apic_irq_attr;
 extern int io_apic_set_pci_routing(struct device *dev, int irq,
