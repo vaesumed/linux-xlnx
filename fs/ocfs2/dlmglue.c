@@ -644,14 +644,10 @@ static void ocfs2_nfs_sync_lock_res_init(struct ocfs2_lock_res *res,
 static void ocfs2_orphan_scan_lock_res_init(struct ocfs2_lock_res *res,
 					    struct ocfs2_super *osb)
 {
-	struct ocfs2_orphan_scan_lvb *lvb;
-
 	ocfs2_lock_res_init_once(res);
 	ocfs2_build_lock_name(OCFS2_LOCK_TYPE_ORPHAN_SCAN, 0, 0, res->l_name);
 	ocfs2_lock_res_init_common(osb, res, OCFS2_LOCK_TYPE_ORPHAN_SCAN,
 				   &ocfs2_orphan_scan_lops, osb);
-	lvb = ocfs2_dlm_lvb(&res->l_lksb);
-	lvb->lvb_version = OCFS2_ORPHAN_LVB_VERSION;
 }
 
 void ocfs2_file_lock_res_init(struct ocfs2_lock_res *lockres,
@@ -1989,7 +1985,8 @@ static inline int ocfs2_meta_lvb_is_trustable(struct inode *inode,
 {
 	struct ocfs2_meta_lvb *lvb = ocfs2_dlm_lvb(&lockres->l_lksb);
 
-	if (lvb->lvb_version == OCFS2_LVB_VERSION
+	if (ocfs2_dlm_lvb_valid(&lockres->l_lksb)
+	    && lvb->lvb_version == OCFS2_LVB_VERSION
 	    && be32_to_cpu(lvb->lvb_igeneration) == inode->i_generation)
 		return 1;
 	return 0;
@@ -2382,8 +2379,12 @@ int ocfs2_orphan_scan_lock(struct ocfs2_super *osb, u32 *seqno, int ex)
 		return status;
 
 	lvb = ocfs2_dlm_lvb(&lockres->l_lksb);
-	if (lvb->lvb_version == OCFS2_ORPHAN_LVB_VERSION)
+	if (ocfs2_dlm_lvb_valid(&lockres->l_lksb) &&
+	    lvb->lvb_version == OCFS2_ORPHAN_LVB_VERSION)
 		*seqno = be32_to_cpu(lvb->lvb_os_seqno);
+	else
+		*seqno = osb->osb_orphan_scan.os_seqno + 1;
+
 	return status;
 }
 
@@ -3627,7 +3628,8 @@ static int ocfs2_refresh_qinfo(struct ocfs2_mem_dqinfo *oinfo)
 	struct ocfs2_global_disk_dqinfo *gdinfo;
 	int status = 0;
 
-	if (lvb->lvb_version == OCFS2_QINFO_LVB_VERSION) {
+	if (ocfs2_dlm_lvb_valid(&lockres->l_lksb) &&
+	    lvb->lvb_version == OCFS2_QINFO_LVB_VERSION) {
 		info->dqi_bgrace = be32_to_cpu(lvb->lvb_bgrace);
 		info->dqi_igrace = be32_to_cpu(lvb->lvb_igrace);
 		oinfo->dqi_syncms = be32_to_cpu(lvb->lvb_syncms);
