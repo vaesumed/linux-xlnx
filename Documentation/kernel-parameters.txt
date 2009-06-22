@@ -48,6 +48,7 @@ parameter is applicable:
 	EFI	EFI Partitioning (GPT) is enabled
 	EIDE	EIDE/ATAPI support is enabled.
 	FB	The frame buffer device is enabled.
+	GCOV	GCOV profiling is enabled.
 	HW	Appropriate hardware is enabled.
 	IA-64	IA-64 architecture is enabled.
 	IMA     Integrity measurement architecture is enabled.
@@ -491,6 +492,13 @@ and is between 256 and 4096 characters. It is defined in the file
 			Also note the kernel might malfunction if you disable
 			some critical bits.
 
+	cmo_free_hint=	[PPC] Format: { yes | no }
+			Specify whether pages are marked as being inactive
+			when they are freed.  This is used in CMO environments
+			to determine OS memory pressure for page stealing by
+			a hypervisor.
+			Default: yes
+
 	code_bytes	[X86] How many bytes of object code to print
 			in an oops report.
 			Range: 0 - 8192
@@ -538,6 +546,10 @@ and is between 256 and 4096 characters. It is defined in the file
                 device, prepend "brl," before the device type, for instance
 			console=brl,ttyS0
 		For now, only VisioBraille is supported.
+
+	consoleblank=	[KNL] The console blank (screen saver) timeout in
+			seconds. Defaults to 10*60 = 10mins. A value of 0
+			disables the blank timer.
 
 	coredump_filter=
 			[KNL] Change the default value for
@@ -784,6 +796,12 @@ and is between 256 and 4096 characters. It is defined in the file
 	gart_fix_e820=  [X86_64] disable the fix e820 for K8 GART
 			Format: off | on
 			default: on
+
+	gcov_persist=	[GCOV] When non-zero (default), profiling data for
+			kernel modules is saved and remains accessible via
+			debugfs, even when the module is unloaded/reloaded.
+			When zero, profiling data is discarded and associated
+			debugfs files are removed at module unload time.
 
 	gdth=		[HW,SCSI]
 			See header of drivers/scsi/gdth.c.

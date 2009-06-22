@@ -65,6 +65,7 @@
 #include <linux/idr.h>
 #include <linux/ftrace.h>
 #include <linux/async.h>
+#include <linux/kmemcheck.h>
 #include <linux/kmemtrace.h>
 #include <trace/boot.h>
 
@@ -546,6 +547,7 @@ static void __init mm_init(void)
 	page_cgroup_init_flatmem();
 	mem_init();
 	kmem_cache_init();
+	pgtable_cache_init();
 	vmalloc_init();
 }
 
@@ -640,6 +642,10 @@ asmlinkage void __init start_kernel(void)
 				 "enabled early\n");
 	early_boot_irqs_on();
 	local_irq_enable();
+
+	/* Interrupts are enabled now so all GFP allocations are safe. */
+	set_gfp_allowed_mask(__GFP_BITS_MASK);
+
 	kmem_cache_init_late();
 
 	/*
@@ -670,7 +676,6 @@ asmlinkage void __init start_kernel(void)
 		initrd_start = 0;
 	}
 #endif
-	cpuset_init_early();
 	page_cgroup_init();
 	enable_debug_pagealloc();
 	cpu_hotplug_init();
@@ -684,7 +689,6 @@ asmlinkage void __init start_kernel(void)
 		late_time_init();
 	calibrate_delay();
 	pidmap_init();
-	pgtable_cache_init();
 	anon_vma_init();
 #ifdef CONFIG_X86
 	if (efi_enabled)
@@ -718,6 +722,17 @@ asmlinkage void __init start_kernel(void)
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
+}
+
+/* Call all constructor functions linked into the kernel. */
+static void __init do_ctors(void)
+{
+#ifdef CONFIG_CONSTRUCTORS
+	ctor_fn_t *call = (ctor_fn_t *) __ctors_start;
+
+	for (; call < (ctor_fn_t *) __ctors_end; call++)
+		(*call)();
+#endif
 }
 
 int initcall_debug;
@@ -800,6 +815,7 @@ static void __init do_basic_setup(void)
 	usermodehelper_init();
 	driver_init();
 	init_irq_proc();
+	do_ctors();
 	do_initcalls();
 }
 
@@ -867,6 +883,11 @@ static noinline int init_post(void)
 static int __init kernel_init(void * unused)
 {
 	lock_kernel();
+
+	/*
+	 * init can allocate pages on any node
+	 */
+	set_mems_allowed(node_possible_map);
 	/*
 	 * init can run on any cpu.
 	 */

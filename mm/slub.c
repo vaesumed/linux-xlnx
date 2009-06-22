@@ -18,6 +18,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/kmemtrace.h>
+#include <linux/kmemcheck.h>
 #include <linux/cpu.h>
 #include <linux/cpuset.h>
 #include <linux/kmemleak.h>
@@ -147,7 +148,7 @@
 		SLAB_TRACE | SLAB_DESTROY_BY_RCU | SLAB_NOLEAKTRACE)
 
 #define SLUB_MERGE_SAME (SLAB_DEBUG_FREE | SLAB_RECLAIM_ACCOUNT | \
-		SLAB_CACHE_DMA)
+		SLAB_CACHE_DMA | SLAB_NOTRACK)
 
 #ifndef ARCH_KMALLOC_MINALIGN
 #define ARCH_KMALLOC_MINALIGN __alignof__(unsigned long long)
@@ -177,12 +178,6 @@ static enum {
 	UP,		/* Everything works but does not show up in sysfs */
 	SYSFS		/* Sysfs up */
 } slab_state = DOWN;
-
-/*
- * The slab allocator is initialized with interrupts disabled. Therefore, make
- * sure early boot allocations don't accidentally enable interrupts.
- */
-static gfp_t slab_gfp_mask __read_mostly = SLAB_GFP_BOOT_MASK;
 
 /* A list of all slab caches on the system */
 static DECLARE_RWSEM(slub_lock);
@@ -1078,6 +1073,8 @@ static inline struct page *alloc_slab_page(gfp_t flags, int node,
 {
 	int order = oo_order(oo);
 
+	flags |= __GFP_NOTRACK;
+
 	if (node == -1)
 		return alloc_pages(flags, order);
 	else
@@ -1105,6 +1102,24 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 
 		stat(get_cpu_slab(s, raw_smp_processor_id()), ORDER_FALLBACK);
 	}
+
+	if (kmemcheck_enabled
+		&& !(s->flags & (SLAB_NOTRACK | DEBUG_DEFAULT_FLAGS)))
+	{
+		int pages = 1 << oo_order(oo);
+
+		kmemcheck_alloc_shadow(page, oo_order(oo), flags, node);
+
+		/*
+		 * Objects from caches that have a constructor don't get
+		 * cleared when they're allocated, so we need to do it here.
+		 */
+		if (s->ctor)
+			kmemcheck_mark_uninitialized_pages(page, pages);
+		else
+			kmemcheck_mark_unallocated_pages(page, pages);
+	}
+
 	page->objects = oo_objects(oo);
 	mod_zone_page_state(page_zone(page),
 		(s->flags & SLAB_RECLAIM_ACCOUNT) ?
@@ -1177,6 +1192,8 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 			check_object(s, page, p, 0);
 		__ClearPageSlubDebug(page);
 	}
+
+	kmemcheck_free_shadow(page, compound_order(page));
 
 	mod_zone_page_state(page_zone(page),
 		(s->flags & SLAB_RECLAIM_ACCOUNT) ?
@@ -1669,7 +1686,7 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	unsigned long flags;
 	unsigned int objsize;
 
-	gfpflags &= slab_gfp_mask;
+	gfpflags &= gfp_allowed_mask;
 
 	lockdep_trace_alloc(gfpflags);
 	might_sleep_if(gfpflags & __GFP_WAIT);
@@ -1694,7 +1711,9 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	if (unlikely((gfpflags & __GFP_ZERO) && object))
 		memset(object, 0, objsize);
 
+	kmemcheck_slab_alloc(s, gfpflags, object, c->objsize);
 	kmemleak_alloc_recursive(object, objsize, 1, s->flags, gfpflags);
+
 	return object;
 }
 
@@ -1827,6 +1846,7 @@ static __always_inline void slab_free(struct kmem_cache *s,
 	kmemleak_free_recursive(x, s->flags);
 	local_irq_save(flags);
 	c = get_cpu_slab(s, smp_processor_id());
+	kmemcheck_slab_free(s, object, c->objsize);
 	debug_check_no_locks_freed(object, c->objsize);
 	if (!(s->flags & SLAB_DEBUG_OBJECTS))
 		debug_check_no_obj_freed(object, c->objsize);
@@ -2706,7 +2726,7 @@ static noinline struct kmem_cache *dma_kmalloc_cache(int index, gfp_t flags)
 	 * need to do anything because our sysfs initcall will start by
 	 * adding all existing slabs to sysfs.
 	 */
-	slabflags = SLAB_CACHE_DMA;
+	slabflags = SLAB_CACHE_DMA|SLAB_NOTRACK;
 	if (slab_state >= SYSFS)
 		slabflags |= __SYSFS_ADD_DEFERRED;
 
@@ -2806,9 +2826,10 @@ EXPORT_SYMBOL(__kmalloc);
 
 static void *kmalloc_large_node(size_t size, gfp_t flags, int node)
 {
-	struct page *page = alloc_pages_node(node, flags | __GFP_COMP,
-						get_order(size));
+	struct page *page;
 
+	flags |= __GFP_COMP | __GFP_NOTRACK;
+	page = alloc_pages_node(node, flags, get_order(size));
 	if (page)
 		return page_address(page);
 	else
@@ -3193,10 +3214,6 @@ void __init kmem_cache_init(void)
 
 void __init kmem_cache_init_late(void)
 {
-	/*
-	 * Interrupts are enabled now so all GFP allocations are safe.
-	 */
-	slab_gfp_mask = __GFP_BITS_MASK;
 }
 
 /*
@@ -3797,7 +3814,7 @@ static int list_locations(struct kmem_cache *s, char *buf,
 						 to_cpumask(l->cpus));
 		}
 
-		if (num_online_nodes() > 1 && !nodes_empty(l->nodes) &&
+		if (nr_online_nodes > 1 && !nodes_empty(l->nodes) &&
 				len < PAGE_SIZE - 60) {
 			len += sprintf(buf + len, " nodes=");
 			len += nodelist_scnprintf(buf + len, PAGE_SIZE - len - 50,
@@ -4472,6 +4489,8 @@ static char *create_unique_id(struct kmem_cache *s)
 		*p++ = 'a';
 	if (s->flags & SLAB_DEBUG_FREE)
 		*p++ = 'F';
+	if (!(s->flags & SLAB_NOTRACK))
+		*p++ = 't';
 	if (p != name + 1)
 		*p++ = '-';
 	p += sprintf(p, "%07d", s->size);

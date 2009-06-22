@@ -68,12 +68,6 @@ static int slqb_min_order;
  */
 static int slqb_min_objects = 1;
 
-/*
- * The slab allocator is initialized with interrupts disabled. Therefore, make
- * sure early boot allocations don't accidentally enable interrupts.
- */
-static gfp_t slab_gfp_mask __read_mostly = SLAB_GFP_BOOT_MASK;
-
 #ifdef CONFIG_NUMA
 static inline int slab_numa(struct kmem_cache *s)
 {
@@ -1545,7 +1539,7 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	void *object;
 	unsigned long flags;
 
-	gfpflags &= slab_gfp_mask;
+	gfpflags &= gfp_allowed_mask;
 
 again:
 	local_irq_save(flags);
@@ -2986,10 +2980,6 @@ void __init kmem_cache_init(void)
 
 void __init kmem_cache_init_late(void)
 {
-	/*
-	 * Interrupts are enabled now so all GFP allocations are safe.
-	 */
-	slab_gfp_mask = __GFP_BITS_MASK;
 }
 
 /*
