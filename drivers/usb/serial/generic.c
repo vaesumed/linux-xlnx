@@ -535,31 +535,6 @@ void usb_serial_generic_unthrottle(struct tty_struct *tty)
 	}
 }
 
-int usb_serial_handle_sysrq_char(struct usb_serial_port *port, unsigned int ch)
-{
-	if (port->sysrq && port->console) {
-		if (ch && time_before(jiffies, port->sysrq)) {
-			handle_sysrq(ch, tty_port_tty_get(&port->port));
-			port->sysrq = 0;
-			return 1;
-		}
-		port->sysrq = 0;
-	}
-	return 0;
-}
-EXPORT_SYMBOL_GPL(usb_serial_handle_sysrq_char);
-
-int usb_serial_handle_break(struct usb_serial_port *port)
-{
-	if (!port->sysrq) {
-		port->sysrq = jiffies + HZ*5;
-		return 1;
-	}
-	port->sysrq = 0;
-	return 0;
-}
-EXPORT_SYMBOL_GPL(usb_serial_handle_break);
-
 void usb_serial_generic_disconnect(struct usb_serial *serial)
 {
 	int i;
