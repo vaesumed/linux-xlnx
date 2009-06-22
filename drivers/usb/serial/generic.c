@@ -425,11 +425,19 @@ static void flush_and_resubmit_read_urb(struct usb_serial_port *port)
 		goto done;
 
 	/* Push data to tty */
-	for (i = 0; i < urb->actual_length; i++, ch++) {
-		if (!usb_serial_handle_sysrq_char(port, *ch))
-			tty_insert_flip_char(tty, *ch, TTY_NORMAL);
+	if (unlikely(port->console)) {
+		for (i = 0; i < urb->actual_length; i++, ch++) {
+			if (!usb_serial_handle_sysrq_char(port, *ch))
+				tty_insert_flip_char(tty, *ch, TTY_NORMAL);
+		}
+		tty_flip_buffer_push(tty);
+	} else if (urb->actual_length) {
+		i = tty_buffer_request_room(tty, urb->actual_length);
+		if (i) {
+			tty_insert_flip_string(tty, urb->transfer_buffer, i);
+			tty_flip_buffer_push(tty);
+		}
 	}
-	tty_flip_buffer_push(tty);
 	tty_kref_put(tty);
 done:
 	usb_serial_generic_resubmit_read_urb(port, GFP_ATOMIC);
