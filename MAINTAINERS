@@ -2512,6 +2512,15 @@ W:	http://www.kernel.org/pub/linux/kernel/people/fseidel/hdaps/
 S:	Maintained
 F:	drivers/hwmon/hdaps.c
 
+HARDWARE LATENCY DETECTOR
+P:	Jon Masters
+M:	jcm@jonmasters.org
+W:	http://www.kernel.org/pub/linux/kernel/people/jcm/hwlat_detector/
+S:	Supported
+L:	linux-kernel@vger.kernel.org
+F:	Documentation/hwlat_detector.txt
+F:	drivers/misc/hwlat_detector.c
+
 HYPERVISOR VIRTUAL CONSOLE DRIVER
 L:	linuxppc-dev@ozlabs.org
 S:	Odd Fixes
