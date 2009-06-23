@@ -60,17 +60,18 @@ static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 {
 	int num_entries, i;
 
-	struct acpi_table_xsdt *xsdt = (struct acpi_table_xsdt *) table;
+	struct acpi_table_xsdt *xsdt = (struct acpi_table_xsdt *)table;
 
 	BUG_ON(!xsdt);
 
 	num_entries = (xsdt->header.length - sizeof(struct acpi_table_header) /
-		sizeof(u64));
+			sizeof(u64));
 
 	pr_debug("XSDT has %d entries\n", num_entries);
 
 	for (i = 0; i < num_entries; i++)
-		sfi_tb_install_table(xsdt->table_offset_entry[i], SFI_ACPI_TABLE);
+		sfi_tb_install_table(xsdt->table_offset_entry[i],
+					SFI_ACPI_TABLE);
 
 	return 0;
 }
@@ -80,13 +81,13 @@ int sfi_acpi_init()
 	sfi_table_parse(SFI_SIG_XSDT, NULL, NULL, 0, sfi_acpi_parse_xsdt);
 	return 0;
 }
+
 /*
  * sfi_acpi_table_parse()
  */
-int sfi_acpi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-        unsigned int flags, acpi_table_handler handler)
+int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
+			 unsigned int flags, acpi_table_handler handler)
 {
 	return sfi_table_parse(signature, oem_id, oem_table_id, SFI_ACPI_TABLE,
-		(sfi_table_handler)handler);
+				(sfi_table_handler) handler);
 }
-

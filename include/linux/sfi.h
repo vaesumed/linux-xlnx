@@ -69,12 +69,12 @@
  * as they are provided by the BIOS.
  */
 struct sfi_table_header {
-	char		signature[SFI_SIGNATURE_SIZE];
-	u32		length;
-	u8		revision;
-	u8		checksum;
-	char		oem_id[SFI_OEM_ID_SIZE];
-	char		oem_table_id[SFI_OEM_TABLE_ID_SIZE];
+	char	signature[SFI_SIGNATURE_SIZE];
+	u32	length;
+	u8	revision;
+	u8	checksum;
+	char	oem_id[SFI_OEM_ID_SIZE];
+	char	oem_table_id[SFI_OEM_TABLE_ID_SIZE];
 } __attribute__ ((packed));
 
 struct sfi_table_simple {
@@ -101,7 +101,7 @@ struct sfi_cstate_table_entry {
 } __attribute__ ((packed));
 
 struct sfi_apic_table_entry {
-	u64	phy_addr;	/* phy base addr for APIC reg */
+	u64	phy_addr;		/* phy base addr for APIC reg */
 } __attribute__ ((packed));
 
 struct sfi_freq_table_entry {
@@ -132,25 +132,43 @@ extern void __init sfi_init_late(void);
 
 typedef int (*sfi_table_handler) (struct sfi_table_header *table);
 
-int sfi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-	uint flag, sfi_table_handler handler);
+int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
+			uint flag, sfi_table_handler handler);
 
 void __init __iomem *arch_early_ioremap(unsigned long phys, unsigned long size);
-void __init arch_early_iounmap(void __iomem *virt, unsigned long size);
+void __init arch_early_iounmap(void __iomem * virt, unsigned long size);
 
 extern int sfi_disabled;
-static inline void disable_sfi(void) { sfi_disabled = 1; }
+static inline void disable_sfi(void)
+{
+	sfi_disabled = 1;
+}
 
 #else /* !CONFIG_SFI */
 
-static inline int sfi_init_memory_map(void)	{ return -1; }
-static inline int sfi_init(void)		{ return 0; }
-static inline void sfi_init_late(void)		{}
+static inline int sfi_init_memory_map(void)
+{
+	return -1;
+}
+
+static inline int sfi_init(void)
+{
+	return 0;
+}
+
+static inline void sfi_init_late(void)
+{
+}
+
 #define sfi_disabled	0
 
-static inline int sfi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-	unsigned int flags, sfi_table_handler handler) { return -1; }
+static inline int sfi_table_parse(char *signature, char *oem_id,
+					char *oem_table_id, unsigned int flags,
+					sfi_table_handler handler)
+{
+	return -1;
+}
 
-#endif	/* CONFIG_SFI */
+#endif /* CONFIG_SFI */
 
 #endif	/*_LINUX_SFI_H*/

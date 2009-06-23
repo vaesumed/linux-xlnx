@@ -89,8 +89,7 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 		arch_early_iounmap(virt, size);
 }
 
-static void sfi_print_table_header(u32 address,
-			struct sfi_table_header *header)
+static void sfi_print_table_header(u32 address, struct sfi_table_header *header)
 {
 	pr_info("%4.4s %08lX, %04X (r%d %6.6s %8.8s)\n",
 		header->signature, (unsigned long)address,
@@ -124,7 +123,7 @@ static int sfi_tb_verify_checksum(struct sfi_table_header *table, u32 length)
 
  /* find the right table based on signaure, return the mapped table */
 int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
-	unsigned int flags, struct sfi_table_header **out_table)
+		unsigned int flags, struct sfi_table_header **out_table)
 {
 	struct sfi_table_desc *tdesc;
 	struct sfi_table_header *th;
@@ -148,7 +147,7 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 			continue;
 
 		if (oem_table_id && strncmp(th->oem_table_id, oem_table_id,
-			SFI_OEM_TABLE_ID_SIZE))
+						SFI_OEM_TABLE_ID_SIZE))
 			continue;
 
 		if (!tdesc->pointer) {
@@ -175,8 +174,8 @@ void sfi_put_table(struct sfi_table_header *table)
 }
 
 /* find table with signature, run handler on it */
-int sfi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-	unsigned int flags, sfi_table_handler handler)
+int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
+			unsigned int flags, sfi_table_handler handler)
 {
 	int ret = 0;
 	struct sfi_table_header *table = NULL;
@@ -192,6 +191,7 @@ int sfi_table_parse(char *signature, char *oem_id, char* oem_table_id,
 	sfi_put_table(table);
 	return ret;
 }
+
 EXPORT_SYMBOL_GPL(sfi_table_parse);
 
 void sfi_tb_install_table(u64 addr, u32 flags)
@@ -232,8 +232,7 @@ unmap_and_exit:
 /*
  * Copy system table and associated table headers to internal format
  */
-static int __init
-sfi_tb_parse_syst(unsigned long syst_addr)
+static int __init sfi_tb_parse_syst(unsigned long syst_addr)
 {
 	struct sfi_table_simple *syst;
 	struct sfi_table_header *table;
@@ -284,7 +283,6 @@ sfi_tb_parse_syst(unsigned long syst_addr)
 	return 0;
 }
 
-
 /*
  * The OS finds the System Table by searching 16-byte boundaries between physical
  * address 0x000E0000 and 0x000FFFFF. The OS shall search this region starting at the
@@ -306,7 +304,7 @@ static __init unsigned long sfi_find_syst(void)
 		syst = (struct sfi_table_header *)(start + offset);
 
 		if (strncmp(syst->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
-				continue;
+			continue;
 
 		if (!sfi_tb_verify_checksum(syst, syst->length)) {
 			sfi_unmap_memory(start, len);
@@ -398,4 +396,5 @@ static int __init sfi_parse_cmdline(char *arg)
 
 	return 0;
 }
+
 early_param("sfi", sfi_parse_cmdline);

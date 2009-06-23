@@ -47,15 +47,14 @@ static u64 sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
 
 #ifdef CONFIG_X86_IO_APIC
 static struct mp_ioapic_routing {
-	int			apic_id;
-	int			gsi_base;
-	int			gsi_end;
-	u32			pin_programmed[4];
+	int	apic_id;
+	int	gsi_base;
+	int	gsi_end;
+	u32	pin_programmed[4];
 } mp_ioapic_routing[MAX_IO_APICS];
 #endif
 
-void __init __iomem *
-arch_early_ioremap(unsigned long phys, unsigned long size)
+void __init __iomem *arch_early_ioremap(unsigned long phys, unsigned long size)
 {
 	return early_ioremap(phys, size);
 }
@@ -153,7 +152,7 @@ int __init sfi_init_memory_map(void)
 #ifdef CONFIG_X86_LOCAL_APIC
 void __init mp_sfi_register_lapic_address(u64 address)
 {
-	mp_lapic_addr = (unsigned long) address;
+	mp_lapic_addr = (unsigned long)address;
 
 	set_fixmap_nocache(FIX_APIC_BASE, mp_lapic_addr);
 
@@ -240,7 +239,6 @@ static u8 __init uniq_ioapic_id(u8 id)
 #endif
 }
 
-
 void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 {
 	int idx = 0;
@@ -289,10 +287,10 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 		io_apic_get_redir_entries(idx);
 	gsi_base = mp_ioapic_routing[idx].gsi_end + 1;
 	pr_info("IOAPIC[%d]: apic_id %d, version %d, address 0x%x, "
-	       "GSI %d-%d\n", idx, mp_ioapics[idx].apicid,
-	       mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr,
-	       mp_ioapic_routing[idx].gsi_base,
-	       mp_ioapic_routing[idx].gsi_end);
+		"GSI %d-%d\n", idx, mp_ioapics[idx].apicid,
+		mp_ioapics[idx].apicver, (u32) mp_ioapics[idx].apicaddr,
+		mp_ioapic_routing[idx].gsi_base,
+		mp_ioapic_routing[idx].gsi_end);
 
 	nr_ioapics++;
 }
@@ -307,7 +305,7 @@ static int __init sfi_parse_apic(struct sfi_table_header *table)
 	sb = (struct sfi_table_simple *)table;
 
 	num = SFI_GET_ENTRY_NUM(sb, sfi_apic_table_entry);
-	pentry = (struct sfi_apic_table_entry *) sb->pentry;
+	pentry = (struct sfi_apic_table_entry *)sb->pentry;
 	for (i = 0; i < num; i++) {
 		mp_sfi_register_ioapic(i, pentry->phy_addr);
 		pentry++;
