@@ -37,13 +37,11 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
-#include <linux/acpi.h>
 #include <linux/kernel.h>
+#include <linux/acpi.h>
 #include <linux/sfi.h>
-#include "sfi_core.h"
 
-#undef PREFIX
-#define PREFIX	"SFI: "
+#include "sfi_core.h"
 
 /*
  * SFI can access ACPI-defined tables via an optional ACPI XSDT.
@@ -69,7 +67,7 @@ static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 	num_entries = (xsdt->header.length - sizeof(struct acpi_table_header) /
 		sizeof(u64));
 
-	pr_debug(PREFIX "XSDT has %d entries\n", num_entries);
+	pr_debug(SFI_PFX "XSDT has %d entries\n", num_entries);
 
 	for (i = 0; i < num_entries; i++)
 		sfi_tb_install_table(xsdt->table_offset_entry[i], SFI_ACPI_TABLE);
