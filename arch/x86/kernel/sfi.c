@@ -21,35 +21,35 @@
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
-#include <linux/init.h>
-#include <linux/efi.h>
+#include <linux/bootmem.h>
 #include <linux/cpumask.h>
 #include <linux/module.h>
-#include <linux/irq.h>
-#include <linux/bootmem.h>
-#include <linux/io.h>
 #include <linux/acpi.h>
+#include <linux/init.h>
 #include <linux/efi.h>
 #include <linux/sfi.h>
+#include <linux/irq.h>
+#include <linux/io.h>
 
-#include <asm/pgtable.h>
 #include <asm/io_apic.h>
-#include <asm/apic.h>
+#include <asm/pgtable.h>
 #include <asm/mpspec.h>
-
-#include <asm/e820.h>
 #include <asm/setup.h>
-
-#undef PREFIX
-#define PREFIX "SFI: "
+#include <asm/apic.h>
+#include <asm/e820.h>
 
 #ifdef CONFIG_X86_LOCAL_APIC
 static u64 sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
 #endif
 
-extern int __init sfi_parse_xsdt(struct sfi_table_header *table);
-static int __init sfi_parse_cpus(struct sfi_table_header *table);
-static int __init sfi_parse_apic(struct sfi_table_header *table);
+#ifdef CONFIG_X86_IO_APIC
+static struct mp_ioapic_routing {
+	int			apic_id;
+	int			gsi_base;
+	int			gsi_end;
+	u32			pin_programmed[4];
+} mp_ioapic_routing[MAX_IO_APICS];
+#endif
 
 void __init __iomem *
 arch_early_ioremap(unsigned long phys, unsigned long size)
@@ -62,16 +62,19 @@ void __init arch_early_iounmap(void __iomem *virt, unsigned long size)
 	early_iounmap(virt, size);
 }
 
-static ulong __init sfi_early_find_syst(void)
+static __init struct sfi_table_simple *sfi_early_find_syst(void)
 {
 	unsigned long i;
 	char *pchar = (char *)SFI_SYST_SEARCH_BEGIN;
 
-	for (i = 0; SFI_SYST_SEARCH_BEGIN + i < SFI_SYST_SEARCH_END; i += 16, pchar += 16) {
+	/* SFI spec defines the SYST starts at a 16-byte boundary */
+	for (i = 0; SFI_SYST_SEARCH_BEGIN + i < SFI_SYST_SEARCH_END; i += 16) {
 		if (!strncmp(SFI_SIG_SYST, pchar, SFI_SIGNATURE_SIZE))
-			return SFI_SYST_SEARCH_BEGIN + i;
+			return (struct sfi_table_simple *)(SFI_SYST_SEARCH_BEGIN + i);
+
+		pchar += 16;
 	}
-	return 0;
+	return NULL;
 }
 
 /*
@@ -90,7 +93,7 @@ int __init sfi_init_memory_map(void)
 		return -1;
 
 	/* first search the syst table */
-	syst = (struct sfi_table_simple *)sfi_early_find_syst();
+	syst = sfi_early_find_syst();
 	if (!syst)
 		return -1;
 
@@ -120,7 +123,7 @@ int __init sfi_init_memory_map(void)
 		if (start > end)
 			return -1;
 
-		pr_debug(PREFIX "start = 0x%08x end = 0x%08x type = %d\n",
+		pr_debug(SFI_PFX "start = 0x%08x end = 0x%08x type = %d\n",
 			(u32)start, (u32)end, mentry->type);
 
 		/* translate SFI mmap type to E820 map type */
@@ -154,7 +157,7 @@ void __init mp_sfi_register_lapic_address(u64 address)
 	if (boot_cpu_physical_apicid == -1U)
 		boot_cpu_physical_apicid = read_apic_id();
 
-	pr_info(PREFIX "Boot CPU = %d\n", boot_cpu_physical_apicid);
+	pr_debug(SFI_PFX "Boot CPU = %d\n", boot_cpu_physical_apicid);
 }
 
 /* All CPUs enumerated by SFI must be present and enabled */
@@ -197,7 +200,7 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 	sb = (struct sfi_table_simple *)table;
 
 	cpu_num = SFI_GET_ENTRY_NUM(sb, sfi_cpu_table_entry);
-	pentry = (struct sfi_cpu_table_entry *) sb->pentry;
+	pentry = (struct sfi_cpu_table_entry *)sb->pentry;
 
 	for (i = 0; i < cpu_num; i++) {
 		mp_sfi_register_lapic(pentry->apicid);
@@ -210,13 +213,6 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 #endif /* CONFIG_X86_LOCAL_APIC */
 
 #ifdef	CONFIG_X86_IO_APIC
-static struct mp_ioapic_routing {
-	int			apic_id;
-	int			gsi_base;
-	int			gsi_end;
-	u32			pin_programmed[4];
-} mp_ioapic_routing[MAX_IO_APICS];
-
 /* refer acpi/boot.c */
 static u8 __init uniq_ioapic_id(u8 id)
 {
@@ -228,6 +224,7 @@ static u8 __init uniq_ioapic_id(u8 id)
 		return id;
 #else
 	int i;
+
 	DECLARE_BITMAP(used, 256);
 	bitmap_zero(used, 256);
 	for (i = 0; i < nr_ioapics; i++) {
@@ -276,7 +273,7 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	mp_ioapics[idx].apicver = 0;
 #endif
 
-	pr_info(PREFIX "IOAPIC[%d]: apic_id %d, version %d, address 0x%x\n",
+	pr_info(SFI_PFX "IOAPIC[%d]: apic_id %d, version %d, address 0x%x\n",
 		idx, mp_ioapics[idx].apicid,
 		mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr);
 	/*
@@ -288,7 +285,7 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	mp_ioapic_routing[idx].gsi_end = gsi_base +
 		io_apic_get_redir_entries(idx);
 	gsi_base = mp_ioapic_routing[idx].gsi_end + 1;
-	pr_info(PREFIX "IOAPIC[%d]: apic_id %d, version %d, address 0x%x, "
+	pr_info(SFI_PFX "IOAPIC[%d]: apic_id %d, version %d, address 0x%x, "
 	       "GSI %d-%d\n", idx, mp_ioapics[idx].apicid,
 	       mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr,
 	       mp_ioapic_routing[idx].gsi_base,
