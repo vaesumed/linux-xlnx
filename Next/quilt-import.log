@@ -1,0 +1,88 @@
+Importing driver-core.current based on 2.6.30-git18
+	quilt series is empty
+$ git update-ref refs/heads/quilt/driver-core.current f234012f52a37e48f2330e1ca2df69800e797c3b
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current f234012f52a37e48f2330e1ca2df69800e797c3b
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard b363ab2e6f0dfdc81647e22be9976da2759c3dff
+HEAD is now at b363ab2 Merge branch 'for-linus' into for-next
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+dm-sysfs-skip-output-when-device-is-being-destroyed.patch
+dm-mpath-change-attached-scsi_dh.patch
+dm-mpath-call-activate-fn-for-each-path-in-pg_init.patch
+dm-raid1-keep-retrying-alloc-if-mempool_alloc-failed.patch
+dm-mpath-flush-keventd-queue-in-destructor.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries.patch
+dm-use-i_size_read.patch
+dm-exception-store-fix-exstore-lookup-to-be-case-insensitive.patch
+dm-rename-suspended_bdev-to-bdev.patch
+dm-always-hold-bdev-reference.patch
+dm-make-dm_flush-return-void.patch
+dm-process-requeue-in-dm_wq_work.patch
+dm-store-only-first-barrier-error.patch
+dm-remove-EOPNOTSUPP-for-barriers.patch
+dm-remove-check-that-prevents-mapping-empty-bios.patch
+dm-introduce-num_flush_requests.patch
+dm-initialise-tio-in-alloc_tio.patch
+dm-send-empty-barriers-to-targets-in-dm_flush.patch
+dm-linear-support-flush.patch
+dm-stripe-support-flush.patch
+dm-crypt-support-flush.patch
+dm-delay-support-barriers.patch
+dm-mpath-support-barriers.patch
+dm-snapshot-support-barriers.patch
+dm-io-record-eopnotsupp.patch
+dm-io-retry-after-barrier-error.patch
+dm-snapshot-use-barrier-when-writing-exception-store.patch
+dm-mpath-add-start_io-and-nr_bytes-to-path-selectors.patch
+dm-mpath-add-queue-length-load-balancer.patch
+dm-mpath-add-service-time-load-balancer.patch
+dm-table-improve-warning-message-when-devices-not-freed-before-destruction.patch
+dm-sysfs-add-suspended-attribute.patch
+dm-ioctl-support-cookies-for-udev.patch
+dm-table-ensure-targets-are-aligned-to-logical_block_size.patch
+dm-table-validate-device-logical_block_size.patch
+dm-table-replace-struct-io_restrictions-with-struct-queue_limits.patch
+dm-table-establish-queue-limits-by-copying-table-limits.patch
+dm-targets-introduce-iterate-devices-fn.patch
+dm-log-fix-create_log_context-to-use-logical_block_size-of-log-device.patch
+dm-calculate-queue-limits-during-resume-not-load.patch
+dm-raid1-add-userspace-log.patch
+dm-prepare-for-request-based-option.patch
+dm-enable-request-based-option.patch
+dm-do-not-set-QUEUE_ORDERED_DRAIN-if-request-based.patch
+dm-disable-interrupt-when-taking-map_lock.patch
+dm-mpath-change-to-be-request-based.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 1df0db5...7df7005 master     -> quilt/device-mapper  (forced update)
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard f234012f52a37e48f2330e1ca2df69800e797c3b
+HEAD is now at f234012 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/drzeus/mmc
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-devtmpfs-driver-core-maintained-dev-tmpfs.patch
+sound-remove-direct-access-of-driver_data.patch
+driver-core-move-dev_get-set_drvdata-to-drivers-base-dd.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 47c0383...53d8ba5 master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb 53d8ba57f16029a47ed5df9840ab6c3f9abd3727
+Importing staging based on quilt/usb
+	quilt series is empty
+$ git update-ref refs/heads/quilt/staging 53d8ba57f16029a47ed5df9840ab6c3f9abd3727
