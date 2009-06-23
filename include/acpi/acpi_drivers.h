@@ -29,6 +29,8 @@
 #include <linux/acpi.h>
 #include <acpi/acpi_bus.h>
 
+#ifdef	CONFIG_ACPI
+
 #define ACPI_MAX_STRING			80
 
 /*
@@ -154,4 +156,5 @@ static inline void unregister_hotplug_dock_device(acpi_handle handle)
 }
 #endif
 
+#endif /* CONFIG_ACPI */
 #endif /*__ACPI_DRIVERS_H__*/
