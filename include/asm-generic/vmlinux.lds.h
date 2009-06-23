@@ -437,7 +437,7 @@
 #define INIT_TASK_DATA(align)						\
 	. = ALIGN(align);						\
 	.data.init_task : {						\
-		INIT_TASK						\
+		INIT_TASK(0)						\
 	}
 
 #ifdef CONFIG_CONSTRUCTORS
