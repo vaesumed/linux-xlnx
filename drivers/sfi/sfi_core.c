@@ -92,8 +92,7 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 static void sfi_print_table_header(u32 address,
 			struct sfi_table_header *header)
 {
-	pr_info(SFI_PFX
-		"%4.4s %08lX, %04X (r%d %6.6s %8.8s)\n",
+	pr_info("%4.4s %08lX, %04X (r%d %6.6s %8.8s)\n",
 		header->signature, (unsigned long)address,
 		header->length, header->revision, header->oem_id,
 		header->oem_table_id);
@@ -115,8 +114,7 @@ static int sfi_tb_verify_checksum(struct sfi_table_header *table, u32 length)
 
 	checksum = sfi_checksum_table((u8 *)table, length);
 	if (checksum) {
-		pr_warning(SFI_PFX
-			"Incorrect checksum in table [%4.4s] -  %2.2X,"
+		pr_warning("Incorrect checksum in table [%4.4s] -  %2.2X,"
 			" should be %2.2X\n", table->signature,
 			table->checksum, (u8)(table->checksum - checksum));
 		return -1;
@@ -262,7 +260,7 @@ sfi_tb_parse_syst(unsigned long syst_addr)
 	table = (struct sfi_table_header *)syst;
 	status = sfi_tb_verify_checksum(table, length);
 	if (status) {
-		pr_err(SFI_PFX "SYST checksum error!!\n");
+		pr_err("SYST checksum error!!\n");
 		sfi_unmap_memory(table, length);
 		return status;
 	}
@@ -331,7 +329,7 @@ int __init sfi_table_init(void)
 
 	syst_paddr = sfi_find_syst();
 	if (!syst_paddr) {
-		pr_warning(SFI_PFX "No system table\n");
+		pr_warning("No system table\n");
 		goto err_exit;
 	}
 
@@ -373,7 +371,7 @@ int __init sfi_init(void)
 	if (sfi_disabled)
 		return -1;
 
-	pr_info(SFI_PFX "Simple Firmware Interface v0.5\n");
+	pr_info("Simple Firmware Interface v0.5\n");
 
 	if (sfi_table_init())
 		return -1;

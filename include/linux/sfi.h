@@ -153,7 +153,4 @@ static inline int sfi_table_parse(char *signature, char *oem_id, char* oem_table
 
 #endif	/* CONFIG_SFI */
 
-/* prefix for debug msg */
-#define SFI_PFX		"SFI: "
-
 #endif	/*_LINUX_SFI_H*/

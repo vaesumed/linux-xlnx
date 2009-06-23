@@ -38,6 +38,9 @@
 #include <asm/apic.h>
 #include <asm/e820.h>
 
+#define KMSG_COMPONENT "SFI"
+#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
+
 #ifdef CONFIG_X86_LOCAL_APIC
 static u64 sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
 #endif
@@ -123,7 +126,7 @@ int __init sfi_init_memory_map(void)
 		if (start > end)
 			return -1;
 
-		pr_debug(SFI_PFX "start = 0x%08x end = 0x%08x type = %d\n",
+		pr_debug("start = 0x%08x end = 0x%08x type = %d\n",
 			(u32)start, (u32)end, mentry->type);
 
 		/* translate SFI mmap type to E820 map type */
@@ -157,7 +160,7 @@ void __init mp_sfi_register_lapic_address(u64 address)
 	if (boot_cpu_physical_apicid == -1U)
 		boot_cpu_physical_apicid = read_apic_id();
 
-	pr_debug(SFI_PFX "Boot CPU = %d\n", boot_cpu_physical_apicid);
+	pr_debug("Boot CPU = %d\n", boot_cpu_physical_apicid);
 }
 
 /* All CPUs enumerated by SFI must be present and enabled */
@@ -273,7 +276,7 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	mp_ioapics[idx].apicver = 0;
 #endif
 
-	pr_info(SFI_PFX "IOAPIC[%d]: apic_id %d, version %d, address 0x%x\n",
+	pr_info("IOAPIC[%d]: apic_id %d, version %d, address 0x%x\n",
 		idx, mp_ioapics[idx].apicid,
 		mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr);
 	/*
@@ -285,7 +288,7 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	mp_ioapic_routing[idx].gsi_end = gsi_base +
 		io_apic_get_redir_entries(idx);
 	gsi_base = mp_ioapic_routing[idx].gsi_end + 1;
-	pr_info(SFI_PFX "IOAPIC[%d]: apic_id %d, version %d, address 0x%x, "
+	pr_info("IOAPIC[%d]: apic_id %d, version %d, address 0x%x, "
 	       "GSI %d-%d\n", idx, mp_ioapics[idx].apicid,
 	       mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr,
 	       mp_ioapic_routing[idx].gsi_base,

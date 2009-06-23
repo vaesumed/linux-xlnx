@@ -67,7 +67,7 @@ static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 	num_entries = (xsdt->header.length - sizeof(struct acpi_table_header) /
 		sizeof(u64));
 
-	pr_debug(SFI_PFX "XSDT has %d entries\n", num_entries);
+	pr_debug("XSDT has %d entries\n", num_entries);
 
 	for (i = 0; i < num_entries; i++)
 		sfi_tb_install_table(xsdt->table_offset_entry[i], SFI_ACPI_TABLE);
