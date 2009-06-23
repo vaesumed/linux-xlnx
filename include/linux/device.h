@@ -2,7 +2,8 @@
  * device.h - generic, centralized driver model
  *
  * Copyright (c) 2001-2003 Patrick Mochel <mochel@osdl.org>
- * Copyright (c) 2004-2007 Greg Kroah-Hartman <gregkh@suse.de>
+ * Copyright (c) 2004-2009 Greg Kroah-Hartman <gregkh@suse.de>
+ * Copyright (c) 2008-2009 Novell Inc.
  *
  * This file is released under the GPLv2
  *
@@ -382,7 +383,10 @@ struct device {
 	struct bus_type	*bus;		/* type of bus device is on */
 	struct device_driver *driver;	/* which driver has allocated this
 					   device */
-	void		*driver_data;	/* data private to the driver */
+	void		*dd_DO_NOT_USE;	/* data private to the driver, do
+					 * not directly touch this field,
+					 * use the dev_get/set_drvdata()
+					 * functions instead. */
 	void		*platform_data;	/* Platform specific data, device
 					   core doesn't touch it */
 	struct dev_pm_info	power;
@@ -448,16 +452,6 @@ static inline void set_dev_node(struct device *dev, int node)
 }
 #endif
 
-static inline void *dev_get_drvdata(const struct device *dev)
-{
-	return dev->driver_data;
-}
-
-static inline void dev_set_drvdata(struct device *dev, void *data)
-{
-	dev->driver_data = data;
-}
-
 static inline unsigned int dev_get_uevent_suppress(const struct device *dev)
 {
 	return dev->kobj.uevent_suppress;
@@ -491,6 +485,8 @@ extern int device_rename(struct device *dev, char *new_name);
 extern int device_move(struct device *dev, struct device *new_parent,
 		       enum dpm_order dpm_order);
 extern const char *device_get_nodename(struct device *dev, const char **tmp);
+extern void *dev_get_drvdata(const struct device *dev);
+extern void dev_set_drvdata(struct device *dev, void *data);
 
 /*
  * Root device objects for grouping under /sys/devices
@@ -547,6 +543,16 @@ extern struct device *get_device(struct device *dev);
 extern void put_device(struct device *dev);
 
 extern void wait_for_device_probe(void);
+
+#ifdef CONFIG_DEVTMPFS
+extern int devtmpfs_create_node(struct device *dev);
+extern int devtmpfs_delete_node(struct device *dev);
+extern int devtmpfs_mount(const char *mountpoint);
+#else
+static inline int devtmpfs_create_node(struct device *dev) { return 0; }
+static inline int devtmpfs_delete_node(struct device *dev) { return 0; }
+static inline int devtmpfs_mount(const char *mountpoint) { return 0; }
+#endif
 
 /* drivers/base/power/shutdown.c */
 extern void device_shutdown(void);
