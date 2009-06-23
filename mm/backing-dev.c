@@ -232,7 +232,7 @@ static int __init default_bdi_init(void)
 	int err;
 
 	sync_supers_tsk = kthread_run(bdi_sync_supers, NULL, "sync_supers");
-	BUG_ON(!sync_supers_tsk);
+	BUG_ON(IS_ERR(sync_supers_tsk));
 
 	init_timer(&sync_supers_timer);
 	setup_timer(&sync_supers_timer, sync_supers_timer_fn, 0);
@@ -541,7 +541,8 @@ static int bdi_forker_task(void *ptr)
 		 * from this forker thread. That will free some memory
 		 * and we can try again.
 		 */
-		if (!wb->task) {
+		if (IS_ERR(wb->task)) {
+			wb->task = NULL;
 			bdi_put_wb(bdi, wb);
 readd_flush:
 			/*
@@ -670,7 +671,8 @@ int bdi_register(struct backing_dev_info *bdi, struct device *parent,
 
 		wb->task = kthread_run(bdi_forker_task, wb, "bdi-%s",
 						dev_name(dev));
-		if (!wb->task) {
+		if (IS_ERR(wb->task)) {
+			wb->task = NULL;
 			bdi_put_wb(bdi, wb);
 			ret = -ENOMEM;
 remove_err:
