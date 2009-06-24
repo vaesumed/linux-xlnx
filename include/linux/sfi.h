@@ -78,8 +78,8 @@ struct sfi_table_header {
 } __attribute__ ((packed));
 
 struct sfi_table_simple {
-	struct sfi_table_header	header;
-	u64			pentry[1];
+	struct sfi_table_header		header;
+	u64				pentry[1];
 } __attribute__ ((packed));
 
 /* comply with UEFI spec 2.1 */
@@ -101,7 +101,7 @@ struct sfi_cstate_table_entry {
 } __attribute__ ((packed));
 
 struct sfi_apic_table_entry {
-	u64	phy_addr;		/* phy base addr for APIC reg */
+	u64	phy_addr;	/* phy base addr for APIC reg */
 } __attribute__ ((packed));
 
 struct sfi_freq_table_entry {
