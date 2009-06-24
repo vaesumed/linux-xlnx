@@ -52,6 +52,9 @@
 
 #include "sfi_core.h"
 
+#define on_same_page(addr1, addr2) \
+	((addr1 & PAGE_MASK) == (addr2 & PAGE_MASK))
+
 int sfi_disabled __read_mostly;
 EXPORT_SYMBOL(sfi_disabled);
 
@@ -192,25 +195,32 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 	sfi_put_table(table);
 	return ret;
 }
-
 EXPORT_SYMBOL_GPL(sfi_table_parse);
 
 void sfi_tb_install_table(u64 addr, u32 flags)
 {
 	struct sfi_table_header *table;
 	u32 length;
+	int need_remap;
 
 	/* only map table header before knowing actual length */
 	table = sfi_map_memory(addr, sizeof(struct sfi_table_header));
 	if (!table)
 		return;
-
 	length = table->length;
-	sfi_unmap_memory(table, sizeof(struct sfi_table_header));
 
-	table = sfi_map_memory(addr, length);
-	if (!table)
-		return;
+	/*
+	 * remap the table only when the last byte of table header and
+	 * table itself are not on same page
+	 */
+	need_remap = !on_same_page((addr + sizeof(struct sfi_table_header)),
+				(addr + length));
+	if (need_remap) {
+		sfi_unmap_memory(table, sizeof(struct sfi_table_header));
+		table = sfi_map_memory(addr, length);
+		if (!table)
+			return;
+	}
 
 	if (sfi_tb_verify_checksum(table, length))
 		goto unmap_and_exit;
@@ -226,7 +236,8 @@ void sfi_tb_install_table(u64 addr, u32 flags)
 	sfi_tblist.count++;
 
 unmap_and_exit:
-	sfi_unmap_memory(table, length);
+	sfi_unmap_memory(table,
+			need_remap ? length : sizeof(struct sfi_table_header));
 	return;
 }
 
@@ -239,23 +250,25 @@ static int __init sfi_parse_syst(unsigned long syst_addr)
 	struct sfi_table_header *table;
 	u64 *paddr;
 	u32 length, tbl_cnt;
-	int status;
-	int i;
+	int i, need_remap;
 
-	/* 1. map and get the total length of SYST */
+	/* map and get the total length of SYST */
 	syst = sfi_map_memory(syst_addr, sizeof(struct sfi_table_simple));
 	if (!syst)
 		return -ENOMEM;
 
-	sfi_print_table_header(syst_addr, (struct sfi_table_header *)syst);
 	table = (struct sfi_table_header *)syst;
 	length = table->length;
-	sfi_unmap_memory(syst, sizeof(struct sfi_table_simple));
+	sfi_print_table_header(syst_addr, table);
 
-	/* 2. remap/verify the SYST and parse the number of entry */
-	syst = sfi_map_memory(syst_addr, length);
-	if (!syst)
-		return -ENOMEM;
+	need_remap = !on_same_page((syst_addr + length),
+				(syst_addr + sizeof(struct sfi_table_simple)));
+	if (need_remap) {
+		sfi_unmap_memory(syst, sizeof(struct sfi_table_simple));
+		syst = sfi_map_memory(syst_addr, length);
+		if (!syst)
+			return -ENOMEM;
+	}
 
 	/* Calculate the number of tables */
 	tbl_cnt = (length - sizeof(struct sfi_table_header)) / sizeof(u64);
@@ -267,11 +280,12 @@ static int __init sfi_parse_syst(unsigned long syst_addr)
 	memcpy(&sfi_tblist.tables[0].header,
 		syst, sizeof(struct sfi_table_header));
 
-	/* 3. save all tables info to the global sfi_tblist structure */
+	/* save all tables info to the global sfi_tblist structure */
 	for (i = 1; i <= tbl_cnt; i++)
 		sfi_tb_install_table(*paddr++, 0);
 
-	sfi_unmap_memory(syst, length);
+	sfi_unmap_memory(syst,
+			need_remap ? length : sizeof(struct sfi_table_simple));
 	return 0;
 }
 
