@@ -52,7 +52,7 @@
 
 #include "sfi_core.h"
 
-int sfi_disabled;
+int sfi_disabled __read_mostly;
 EXPORT_SYMBOL(sfi_disabled);
 
 #define SFI_MAX_TABLES		64
@@ -65,14 +65,14 @@ static struct sfi_table_desc sfi_initial_tables[SFI_MAX_TABLES] __initdata;
  * early_ioremap  and early_iounmap should be used each time a
  * table is visited
  */
-static u32 sfi_tbl_permanant_mapped;
+static u32 sfi_tbl_permanent_mapped __read_mostly;
 
 static void __iomem *sfi_map_memory(u32 phys, u32 size)
 {
 	if (!phys || !size)
 		return NULL;
 
-	if (sfi_tbl_permanant_mapped)
+	if (sfi_tbl_permanent_mapped)
 		return ioremap((unsigned long)phys, size);
 	else
 		return arch_early_ioremap((unsigned long)phys, size);
@@ -83,7 +83,7 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 	if (!virt || !size)
 		return;
 
-	if (sfi_tbl_permanant_mapped)
+	if (sfi_tbl_permanent_mapped)
 		iounmap(virt);
 	else
 		arch_early_iounmap(virt, size);
@@ -91,18 +91,19 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 
 static void sfi_print_table_header(u32 address, struct sfi_table_header *header)
 {
-	pr_info("%4.4s %08lX, %04X (r%d %6.6s %8.8s)\n",
-		header->signature, (unsigned long)address,
+	pr_info("%4.4s %08X, %04X (r%d %6.6s %8.8s)\n",
+		header->signature, address,
 		header->length, header->revision, header->oem_id,
 		header->oem_table_id);
 }
 
-static u8 sfi_checksum_table(u8 *buffer, u32 length)
+static u8 sfi_checksum_table(void *buffer, u32 length)
 {
 	u8 sum = 0;
+	u8 *puchar = buffer;
 
 	while (length--)
-		sum += *buffer++;
+		sum += *puchar++;
 	return sum;
 }
 
@@ -111,7 +112,7 @@ static int sfi_tb_verify_checksum(struct sfi_table_header *table, u32 length)
 {
 	u8 checksum;
 
-	checksum = sfi_checksum_table((u8 *)table, length);
+	checksum = sfi_checksum_table(table, length);
 	if (checksum) {
 		pr_warning("Incorrect checksum in table [%4.4s] -  %2.2X,"
 			" should be %2.2X\n", table->signature,
@@ -158,7 +159,7 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 		}
 		*out_table = tdesc->pointer;
 
-		if (!sfi_tbl_permanant_mapped)
+		if (!sfi_tbl_permanent_mapped)
 			tdesc->pointer = NULL;
 
 		return 0;
@@ -169,7 +170,7 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 
 void sfi_put_table(struct sfi_table_header *table)
 {
-	if (!sfi_tbl_permanant_mapped)
+	if (!sfi_tbl_permanent_mapped)
 		sfi_unmap_memory(table, table->length);
 }
 
@@ -185,7 +186,7 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 
 	sfi_get_table(signature, oem_id, oem_table_id, flags, &table);
 	if (!table)
-		return -1;
+		return -EINVAL;
 
 	ret = handler(table);
 	sfi_put_table(table);
@@ -232,7 +233,7 @@ unmap_and_exit:
 /*
  * Copy system table and associated table headers to internal format
  */
-static int __init sfi_tb_parse_syst(unsigned long syst_addr)
+static int __init sfi_parse_syst(unsigned long syst_addr)
 {
 	struct sfi_table_simple *syst;
 	struct sfi_table_header *table;
@@ -256,14 +257,6 @@ static int __init sfi_tb_parse_syst(unsigned long syst_addr)
 	if (!syst)
 		return -ENOMEM;
 
-	table = (struct sfi_table_header *)syst;
-	status = sfi_tb_verify_checksum(table, length);
-	if (status) {
-		pr_err("SYST checksum error!!\n");
-		sfi_unmap_memory(table, length);
-		return status;
-	}
-
 	/* Calculate the number of tables */
 	tbl_cnt = (length - sizeof(struct sfi_table_header)) / sizeof(u64);
 	paddr = (u64 *) syst->pentry;
@@ -279,14 +272,14 @@ static int __init sfi_tb_parse_syst(unsigned long syst_addr)
 		sfi_tb_install_table(*paddr++, 0);
 
 	sfi_unmap_memory(syst, length);
-
 	return 0;
 }
 
 /*
- * The OS finds the System Table by searching 16-byte boundaries between physical
- * address 0x000E0000 and 0x000FFFFF. The OS shall search this region starting at the
- * low address and shall stop searching when the 1st valid SFI System Table is found.
+ * The OS finds the System Table by searching 16-byte boundaries between
+ * physical address 0x000E0000 and 0x000FFFFF. The OS shall search this region
+ * starting at the low address and shall stop searching when the 1st valid SFI
+ * System Table is found.
  */
 static __init unsigned long sfi_find_syst(void)
 {
@@ -301,8 +294,7 @@ static __init unsigned long sfi_find_syst(void)
 	for (offset = 0; offset < len; offset += 16) {
 		struct sfi_table_header *syst;
 
-		syst = (struct sfi_table_header *)(start + offset);
-
+		syst = start + offset;
 		if (strncmp(syst->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
 			continue;
 
@@ -331,7 +323,7 @@ int __init sfi_table_init(void)
 		goto err_exit;
 	}
 
-	status = sfi_tb_parse_syst(syst_paddr);
+	status = sfi_parse_syst(syst_paddr);
 	if (status)
 		goto err_exit;
 
@@ -346,7 +338,7 @@ static void sfi_realloc_tblist(void)
 	int size;
 	struct sfi_table_desc *table;
 
-	size = (sfi_tblist.count + 8) * sizeof(struct sfi_table_desc);
+	size = sfi_tblist.count * sizeof(struct sfi_table_desc);
 	table = kzalloc(size, GFP_KERNEL);
 	if (!table) {
 		disable_sfi();
@@ -369,7 +361,7 @@ int __init sfi_init(void)
 	if (sfi_disabled)
 		return -1;
 
-	pr_info("Simple Firmware Interface v0.5\n");
+	pr_info("Simple Firmware Interface v0.6\n");
 
 	if (sfi_table_init())
 		return -1;
@@ -382,7 +374,7 @@ void __init sfi_init_late(void)
 {
 	if (sfi_disabled)
 		return;
-	sfi_tbl_permanant_mapped = 1;
+	sfi_tbl_permanent_mapped = 1;
 	sfi_realloc_tblist();
 }
 
