@@ -37,12 +37,14 @@
 #define CR3_L_MODE_RESERVED_BITS (CR3_NONPAE_RESERVED_BITS |	\
 				  0xFFFFFF0000000000ULL)
 
-#define KVM_GUEST_CR0_MASK				   \
-	(X86_CR0_PG | X86_CR0_PE | X86_CR0_WP | X86_CR0_NE \
-	 | X86_CR0_NW | X86_CR0_CD)
+#define KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST				\
+	(X86_CR0_WP | X86_CR0_NE | X86_CR0_NW | X86_CR0_CD)
+#define KVM_GUEST_CR0_MASK						\
+	(KVM_GUEST_CR0_MASK_UNRESTRICTED_GUEST | X86_CR0_PG | X86_CR0_PE)
+#define KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST				\
+	(X86_CR0_WP | X86_CR0_NE | X86_CR0_TS | X86_CR0_MP)
 #define KVM_VM_CR0_ALWAYS_ON						\
-	(X86_CR0_PG | X86_CR0_PE | X86_CR0_WP | X86_CR0_NE | X86_CR0_TS \
-	 | X86_CR0_MP)
+	(KVM_VM_CR0_ALWAYS_ON_UNRESTRICTED_GUEST | X86_CR0_PG | X86_CR0_PE)
 #define KVM_GUEST_CR4_MASK						\
 	(X86_CR4_VME | X86_CR4_PSE | X86_CR4_PAE | X86_CR4_PGE | X86_CR4_VMXE)
 #define KVM_PMODE_VM_CR4_ALWAYS_ON (X86_CR4_PAE | X86_CR4_VMXE)
@@ -118,6 +120,10 @@ enum kvm_reg {
 #endif
 	VCPU_REGS_RIP,
 	NR_VCPU_REGS
+};
+
+enum kvm_reg_ex {
+	VCPU_EXREG_PDPTR = NR_VCPU_REGS,
 };
 
 enum {
@@ -334,16 +340,6 @@ struct kvm_vcpu_arch {
 		u8 nr;
 	} interrupt;
 
-	struct {
-		int vm86_active;
-		u8 save_iopl;
-		struct kvm_save_segment {
-			u16 selector;
-			unsigned long base;
-			u32 limit;
-			u32 ar;
-		} tr, es, ds, fs, gs;
-	} rmode;
 	int halt_request; /* real mode on Intel only */
 
 	int cpuid_nent;
@@ -373,6 +369,11 @@ struct kvm_vcpu_arch {
 	unsigned long dr6;
 	unsigned long dr7;
 	unsigned long eff_db[KVM_NR_DB_REGS];
+
+	u64 mcg_cap;
+	u64 mcg_status;
+	u64 mcg_ctl;
+	u64 *mce_banks;
 };
 
 struct kvm_mem_alias {
@@ -751,8 +752,6 @@ static inline void kvm_inject_gp(struct kvm_vcpu *vcpu, u32 error_code)
 {
 	kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
 }
-
-#define MSR_IA32_TIME_STAMP_COUNTER		0x010
 
 #define TSS_IOPB_BASE_OFFSET 0x66
 #define TSS_BASE_SIZE 0x68
