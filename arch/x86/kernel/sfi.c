@@ -42,7 +42,7 @@
 #define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
 
 #ifdef CONFIG_X86_LOCAL_APIC
-static u64 sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
+static unsigned long sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
 #endif
 
 #ifdef CONFIG_X86_IO_APIC
@@ -111,8 +111,10 @@ int __init sfi_init_memory_map(void)
 		}
 		pentry++;
 	}
-	if (!mmapt)
+	if (!mmapt) {
+		pr_warning("could not find a valid memory map table\n");
 		return -1;
+	}
 
 	/* refer copy_e820_memory() */
 	num = SFI_GET_ENTRY_NUM(mmapt, sfi_mem_entry);
@@ -150,10 +152,9 @@ int __init sfi_init_memory_map(void)
 }
 
 #ifdef CONFIG_X86_LOCAL_APIC
-void __init mp_sfi_register_lapic_address(u64 address)
+void __init mp_sfi_register_lapic_address(unsigned long address)
 {
-	mp_lapic_addr = (unsigned long)address;
-
+	mp_lapic_addr = address;
 	set_fixmap_nocache(FIX_APIC_BASE, mp_lapic_addr);
 
 	if (boot_cpu_physical_apicid == -1U)
@@ -198,9 +199,7 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 	int i;
 	int cpu_num;
 
-	BUG_ON(!table);
 	sb = (struct sfi_table_simple *)table;
-
 	cpu_num = SFI_GET_ENTRY_NUM(sb, sfi_cpu_table_entry);
 	pentry = (struct sfi_cpu_table_entry *)sb->pentry;
 
@@ -295,23 +294,23 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	nr_ioapics++;
 }
 
-static int __init sfi_parse_apic(struct sfi_table_header *table)
+static int __init sfi_parse_ioapic(struct sfi_table_header *table)
 {
 	struct sfi_table_simple *sb;
 	struct sfi_apic_table_entry *pentry;
 	int i, num;
 
-	BUG_ON(!table);
 	sb = (struct sfi_table_simple *)table;
-
 	num = SFI_GET_ENTRY_NUM(sb, sfi_apic_table_entry);
 	pentry = (struct sfi_apic_table_entry *)sb->pentry;
+
 	for (i = 0; i < num; i++) {
 		mp_sfi_register_ioapic(i, pentry->phy_addr);
 		pentry++;
 	}
 
-	WARN_ON(pic_mode);
+	WARN(pic_mode, KERN_WARNING
+		"SFI: pic_mod shouldn't be 1 when IOAPIC table is present\n");
 	pic_mode = 0;
 	return 0;
 }
@@ -327,7 +326,7 @@ int __init sfi_platform_init(void)
 	sfi_table_parse(SFI_SIG_CPUS, NULL, NULL, 0, sfi_parse_cpus);
 #endif
 #ifdef CONFIG_X86_IO_APIC
-	sfi_table_parse(SFI_SIG_APIC, NULL, NULL, 0, sfi_parse_apic);
+	sfi_table_parse(SFI_SIG_APIC, NULL, NULL, 0, sfi_parse_ioapic);
 #endif
 	return 0;
 }
