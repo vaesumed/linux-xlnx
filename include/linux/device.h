@@ -133,7 +133,7 @@ struct device_driver {
 	void (*shutdown) (struct device *dev);
 	int (*suspend) (struct device *dev, pm_message_t state);
 	int (*resume) (struct device *dev);
-	struct attribute_group **groups;
+	const struct attribute_group **groups;
 
 	struct dev_pm_ops *pm;
 
@@ -289,7 +289,7 @@ extern void class_destroy(struct class *cls);
  */
 struct device_type {
 	const char *name;
-	struct attribute_group **groups;
+	const struct attribute_group **groups;
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	char *(*nodename)(struct device *dev);
 	void (*release)(struct device *dev);
@@ -413,7 +413,7 @@ struct device {
 
 	struct klist_node	knode_class;
 	struct class		*class;
-	struct attribute_group	**groups;	/* optional groups */
+	const struct attribute_group **groups;	/* optional groups */
 
 	void	(*release)(struct device *dev);
 };
