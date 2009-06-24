@@ -1508,11 +1508,13 @@ static void free_counter(struct perf_counter *counter)
 {
 	perf_pending_sync(counter);
 
-	atomic_dec(&nr_counters);
-	if (counter->attr.mmap)
-		atomic_dec(&nr_mmap_counters);
-	if (counter->attr.comm)
-		atomic_dec(&nr_comm_counters);
+	if (!counter->parent) {
+		atomic_dec(&nr_counters);
+		if (counter->attr.mmap)
+			atomic_dec(&nr_mmap_counters);
+		if (counter->attr.comm)
+			atomic_dec(&nr_comm_counters);
+	}
 
 	if (counter->destroy)
 		counter->destroy(counter);
@@ -3317,8 +3319,8 @@ out:
 	put_cpu_var(perf_cpu_context);
 }
 
-void
-perf_swcounter_event(u32 event, u64 nr, int nmi, struct pt_regs *regs, u64 addr)
+void __perf_swcounter_event(u32 event, u64 nr, int nmi,
+			    struct pt_regs *regs, u64 addr)
 {
 	struct perf_sample_data data = {
 		.regs = regs,
@@ -3509,9 +3511,21 @@ static const struct pmu *tp_perf_counter_init(struct perf_counter *counter)
 }
 #endif
 
+atomic_t perf_swcounter_enabled[PERF_COUNT_SW_MAX];
+
+static void sw_perf_counter_destroy(struct perf_counter *counter)
+{
+	u64 event = counter->attr.config;
+
+	WARN_ON(counter->parent);
+
+	atomic_dec(&perf_swcounter_enabled[event]);
+}
+
 static const struct pmu *sw_perf_counter_init(struct perf_counter *counter)
 {
 	const struct pmu *pmu = NULL;
+	u64 event = counter->attr.config;
 
 	/*
 	 * Software counters (currently) can't in general distinguish
@@ -3520,7 +3534,7 @@ static const struct pmu *sw_perf_counter_init(struct perf_counter *counter)
 	 * to be kernel events, and page faults are never hypervisor
 	 * events.
 	 */
-	switch (counter->attr.config) {
+	switch (event) {
 	case PERF_COUNT_SW_CPU_CLOCK:
 		pmu = &perf_ops_cpu_clock;
 
@@ -3541,6 +3555,10 @@ static const struct pmu *sw_perf_counter_init(struct perf_counter *counter)
 	case PERF_COUNT_SW_PAGE_FAULTS_MAJ:
 	case PERF_COUNT_SW_CONTEXT_SWITCHES:
 	case PERF_COUNT_SW_CPU_MIGRATIONS:
+		if (!counter->parent) {
+			atomic_inc(&perf_swcounter_enabled[event]);
+			counter->destroy = sw_perf_counter_destroy;
+		}
 		pmu = &perf_ops_generic;
 		break;
 	}
@@ -3556,6 +3574,7 @@ perf_counter_alloc(struct perf_counter_attr *attr,
 		   int cpu,
 		   struct perf_counter_context *ctx,
 		   struct perf_counter *group_leader,
+		   struct perf_counter *parent_counter,
 		   gfp_t gfpflags)
 {
 	const struct pmu *pmu;
@@ -3590,6 +3609,8 @@ perf_counter_alloc(struct perf_counter_attr *attr,
 	counter->pmu		= NULL;
 	counter->ctx		= ctx;
 	counter->oncpu		= -1;
+
+	counter->parent		= parent_counter;
 
 	counter->ns		= get_pid_ns(current->nsproxy->pid_ns);
 	counter->id		= atomic64_inc_return(&perf_counter_id);
@@ -3648,11 +3669,13 @@ done:
 
 	counter->pmu = pmu;
 
-	atomic_inc(&nr_counters);
-	if (counter->attr.mmap)
-		atomic_inc(&nr_mmap_counters);
-	if (counter->attr.comm)
-		atomic_inc(&nr_comm_counters);
+	if (!counter->parent) {
+		atomic_inc(&nr_counters);
+		if (counter->attr.mmap)
+			atomic_inc(&nr_mmap_counters);
+		if (counter->attr.comm)
+			atomic_inc(&nr_comm_counters);
+	}
 
 	return counter;
 }
@@ -3815,7 +3838,7 @@ SYSCALL_DEFINE5(perf_counter_open,
 	}
 
 	counter = perf_counter_alloc(&attr, cpu, ctx, group_leader,
-				     GFP_KERNEL);
+				     NULL, GFP_KERNEL);
 	ret = PTR_ERR(counter);
 	if (IS_ERR(counter))
 		goto err_put_context;
@@ -3881,7 +3904,8 @@ inherit_counter(struct perf_counter *parent_counter,
 
 	child_counter = perf_counter_alloc(&parent_counter->attr,
 					   parent_counter->cpu, child_ctx,
-					   group_leader, GFP_KERNEL);
+					   group_leader, parent_counter,
+					   GFP_KERNEL);
 	if (IS_ERR(child_counter))
 		return child_counter;
 	get_ctx(child_ctx);
@@ -3903,12 +3927,6 @@ inherit_counter(struct perf_counter *parent_counter,
 	 * Link it up in the child's context:
 	 */
 	add_counter_to_ctx(child_counter, child_ctx);
-
-	child_counter->parent = parent_counter;
-	/*
-	 * inherit into child's child as well:
-	 */
-	child_counter->attr.inherit = 1;
 
 	/*
 	 * Get a reference to the parent filp - we will fput it
