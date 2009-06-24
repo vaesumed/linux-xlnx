@@ -60,6 +60,3 @@ extern struct sfi_internal_syst sfi_tblist;
 void sfi_tb_install_table(u64 address, u32 flags);
 
 #define SFI_ACPI_TABLE	1
-
-#define KMSG_COMPONENT "SFI"
-#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt

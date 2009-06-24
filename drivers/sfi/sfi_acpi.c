@@ -37,6 +37,9 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
+#define KMSG_COMPONENT "SFI"
+#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
+
 #include <linux/kernel.h>
 #include <linux/acpi.h>
 #include <linux/sfi.h>

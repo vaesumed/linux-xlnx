@@ -21,6 +21,10 @@
  *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
+
+#define KMSG_COMPONENT "SFI"
+#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
+
 #include <linux/bootmem.h>
 #include <linux/cpumask.h>
 #include <linux/module.h>
@@ -37,9 +41,6 @@
 #include <asm/setup.h>
 #include <asm/apic.h>
 #include <asm/e820.h>
-
-#define KMSG_COMPONENT "SFI"
-#define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
 
 #ifdef CONFIG_X86_LOCAL_APIC
 static unsigned long sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
