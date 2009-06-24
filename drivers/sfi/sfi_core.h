@@ -38,17 +38,17 @@
  */
 
 struct sfi_table_desc {
-	struct sfi_table_header header;	/* copy of the headef info */
-	struct sfi_table_header *pointer;
-	u64 address;
-	u32 flags;
+	struct sfi_table_header		header;	/* copy of the header info */
+	struct sfi_table_header		*pointer;
+	u64				address;
+	u32				flags;
 };
 
 /* SFI internal root SYSTem table */
 struct sfi_internal_syst {
-	struct sfi_table_desc *tables;
-	u32 count;
-	u32 size;
+	struct sfi_table_desc	*tables;
+	u32			count;
+	u32			size;
 };
 
 extern int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
