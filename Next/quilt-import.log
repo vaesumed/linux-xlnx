@@ -1,0 +1,236 @@
+Importing driver-core.current based on 2.6.30-git22
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 4e8a2372f9255a1464ef488ed925455f53fbdaa1
+HEAD is now at 4e8a237 nvidiafb: fix boot-time printk string
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+devres-warn-and-return-don-t-crash-on-device_del-of-uninitialized-device.patch
+partitions-fix-broken-uevent_suppress-conversion.patch
+sound-remove-direct-access-of-driver_data.patch
+omap-video-remove-direct-access-of-driver_data.patch
+wm97xx_batery-replace-driver_data-with-dev_get_drvdata.patch
+driver-core-move-dev_get-set_drvdata-to-drivers-base-dd.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+ + c34afec...d61771d master     -> quilt/driver-core.current  (forced update)
+Importing usb.current based on quilt/driver-core.current
+$ cd ../quilt-tmp
+$ git reset --hard d61771dbb960d791cbf2080099ab8d0d78b4d4fb
+HEAD is now at d61771d Driver core: move dev_get/set_drvdata to drivers/base/dd.c
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-pl2303-new-vendor-and-product-id-for-the-prolific-driver.patch
+usb-gadget-fix-imx_udc-entry-in-kconfig.patch
+usb-ftdi_sio-product-id-s-for-ccs-pic-programmers.patch
+usb-fhci-mutually-exclusive-port_status.patch
+usb-ehci-update-toggle-state-for-linked-qhs.patch
+usb-isp1760-use-__devexit_p-for-remove-function.patch
+usb-option.c-add-qualcomm-option-icon-210-modem.patch
+usb-option.c-to-support-qisda-h21-h20-usb-modem.patch
+revert-usb-add-intel-langwell-usb-otg-transceiver-drive.patch
+usb-gadget-audio-provide-correct-device-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 630991d...40d7e8e master     -> quilt/usb.current  (forced update)
+Importing i2c based on 2.6.30-git22
+$ cd ../quilt-tmp
+$ git reset --hard 4e8a2372f9255a1464ef488ed925455f53fbdaa1
+HEAD is now at 4e8a237 nvidiafb: fix boot-time printk string
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-drop-i2c_driver-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 633acf86...c5a46a6 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.30-git22
+$ cd ../quilt-tmp
+$ git reset --hard 4e8a2372f9255a1464ef488ed925455f53fbdaa1
+HEAD is now at 4e8a237 nvidiafb: fix boot-time printk string
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-max6650-fix-lock-imbalance.patch
+hwmon-vid-limit-AMD-0Fh-6-bit-VID.patch
+hwmon-abituguru3-dmi-probing-for-ab9-ab9-quadqt-and-ix38-quadgt.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + aabf938...96b0c49 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.30-8260-gac1b7c3
+$ cd ../quilt-tmp
+$ git reset --hard ac1b7c378ef26fba6694d5f118fe7fc16fee2fe2
+HEAD is now at ac1b7c3 Merge git://git.infradead.org/mtd-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+cpumask:use_zalloc_cpumask_var_where_possible.patch
+cpumask:remove-pcibus_to_cpumask-alpha.patch
+cpumask:remove-pcibus_to_cpumask-mips.patch
+cpumask:remove-pcibus_to_cpumask-powerpc.patch
+cpumask:remove-node_to_cpumask.patch
+cpumask:remove-CPU_MASK_ALL_PTR.patch
+cpumask:remove-address-of-CPU_MASK_ALL-mips.patch
+cpumask:remove-cpu_mask_all.patch
+cpumask:remove-last-remaining-irqaction-mask.patch
+cpumask:irqaction-remove-mask.patch
+cpumask:remove_mask_field_from_comments.patch
+cpumask:remove-set_cpus_allowed.patch
+cpumask:ia64-smp_call_function_many.patch
+cpumask:remove-smp_call_function_mask.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-core.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-sparc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-s390.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-powerpc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-ia64.patch
+cpumask:arch_send_call_function_ipi_mask-alpha.patch
+cpumask:arch_send_call_function_ipi_mask-m32r.patch
+cpumask:arch_send_call_function_ipi_mask-mips.patch
+cpumask:arch_send_call_function_ipi_mask-powerpc.patch
+cpumask:arch_send_call_function_ipi_mask-s390.patch
+cpumask:remove-arch_send_call_function_ipi.patch
+cpumask:use-cpumap-accessors-m32r.patch
+cpumask:use-cpumap-accessors-mips.patch
+cpumask:use-cpumap-accessors-powerpc.patch
+cpumask:use-cpumap-accessors-um.patch
+cpumask:use-mm_cpumask-arm.patch
+cpumask:use-mm_cpumask-m32r.patch
+cpumask:use-mm_cpumask-mn10300.patch
+cpumask:use-mm_cpumask-mips.patch
+cpumask:use-mm_cpumask-um.patch
+cpumask:use-mm_cpumask-x86.patch
+cpumask:mm_quicklist-new-cpumask-ops.patch
+cpumask:remove-unused-deprecated-functions.patch
+cpumask:move-obsolete-functions-to-end-of-header.patch
+lguest:fix_journey.patch
+virtio:blk_don_t_bounce_highmem_requests.patch
+virtio:blk_ioctl_return_value_fix.patch
+module:use_symbol_prefix_with_layout.patch
+kthread:update_the_comment_in_kthread_stop.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-dcdbas.patch
+misc:remove-start_kernel-prototypes.patch
+misc:cpuhotplug_remove_cpu_hotplug_init.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + 7ad613e...1e8c3fd master     -> quilt/rr  (forced update)
+Importing device-mapper based on block/for-next
+$ cd ../quilt-tmp
+$ git reset --hard 2e5c9da46a3a1e9d0468bbbc0253a231995c0dad
+HEAD is now at 2e5c9da writeback: kthread_run() returns error pointer on failure, not NULL
+$ git quiltimport --author Alasdair G Kergon <agk@redhat.com> --patches ../quilt/device-mapper
+dm-mpath-validate-table-argument-count.patch
+dm-mpath-validate-hw_handler-argument-count.patch
+dm-sysfs-skip-output-when-device-is-being-destroyed.patch
+dm-mpath-change-attached-scsi_dh.patch
+dm-mpath-call-activate-fn-for-each-path-in-pg_init.patch
+dm-raid1-keep-retrying-alloc-if-mempool_alloc-failed.patch
+dm-mpath-flush-keventd-queue-in-destructor.patch
+dm-avoid-unsupported-spanning-of-md-stripe-boundaries.patch
+dm-use-i_size_read.patch
+dm-exception-store-fix-exstore-lookup-to-be-case-insensitive.patch
+dm-rename-suspended_bdev-to-bdev.patch
+dm-always-hold-bdev-reference.patch
+dm-make-dm_flush-return-void.patch
+dm-process-requeue-in-dm_wq_work.patch
+dm-store-only-first-barrier-error.patch
+dm-remove-EOPNOTSUPP-for-barriers.patch
+dm-remove-check-that-prevents-mapping-empty-bios.patch
+dm-introduce-num_flush_requests.patch
+dm-initialise-tio-in-alloc_tio.patch
+dm-send-empty-barriers-to-targets-in-dm_flush.patch
+dm-linear-support-flush.patch
+dm-stripe-support-flush.patch
+dm-crypt-support-flush.patch
+dm-delay-support-barriers.patch
+dm-mpath-support-barriers.patch
+dm-snapshot-support-barriers.patch
+dm-io-record-eopnotsupp.patch
+dm-io-retry-after-barrier-error.patch
+dm-snapshot-use-barrier-when-writing-exception-store.patch
+dm-mpath-add-start_io-and-nr_bytes-to-path-selectors.patch
+dm-mpath-add-queue-length-load-balancer.patch
+dm-mpath-add-service-time-load-balancer.patch
+dm-table-improve-warning-message-when-devices-not-freed-before-destruction.patch
+dm-sysfs-add-suspended-attribute.patch
+dm-ioctl-support-cookies-for-udev.patch
+dm-table-ensure-targets-are-aligned-to-logical_block_size.patch
+dm-table-validate-device-logical_block_size.patch
+dm-table-replace-struct-io_restrictions-with-struct-queue_limits.patch
+dm-table-establish-queue-limits-by-copying-table-limits.patch
+dm-targets-introduce-iterate-devices-fn.patch
+dm-log-fix-create_log_context-to-use-logical_block_size-of-log-device.patch
+dm-calculate-queue-limits-during-resume-not-load.patch
+dm-raid1-add-userspace-log.patch
+dm-prepare-for-request-based-option.patch
+dm-enable-request-based-option.patch
+dm-do-not-set-QUEUE_ORDERED_DRAIN-if-request-based.patch
+dm-disable-interrupt-when-taking-map_lock.patch
+dm-mpath-change-to-be-request-based.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/device-mapper
+From ../quilt-tmp
+ + 730072c...ccbcbb6 master     -> quilt/device-mapper  (forced update)
+Importing ttydev based on 4e8a2372f9255a1464ef488ed925455f53fbdaa1
+$ cd ../quilt-tmp
+$ git reset --hard 4e8a2372f9255a1464ef488ed925455f53fbdaa1
+HEAD is now at 4e8a237 nvidiafb: fix boot-time printk string
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+serial-txx9-polling
+serial-jsm-castclean
+tty-synclink_gt-tx-race-fix
+serial-use-remap-bar
+tty-fix-block-til-ready
+tty-more-lowlat-offenders
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + f5bc5ad...32393d1 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard 40d7e8e56a79cb3047299e7fc8b88bc8c1ad2d36
+HEAD is now at 40d7e8e USB: gadget: audio: provide correct device id
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-devtmpfs-driver-core-maintained-dev-tmpfs.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 78f9b26...0e16dea master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard 0e16dea04bf73a9b90c0ee65108caa971c7647e9
+HEAD is now at 0e16dea Driver Core: devtmpfs - kernel-maintained tmpfs-based /dev
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-ehci-dbg.c-no-need-for-checking-it-before-call-vfree.patch
+usb-sisusbvga-drop-usb_buffer_alloc.patch
+usb-usbmon-drop-kconfig-defaults.patch
+usb-usbmon-touch-up-the-documentation.patch
+usb-usbmon-end-ugly-tricks-with-dma-peeking.patch
+usb-let-usb_sg_init-to-set-transfer_buffer-more-often.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + f630f98...5aaf2ee master     -> quilt/usb  (forced update)
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 5aaf2ee1f0f9a82d4aed13b5505774b88dfad7e5
+HEAD is now at 5aaf2ee USB: Let usb_sg_init to set transfer_buffer more often
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-rt2870-add-usb-id-for-sitecom-wl-608.patch
+staging-vt6655-compile-fix.patch
+staging-rspiusb-use-null-virtual-address-instead-of-a-bogus-one.patch
+staging-android-binder-remove-some-funny-usage.patch
+staging-android-binder-move-debugging-mask-into-a-macro.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:645: space before tab in indent.
+					    	     proc->pid, thread->pid, node->debug_id,
+warning: 1 line adds whitespace errors.
+staging-android-binder-remove-a-predefine.patch
+staging-android-binder-add-enum-usage-in-function-arguments.patch
+staging-android-binder-global-variable-cleanup.patch
+staging-android-binder-clean-up-for-all-the-stat-statments.patch
+staging-wlan-ng-scripts-checkpatch.pl-error-fixes.patch
+staging-et1310-fix-the-coding-style.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + fda233a...9af5fef master     -> quilt/staging  (forced update)
