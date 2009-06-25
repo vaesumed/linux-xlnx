@@ -369,7 +369,7 @@ static struct bdi_work *get_next_work_item(struct backing_dev_info *bdi,
 /*
  * Retrieve work items and do the writeback they describe
  */
-void wb_do_writeback(struct bdi_writeback *wb, int force_wait)
+long wb_do_writeback(struct bdi_writeback *wb, int force_wait)
 {
 	struct backing_dev_info *bdi = wb->bdi;
 	struct bdi_work *work;
@@ -414,8 +414,10 @@ void wb_do_writeback(struct bdi_writeback *wb, int force_wait)
 				global_page_state(NR_UNSTABLE_NFS) +
 				(inodes_stat.nr_inodes - inodes_stat.nr_unused);
 
-		wb_writeback(wb, nr_pages, NULL, WB_SYNC_NONE, 1);
+		wrote = wb_writeback(wb, nr_pages, NULL, WB_SYNC_NONE, 1);
 	}
+
+	return wrote;
 }
 
 /*
@@ -424,10 +426,28 @@ void wb_do_writeback(struct bdi_writeback *wb, int force_wait)
  */
 int bdi_writeback_task(struct bdi_writeback *wb)
 {
-	while (!kthread_should_stop()) {
-		unsigned long wait_jiffies;
+	unsigned long last_active = jiffies;
+	unsigned long wait_jiffies = -1UL;
+	long pages_written;
 
-		wb_do_writeback(wb, 0);
+	while (!kthread_should_stop()) {
+		pages_written = wb_do_writeback(wb, 0);
+
+		if (pages_written)
+			last_active = jiffies;
+		else if (wait_jiffies != -1UL) {
+			unsigned long max_idle;
+
+			/*
+			 * Longest period of inactivity that we tolerate. If we
+			 * see dirty data again later, the task will get
+			 * recreated automatically.
+			 */
+			max_idle = max(5UL * 60 * HZ, wait_jiffies);
+			if (time_after(jiffies, max_idle + last_active) &&
+			    wb_is_default_task(wb))
+				break;
+		}
 
 		wait_jiffies = msecs_to_jiffies(dirty_writeback_interval * 10);
 		set_current_state(TASK_INTERRUPTIBLE);
