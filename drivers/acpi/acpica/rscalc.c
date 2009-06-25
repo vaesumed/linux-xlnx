@@ -543,6 +543,13 @@ acpi_rs_get_pci_routing_table_length(union acpi_operand_object *package_object,
 
 		package_element = *top_object_list;
 
+		/* We must have a valid Package object */
+
+		if (!package_element ||
+		    (package_element->common.type != ACPI_TYPE_PACKAGE)) {
+			return_ACPI_STATUS(AE_AML_OPERAND_TYPE);
+		}
+
 		/*
 		 * The sub_object_list will now point to an array of the
 		 * four IRQ elements: Address, Pin, Source and source_index
@@ -586,9 +593,6 @@ acpi_rs_get_pci_routing_table_length(union acpi_operand_object *package_object,
 			} else {
 				temp_size_needed +=
 				    acpi_ns_get_pathname_length((*sub_object_list)->reference.node);
-				if (!temp_size_needed) {
-					return_ACPI_STATUS(AE_BAD_PARAMETER);
-				}
 			}
 		} else {
 			/*

@@ -1,3 +1,4 @@
+#include <linux/initrd.h>
 #include <linux/ioport.h>
 #include <linux/swap.h>
 
@@ -7,8 +8,12 @@
 #include <asm/page.h>
 #include <asm/page_types.h>
 #include <asm/sections.h>
+#include <asm/setup.h>
 #include <asm/system.h>
 #include <asm/tlbflush.h>
+#include <asm/tlb.h>
+
+DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 
 unsigned long __initdata e820_table_start;
 unsigned long __meminitdata e820_table_end;
@@ -21,6 +26,69 @@ int direct_gbpages
 				= 1
 #endif
 ;
+
+int nx_enabled;
+
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+static int disable_nx __cpuinitdata;
+
+/*
+ * noexec = on|off
+ *
+ * Control non-executable mappings for processes.
+ *
+ * on      Enable
+ * off     Disable
+ */
+static int __init noexec_setup(char *str)
+{
+	if (!str)
+		return -EINVAL;
+	if (!strncmp(str, "on", 2)) {
+		__supported_pte_mask |= _PAGE_NX;
+		disable_nx = 0;
+	} else if (!strncmp(str, "off", 3)) {
+		disable_nx = 1;
+		__supported_pte_mask &= ~_PAGE_NX;
+	}
+	return 0;
+}
+early_param("noexec", noexec_setup);
+#endif
+
+#ifdef CONFIG_X86_PAE
+static void __init set_nx(void)
+{
+	unsigned int v[4], l, h;
+
+	if (cpu_has_pae && (cpuid_eax(0x80000000) > 0x80000001)) {
+		cpuid(0x80000001, &v[0], &v[1], &v[2], &v[3]);
+
+		if ((v[3] & (1 << 20)) && !disable_nx) {
+			rdmsr(MSR_EFER, l, h);
+			l |= EFER_NX;
+			wrmsr(MSR_EFER, l, h);
+			nx_enabled = 1;
+			__supported_pte_mask |= _PAGE_NX;
+		}
+	}
+}
+#else
+static inline void set_nx(void)
+{
+}
+#endif
+
+#ifdef CONFIG_X86_64
+void __cpuinit check_efer(void)
+{
+	unsigned long efer;
+
+	rdmsrl(MSR_EFER, efer);
+	if (!(efer & EFER_NX) || disable_nx)
+		__supported_pte_mask &= ~_PAGE_NX;
+}
+#endif
 
 static void __init find_early_table_space(unsigned long end, int use_pse,
 					  int use_gbpages)
@@ -65,12 +133,11 @@ static void __init find_early_table_space(unsigned long end, int use_pse,
 	 */
 #ifdef CONFIG_X86_32
 	start = 0x7000;
+#else
+	start = 0x8000;
+#endif
 	e820_table_start = find_e820_area(start, max_pfn_mapped<<PAGE_SHIFT,
 					tables, PAGE_SIZE);
-#else /* CONFIG_X86_64 */
-	start = 0x8000;
-	e820_table_start = find_e820_area(start, end, tables, PAGE_SIZE);
-#endif
 	if (e820_table_start == -1UL)
 		panic("Cannot find space for the kernel page tables");
 
@@ -146,7 +213,7 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 	if (!after_bootmem)
 		init_gbpages();
 
-#ifdef CONFIG_DEBUG_PAGEALLOC
+#if defined(CONFIG_DEBUG_PAGEALLOC) || defined(CONFIG_KMEMCHECK)
 	/*
 	 * For CONFIG_DEBUG_PAGEALLOC, identity mapping will use small pages.
 	 * This will simplify cpa(), which otherwise needs to support splitting
@@ -158,12 +225,9 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 	use_gbpages = direct_gbpages;
 #endif
 
-#ifdef CONFIG_X86_32
-#ifdef CONFIG_X86_PAE
 	set_nx();
 	if (nx_enabled)
 		printk(KERN_INFO "NX (Execute Disable) protection: active\n");
-#endif
 
 	/* Enable PSE if available */
 	if (cpu_has_pse)
@@ -174,7 +238,6 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 		set_in_cr4(X86_CR4_PGE);
 		__supported_pte_mask |= _PAGE_GLOBAL;
 	}
-#endif
 
 	if (use_gbpages)
 		page_size_mask |= 1 << PG_LEVEL_1G;
@@ -304,8 +367,23 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
 #endif
 
 #ifdef CONFIG_X86_64
-	if (!after_bootmem)
+	if (!after_bootmem && !start) {
+		pud_t *pud;
+		pmd_t *pmd;
+
 		mmu_cr4_features = read_cr4();
+
+		/*
+		 * _brk_end cannot change anymore, but it and _end may be
+		 * located on different 2M pages. cleanup_highmap(), however,
+		 * can only consider _end when it runs, so destroy any
+		 * mappings beyond _brk_end here.
+		 */
+		pud = pud_offset(pgd_offset_k(_brk_end), _brk_end);
+		pmd = pmd_offset(pud, _brk_end - 1);
+		while (++pmd <= pmd_offset(pud, (unsigned long)_end - 1))
+			pmd_clear(pmd);
+	}
 #endif
 	__flush_tlb_all();
 

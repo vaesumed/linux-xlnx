@@ -137,6 +137,8 @@ struct hci_dev {
 	struct device		*parent;
 	struct device		dev;
 
+	struct rfkill		*rfkill;
+
 	struct module 		*owner;
 
 	int (*open)(struct hci_dev *hdev);
@@ -457,6 +459,7 @@ int hci_recv_fragment(struct hci_dev *hdev, int type, void *data, int count);
 
 int hci_register_sysfs(struct hci_dev *hdev);
 void hci_unregister_sysfs(struct hci_dev *hdev);
+void hci_conn_init_sysfs(struct hci_conn *conn);
 void hci_conn_add_sysfs(struct hci_conn *conn);
 void hci_conn_del_sysfs(struct hci_conn *conn);
 

@@ -31,6 +31,13 @@
 #include "cifs_fs_sb.h"
 #include "cifsfs.h"
 
+/*
+ * To be safe - for UCS to UTF-8 with strings loaded with the rare long
+ * characters alloc more to account for such multibyte target UTF-8
+ * characters.
+ */
+#define UNICODE_NAME_MAX ((4 * NAME_MAX) + 2)
+
 #ifdef CONFIG_CIFS_DEBUG2
 static void dump_cifs_file_struct(struct file *file, char *label)
 {
@@ -108,17 +115,6 @@ construct_dentry(struct qstr *qstring, struct file *file,
 	return rc;
 }
 
-static void AdjustForTZ(struct cifsTconInfo *tcon, struct inode *inode)
-{
-	if ((tcon) && (tcon->ses) && (tcon->ses->server)) {
-		inode->i_ctime.tv_sec += tcon->ses->server->timeAdj;
-		inode->i_mtime.tv_sec += tcon->ses->server->timeAdj;
-		inode->i_atime.tv_sec += tcon->ses->server->timeAdj;
-	}
-	return;
-}
-
-
 static void fill_in_inode(struct inode *tmp_inode, int new_buf_type,
 			  char *buf, unsigned int *pobject_type, int isNewInode)
 {
@@ -143,26 +139,25 @@ static void fill_in_inode(struct inode *tmp_inode, int new_buf_type,
 		allocation_size = le64_to_cpu(pfindData->AllocationSize);
 		end_of_file = le64_to_cpu(pfindData->EndOfFile);
 		tmp_inode->i_atime =
-		      cifs_NTtimeToUnix(le64_to_cpu(pfindData->LastAccessTime));
+			cifs_NTtimeToUnix(pfindData->LastAccessTime);
 		tmp_inode->i_mtime =
-		      cifs_NTtimeToUnix(le64_to_cpu(pfindData->LastWriteTime));
+			cifs_NTtimeToUnix(pfindData->LastWriteTime);
 		tmp_inode->i_ctime =
-		      cifs_NTtimeToUnix(le64_to_cpu(pfindData->ChangeTime));
+			cifs_NTtimeToUnix(pfindData->ChangeTime);
 	} else { /* legacy, OS2 and DOS style */
-/*		struct timespec ts;*/
+		int offset = cifs_sb->tcon->ses->server->timeAdj;
 		FIND_FILE_STANDARD_INFO *pfindData =
 			(FIND_FILE_STANDARD_INFO *)buf;
 
-		tmp_inode->i_mtime = cnvrtDosUnixTm(
-				le16_to_cpu(pfindData->LastWriteDate),
-				le16_to_cpu(pfindData->LastWriteTime));
-		tmp_inode->i_atime = cnvrtDosUnixTm(
-				le16_to_cpu(pfindData->LastAccessDate),
-				le16_to_cpu(pfindData->LastAccessTime));
-		tmp_inode->i_ctime = cnvrtDosUnixTm(
-				le16_to_cpu(pfindData->LastWriteDate),
-				le16_to_cpu(pfindData->LastWriteTime));
-		AdjustForTZ(cifs_sb->tcon, tmp_inode);
+		tmp_inode->i_mtime = cnvrtDosUnixTm(pfindData->LastWriteDate,
+						    pfindData->LastWriteTime,
+						    offset);
+		tmp_inode->i_atime = cnvrtDosUnixTm(pfindData->LastAccessDate,
+						    pfindData->LastAccessTime,
+						    offset);
+		tmp_inode->i_ctime = cnvrtDosUnixTm(pfindData->LastWriteDate,
+						    pfindData->LastWriteTime,
+						    offset);
 		attr = le16_to_cpu(pfindData->Attributes);
 		allocation_size = le32_to_cpu(pfindData->AllocationSize);
 		end_of_file = le32_to_cpu(pfindData->DataSize);
@@ -324,11 +319,11 @@ static void unix_fill_in_inode(struct inode *tmp_inode,
 	local_size  = tmp_inode->i_size;
 
 	tmp_inode->i_atime =
-	    cifs_NTtimeToUnix(le64_to_cpu(pfindData->LastAccessTime));
+	    cifs_NTtimeToUnix(pfindData->LastAccessTime);
 	tmp_inode->i_mtime =
-	    cifs_NTtimeToUnix(le64_to_cpu(pfindData->LastModificationTime));
+	    cifs_NTtimeToUnix(pfindData->LastModificationTime);
 	tmp_inode->i_ctime =
-	    cifs_NTtimeToUnix(le64_to_cpu(pfindData->LastStatusChange));
+	    cifs_NTtimeToUnix(pfindData->LastStatusChange);
 
 	tmp_inode->i_mode = le64_to_cpu(pfindData->Permissions);
 	/* since we set the inode type below we need to mask off type
@@ -438,6 +433,38 @@ static void unix_fill_in_inode(struct inode *tmp_inode,
 	}
 }
 
+/* BB eventually need to add the following helper function to
+      resolve NT_STATUS_STOPPED_ON_SYMLINK return code when
+      we try to do FindFirst on (NTFS) directory symlinks */
+/*
+int get_symlink_reparse_path(char *full_path, struct cifs_sb_info *cifs_sb,
+			     int xid)
+{
+	__u16 fid;
+	int len;
+	int oplock = 0;
+	int rc;
+	struct cifsTconInfo *ptcon = cifs_sb->tcon;
+	char *tmpbuffer;
+
+	rc = CIFSSMBOpen(xid, ptcon, full_path, FILE_OPEN, GENERIC_READ,
+			OPEN_REPARSE_POINT, &fid, &oplock, NULL,
+			cifs_sb->local_nls,
+			cifs_sb->mnt_cifs_flags & CIFS_MOUNT_MAP_SPECIAL_CHR);
+	if (!rc) {
+		tmpbuffer = kmalloc(maxpath);
+		rc = CIFSSMBQueryReparseLinkInfo(xid, ptcon, full_path,
+				tmpbuffer,
+				maxpath -1,
+				fid,
+				cifs_sb->local_nls);
+		if (CIFSSMBClose(xid, ptcon, fid)) {
+			cFYI(1, ("Error closing temporary reparsepoint open)"));
+		}
+	}
+}
+ */
+
 static int initiate_cifs_search(const int xid, struct file *file)
 {
 	int rc = 0;
@@ -493,7 +520,10 @@ ffirst_retry:
 			CIFS_MOUNT_MAP_SPECIAL_CHR, CIFS_DIR_SEP(cifs_sb));
 	if (rc == 0)
 		cifsFile->invalidHandle = false;
-	if ((rc == -EOPNOTSUPP) &&
+	/* BB add following call to handle readdir on new NTFS symlink errors
+	else if STATUS_STOPPED_ON_SYMLINK
+		call get_symlink_reparse_path and retry with new path */
+	else if ((rc == -EOPNOTSUPP) &&
 		(cifs_sb->mnt_cifs_flags & CIFS_MOUNT_SERVER_INUM)) {
 		cifs_sb->mnt_cifs_flags &= ~CIFS_MOUNT_SERVER_INUM;
 		goto ffirst_retry;
@@ -822,7 +852,7 @@ static int find_cifs_entry(const int xid, struct cifsTconInfo *pTcon,
 /* inode num, inode type and filename returned */
 static int cifs_get_name_from_search_buf(struct qstr *pqst,
 	char *current_entry, __u16 level, unsigned int unicode,
-	struct cifs_sb_info *cifs_sb, int max_len, __u64 *pinum)
+	struct cifs_sb_info *cifs_sb, unsigned int max_len, __u64 *pinum)
 {
 	int rc = 0;
 	unsigned int len = 0;
@@ -881,14 +911,12 @@ static int cifs_get_name_from_search_buf(struct qstr *pqst,
 	}
 
 	if (unicode) {
-		/* BB fixme - test with long names */
-		/* Note converted filename can be longer than in unicode */
-		if (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_MAP_SPECIAL_CHR)
-			pqst->len = cifs_convertUCSpath((char *)pqst->name,
-					(__le16 *)filename, len/2, nlt);
-		else
-			pqst->len = cifs_strfromUCS_le((char *)pqst->name,
-					(__le16 *)filename, len/2, nlt);
+		pqst->len = cifs_from_ucs2((char *) pqst->name,
+					   (__le16 *) filename,
+					   UNICODE_NAME_MAX,
+					   min(len, max_len), nlt,
+					   cifs_sb->mnt_cifs_flags &
+						CIFS_MOUNT_MAP_SPECIAL_CHR);
 	} else {
 		pqst->name = filename;
 		pqst->len = len;
@@ -898,8 +926,8 @@ static int cifs_get_name_from_search_buf(struct qstr *pqst,
 	return rc;
 }
 
-static int cifs_filldir(char *pfindEntry, struct file *file,
-	filldir_t filldir, void *direntry, char *scratch_buf, int max_len)
+static int cifs_filldir(char *pfindEntry, struct file *file, filldir_t filldir,
+			void *direntry, char *scratch_buf, unsigned int max_len)
 {
 	int rc = 0;
 	struct qstr qstring;
@@ -996,7 +1024,7 @@ int cifs_readdir(struct file *file, void *direntry, filldir_t filldir)
 	int num_to_fill = 0;
 	char *tmp_buf = NULL;
 	char *end_of_smb;
-	int max_len;
+	unsigned int max_len;
 
 	xid = GetXid();
 
@@ -1070,11 +1098,7 @@ int cifs_readdir(struct file *file, void *direntry, filldir_t filldir)
 				cifsFile->srch_inf.ntwrk_buf_start);
 		end_of_smb = cifsFile->srch_inf.ntwrk_buf_start + max_len;
 
-		/* To be safe - for UCS to UTF-8 with strings loaded
-		with the rare long characters alloc more to account for
-		such multibyte target UTF-8 characters. cifs_unicode.c,
-		which actually does the conversion, has the same limit */
-		tmp_buf = kmalloc((2 * NAME_MAX) + 4, GFP_KERNEL);
+		tmp_buf = kmalloc(UNICODE_NAME_MAX, GFP_KERNEL);
 		for (i = 0; (i < num_to_fill) && (rc == 0); i++) {
 			if (current_entry == NULL) {
 				/* evaluate whether this case is an error */

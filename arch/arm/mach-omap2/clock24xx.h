@@ -24,6 +24,17 @@
 #include "cm-regbits-24xx.h"
 #include "sdrc.h"
 
+/* REVISIT: These should be set dynamically for CONFIG_MULTI_OMAP2 */
+#ifdef CONFIG_ARCH_OMAP2420
+#define OMAP_CM_REGADDR			OMAP2420_CM_REGADDR
+#define OMAP24XX_PRCM_CLKOUT_CTRL	OMAP2420_PRCM_CLKOUT_CTRL
+#define OMAP24XX_PRCM_CLKEMUL_CTRL	OMAP2420_PRCM_CLKEMUL_CTRL
+#else
+#define OMAP_CM_REGADDR			OMAP2430_CM_REGADDR
+#define OMAP24XX_PRCM_CLKOUT_CTRL	OMAP2430_PRCM_CLKOUT_CTRL
+#define OMAP24XX_PRCM_CLKEMUL_CTRL	OMAP2430_PRCM_CLKEMUL_CTRL
+#endif
+
 static unsigned long omap2_table_mpu_recalc(struct clk *clk);
 static int omap2_select_table_rate(struct clk *clk, unsigned long rate);
 static long omap2_round_to_table_rate(struct clk *clk, unsigned long rate);
@@ -621,6 +632,14 @@ static struct clk func_32k_ck = {
 	.name		= "func_32k_ck",
 	.ops		= &clkops_null,
 	.rate		= 32000,
+	.flags		= RATE_FIXED,
+	.clkdm_name	= "wkup_clkdm",
+};
+
+static struct clk secure_32k_ck = {
+	.name		= "secure_32k_ck",
+	.ops		= &clkops_null,
+	.rate		= 32768,
 	.flags		= RATE_FIXED,
 	.clkdm_name	= "wkup_clkdm",
 };
@@ -1790,7 +1809,7 @@ static struct clk gpt12_ick = {
 static struct clk gpt12_fck = {
 	.name		= "gpt12_fck",
 	.ops		= &clkops_omap2_dflt_wait,
-	.parent		= &func_32k_ck,
+	.parent		= &secure_32k_ck,
 	.clkdm_name	= "core_l4_clkdm",
 	.enable_reg	= OMAP_CM_REGADDR(CORE_MOD, CM_FCLKEN1),
 	.enable_bit	= OMAP24XX_EN_GPT12_SHIFT,

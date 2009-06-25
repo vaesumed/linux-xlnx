@@ -189,7 +189,7 @@ int drm_lastclose(struct drm_device * dev)
 			if (entry->bound)
 				drm_unbind_agp(entry->memory);
 			drm_free_agp(entry->memory, entry->pages);
-			drm_free(entry, sizeof(*entry), DRM_MEM_AGPLISTS);
+			kfree(entry);
 		}
 		INIT_LIST_HEAD(&dev->agp->memory);
 
@@ -208,21 +208,15 @@ int drm_lastclose(struct drm_device * dev)
 	/* Clear vma list (only built for debugging) */
 	list_for_each_entry_safe(vma, vma_temp, &dev->vmalist, head) {
 		list_del(&vma->head);
-		drm_free(vma, sizeof(*vma), DRM_MEM_VMAS);
+		kfree(vma);
 	}
 
 	if (drm_core_check_feature(dev, DRIVER_DMA_QUEUE) && dev->queuelist) {
 		for (i = 0; i < dev->queue_count; i++) {
-			if (dev->queuelist[i]) {
-				drm_free(dev->queuelist[i],
-					 sizeof(*dev->queuelist[0]),
-					 DRM_MEM_QUEUES);
-				dev->queuelist[i] = NULL;
-			}
+			kfree(dev->queuelist[i]);
+			dev->queuelist[i] = NULL;
 		}
-		drm_free(dev->queuelist,
-			 dev->queue_slots * sizeof(*dev->queuelist),
-			 DRM_MEM_QUEUES);
+		kfree(dev->queuelist);
 		dev->queuelist = NULL;
 	}
 	dev->queue_count = 0;
@@ -339,12 +333,10 @@ static int __init drm_core_init(void)
 
 	drm_debugfs_root = debugfs_create_dir("dri", NULL);
 	if (!drm_debugfs_root) {
-		DRM_ERROR("Cannot create /debugfs/dri\n");
+		DRM_ERROR("Cannot create /sys/kernel/debug/dri\n");
 		ret = -1;
 		goto err_p3;
 	}
-
-	drm_mem_init();
 
 	DRM_INFO("Initialized %s %d.%d.%d %s\n",
 		 CORE_NAME, CORE_MAJOR, CORE_MINOR, CORE_PATCHLEVEL, CORE_DATE);
@@ -456,7 +448,8 @@ int drm_ioctl(struct inode *inode, struct file *filp,
 		retcode = -EINVAL;
 	} else if (((ioctl->flags & DRM_ROOT_ONLY) && !capable(CAP_SYS_ADMIN)) ||
 		   ((ioctl->flags & DRM_AUTH) && !file_priv->authenticated) ||
-		   ((ioctl->flags & DRM_MASTER) && !file_priv->is_master)) {
+		   ((ioctl->flags & DRM_MASTER) && !file_priv->is_master) ||
+		   (!(ioctl->flags & DRM_CONTROL_ALLOW) && (file_priv->minor->type == DRM_MINOR_CONTROL))) {
 		retcode = -EACCES;
 	} else {
 		if (cmd & (IOC_IN | IOC_OUT)) {
@@ -480,7 +473,7 @@ int drm_ioctl(struct inode *inode, struct file *filp,
 		}
 		retcode = func(dev, kdata, file_priv);
 
-		if ((retcode == 0) && (cmd & IOC_OUT)) {
+		if (cmd & IOC_OUT) {
 			if (copy_to_user((void __user *)arg, kdata,
 					 _IOC_SIZE(cmd)) != 0)
 				retcode = -EFAULT;

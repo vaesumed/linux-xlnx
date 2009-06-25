@@ -253,8 +253,6 @@ static int iscsi_sw_tcp_xmit_segment(struct iscsi_tcp_conn *tcp_conn,
 
 		if (r < 0) {
 			iscsi_tcp_segment_unmap(segment);
-			if (copied || r == -EAGAIN)
-				break;
 			return r;
 		}
 		copied += r;
@@ -275,11 +273,17 @@ static int iscsi_sw_tcp_xmit(struct iscsi_conn *conn)
 
 	while (1) {
 		rc = iscsi_sw_tcp_xmit_segment(tcp_conn, segment);
-		if (rc < 0) {
+		/*
+		 * We may not have been able to send data because the conn
+		 * is getting stopped. libiscsi will know so propogate err
+		 * for it to do the right thing.
+		 */
+		if (rc == -EAGAIN)
+			return rc;
+		else if (rc < 0) {
 			rc = ISCSI_ERR_XMIT_FAILED;
 			goto error;
-		}
-		if (rc == 0)
+		} else if (rc == 0)
 			break;
 
 		consumed += rc;
@@ -463,7 +467,7 @@ static int iscsi_sw_tcp_pdu_init(struct iscsi_task *task,
 	}
 
 	if (err) {
-		iscsi_conn_failure(conn, err);
+		/* got invalid offset/len */
 		return -EIO;
 	}
 	return 0;
@@ -851,6 +855,7 @@ static struct scsi_host_template iscsi_sw_tcp_sht = {
 	.use_clustering         = DISABLE_CLUSTERING,
 	.slave_alloc            = iscsi_sw_tcp_slave_alloc,
 	.slave_configure        = iscsi_sw_tcp_slave_configure,
+	.target_alloc		= iscsi_target_alloc,
 	.proc_name		= "iscsi_tcp",
 	.this_id		= -1,
 };

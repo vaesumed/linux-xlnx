@@ -923,14 +923,23 @@ static int ocfs2_test_bg_bit_allocatable(struct buffer_head *bg_bh,
 					 int nr)
 {
 	struct ocfs2_group_desc *bg = (struct ocfs2_group_desc *) bg_bh->b_data;
+	int ret;
 
 	if (ocfs2_test_bit(nr, (unsigned long *)bg->bg_bitmap))
 		return 0;
-	if (!buffer_jbd(bg_bh) || !bh2jh(bg_bh)->b_committed_data)
+
+	if (!buffer_jbd(bg_bh))
 		return 1;
 
+	jbd_lock_bh_state(bg_bh);
 	bg = (struct ocfs2_group_desc *) bh2jh(bg_bh)->b_committed_data;
-	return !ocfs2_test_bit(nr, (unsigned long *)bg->bg_bitmap);
+	if (bg)
+		ret = !ocfs2_test_bit(nr, (unsigned long *)bg->bg_bitmap);
+	else
+		ret = 1;
+	jbd_unlock_bh_state(bg_bh);
+
+	return ret;
 }
 
 static int ocfs2_block_group_find_clear_bits(struct ocfs2_super *osb,
@@ -1885,6 +1894,7 @@ static inline int ocfs2_block_group_clear_bits(handle_t *handle,
 	unsigned int tmp;
 	int journal_type = OCFS2_JOURNAL_ACCESS_WRITE;
 	struct ocfs2_group_desc *undo_bg = NULL;
+	int cluster_bitmap = 0;
 
 	mlog_entry_void();
 
@@ -1905,17 +1915,27 @@ static inline int ocfs2_block_group_clear_bits(handle_t *handle,
 	}
 
 	if (ocfs2_is_cluster_bitmap(alloc_inode))
-		undo_bg = (struct ocfs2_group_desc *) bh2jh(group_bh)->b_committed_data;
+		cluster_bitmap = 1;
+
+	if (cluster_bitmap) {
+		jbd_lock_bh_state(group_bh);
+		undo_bg = (struct ocfs2_group_desc *)
+					bh2jh(group_bh)->b_committed_data;
+		BUG_ON(!undo_bg);
+	}
 
 	tmp = num_bits;
 	while(tmp--) {
 		ocfs2_clear_bit((bit_off + tmp),
 				(unsigned long *) bg->bg_bitmap);
-		if (ocfs2_is_cluster_bitmap(alloc_inode))
+		if (cluster_bitmap)
 			ocfs2_set_bit(bit_off + tmp,
 				      (unsigned long *) undo_bg->bg_bitmap);
 	}
 	le16_add_cpu(&bg->bg_free_bits_count, num_bits);
+
+	if (cluster_bitmap)
+		jbd_unlock_bh_state(group_bh);
 
 	status = ocfs2_journal_dirty(handle, group_bh);
 	if (status < 0)
@@ -2197,26 +2217,29 @@ static int ocfs2_get_suballoc_slot_bit(struct ocfs2_super *osb, u64 blkno,
 	struct buffer_head *inode_bh = NULL;
 	struct ocfs2_dinode *inode_fe;
 
-	mlog_entry("blkno: %llu\n", blkno);
+	mlog_entry("blkno: %llu\n", (unsigned long long)blkno);
 
 	/* dirty read disk */
 	status = ocfs2_read_blocks_sync(osb, blkno, 1, &inode_bh);
 	if (status < 0) {
-		mlog(ML_ERROR, "read block %llu failed %d\n", blkno, status);
+		mlog(ML_ERROR, "read block %llu failed %d\n",
+		     (unsigned long long)blkno, status);
 		goto bail;
 	}
 
 	inode_fe = (struct ocfs2_dinode *) inode_bh->b_data;
 	if (!OCFS2_IS_VALID_DINODE(inode_fe)) {
-		mlog(ML_ERROR, "invalid inode %llu requested\n", blkno);
+		mlog(ML_ERROR, "invalid inode %llu requested\n",
+		     (unsigned long long)blkno);
 		status = -EINVAL;
 		goto bail;
 	}
 
-	if (le16_to_cpu(inode_fe->i_suballoc_slot) != OCFS2_INVALID_SLOT &&
+	if (le16_to_cpu(inode_fe->i_suballoc_slot) != (u16)OCFS2_INVALID_SLOT &&
 	    (u32)le16_to_cpu(inode_fe->i_suballoc_slot) > osb->max_slots - 1) {
 		mlog(ML_ERROR, "inode %llu has invalid suballoc slot %u\n",
-		     blkno, (u32)le16_to_cpu(inode_fe->i_suballoc_slot));
+		     (unsigned long long)blkno,
+		     (u32)le16_to_cpu(inode_fe->i_suballoc_slot));
 		status = -EINVAL;
 		goto bail;
 	}
@@ -2251,7 +2274,8 @@ static int ocfs2_test_suballoc_bit(struct ocfs2_super *osb,
 	u64 bg_blkno;
 	int status;
 
-	mlog_entry("blkno: %llu bit: %u\n", blkno, (unsigned int)bit);
+	mlog_entry("blkno: %llu bit: %u\n", (unsigned long long)blkno,
+		   (unsigned int)bit);
 
 	alloc_fe = (struct ocfs2_dinode *)alloc_bh->b_data;
 	if ((bit + 1) > ocfs2_bits_per_group(&alloc_fe->id2.i_chain)) {
@@ -2266,7 +2290,8 @@ static int ocfs2_test_suballoc_bit(struct ocfs2_super *osb,
 	status = ocfs2_read_group_descriptor(suballoc, alloc_fe, bg_blkno,
 					     &group_bh);
 	if (status < 0) {
-		mlog(ML_ERROR, "read group %llu failed %d\n", bg_blkno, status);
+		mlog(ML_ERROR, "read group %llu failed %d\n",
+		     (unsigned long long)bg_blkno, status);
 		goto bail;
 	}
 
@@ -2300,7 +2325,7 @@ int ocfs2_test_inode_bit(struct ocfs2_super *osb, u64 blkno, int *res)
 	struct inode *inode_alloc_inode;
 	struct buffer_head *alloc_bh = NULL;
 
-	mlog_entry("blkno: %llu", blkno);
+	mlog_entry("blkno: %llu", (unsigned long long)blkno);
 
 	status = ocfs2_get_suballoc_slot_bit(osb, blkno, &suballoc_slot,
 					     &suballoc_bit);

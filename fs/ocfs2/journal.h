@@ -144,6 +144,10 @@ static inline void ocfs2_inode_set_new(struct ocfs2_super *osb,
 }
 
 /* Exported only for the journal struct init code in super.c. Do not call. */
+void ocfs2_orphan_scan_init(struct ocfs2_super *osb);
+void ocfs2_orphan_scan_stop(struct ocfs2_super *osb);
+void ocfs2_orphan_scan_exit(struct ocfs2_super *osb);
+
 void ocfs2_complete_recovery(struct work_struct *work);
 void ocfs2_wait_for_recovery(struct ocfs2_super *osb);
 
@@ -437,8 +441,9 @@ static inline int ocfs2_unlink_credits(struct super_block *sb)
 }
 
 /* dinode + orphan dir dinode + inode alloc dinode + orphan dir entry +
- * inode alloc group descriptor + orphan dir index leaf */
-#define OCFS2_DELETE_INODE_CREDITS (3 * OCFS2_INODE_UPDATE_CREDITS + 3)
+ * inode alloc group descriptor + orphan dir index root +
+ * orphan dir index leaf */
+#define OCFS2_DELETE_INODE_CREDITS (3 * OCFS2_INODE_UPDATE_CREDITS + 4)
 
 /* dinode update, old dir dinode update, new dir dinode update, old
  * dir dir entry, new dir dir entry, dir entry update for renaming

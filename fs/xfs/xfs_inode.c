@@ -49,7 +49,6 @@
 #include "xfs_utils.h"
 #include "xfs_dir2_trace.h"
 #include "xfs_quota.h"
-#include "xfs_acl.h"
 #include "xfs_filestream.h"
 #include "xfs_vnodeops.h"
 
@@ -1258,8 +1257,10 @@ xfs_file_last_byte(
 	 * necessary.
 	 */
 	if (ip->i_df.if_flags & XFS_IFEXTENTS) {
+		xfs_ilock(ip, XFS_ILOCK_SHARED);
 		error = xfs_bmap_last_offset(NULL, ip, &last_block,
 			XFS_DATA_FORK);
+		xfs_iunlock(ip, XFS_ILOCK_SHARED);
 		if (error) {
 			last_block = 0;
 		}

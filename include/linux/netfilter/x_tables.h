@@ -184,9 +184,10 @@ struct xt_counters_info
  * @matchinfo:	per-match data
  * @fragoff:	packet is a fragment, this is the data offset
  * @thoff:	position of transport header relative to skb->data
- * @hotdrop:	drop packet if we had inspection problems
+ * @hook:	hook number given packet came from
  * @family:	Actual NFPROTO_* through which the function is invoked
  * 		(helpful when match->family == NFPROTO_UNSPEC)
+ * @hotdrop:	drop packet if we had inspection problems
  */
 struct xt_match_param {
 	const struct net_device *in, *out;
@@ -194,8 +195,9 @@ struct xt_match_param {
 	const void *matchinfo;
 	int fragoff;
 	unsigned int thoff;
-	bool *hotdrop;
+	unsigned int hooknum;
 	u_int8_t family;
+	bool *hotdrop;
 };
 
 /**
@@ -472,7 +474,7 @@ static inline void xt_info_rdlock_bh(void)
 
 	local_bh_disable();
 	lock = &__get_cpu_var(xt_info_locks);
-	if (!lock->readers++)
+	if (likely(!lock->readers++))
 		spin_lock(&lock->lock);
 }
 
@@ -480,7 +482,7 @@ static inline void xt_info_rdunlock_bh(void)
 {
 	struct xt_info_lock *lock = &__get_cpu_var(xt_info_locks);
 
-	if (!--lock->readers)
+	if (likely(!--lock->readers))
 		spin_unlock(&lock->lock);
 	local_bh_enable();
 }

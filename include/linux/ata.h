@@ -730,6 +730,34 @@ static inline int ata_id_has_unload(const u16 *id)
 	return 0;
 }
 
+static inline int ata_id_form_factor(const u16 *id)
+{
+	u16 val = id[168];
+
+	if (ata_id_major_version(id) < 7 || val == 0 || val == 0xffff)
+		return 0;
+
+	val &= 0xf;
+
+	if (val > 5)
+		return 0;
+
+	return val;
+}
+
+static inline int ata_id_rotation_rate(const u16 *id)
+{
+	u16 val = id[217];
+
+	if (ata_id_major_version(id) < 7 || val == 0 || val == 0xffff)
+		return 0;
+
+	if (val > 1 && val < 0x401)
+		return 0;
+
+	return val;
+}
+
 static inline int ata_id_has_trim(const u16 *id)
 {
 	if (ata_id_major_version(id) >= 7 &&
@@ -770,6 +798,20 @@ static inline int ata_id_is_cfa(const u16 *id)
 static inline int ata_id_is_ssd(const u16 *id)
 {
 	return id[ATA_ID_ROT_SPEED] == 0x01;
+}
+
+static inline int ata_id_pio_need_iordy(const u16 *id, const u8 pio)
+{
+	/* CF spec. r4.1 Table 22 says no IORDY on PIO5 and PIO6. */
+	if (pio > 4 && ata_id_is_cfa(id))
+		return 0;
+	/* For PIO3 and higher it is mandatory. */
+	if (pio > 2)
+		return 1;
+	/* Turn it on when possible. */
+	if (ata_id_has_iordy(id))
+		return 1;
+	return 0;
 }
 
 static inline int ata_drive_40wire(const u16 *dev_id)

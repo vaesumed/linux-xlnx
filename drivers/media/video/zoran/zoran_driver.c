@@ -1863,22 +1863,20 @@ static int zoran_querycap(struct file *file, void *__fh, struct v4l2_capability 
 
 static int zoran_enum_fmt(struct zoran *zr, struct v4l2_fmtdesc *fmt, int flag)
 {
-	int num = -1, i;
+	unsigned int num, i;
 
-	for (i = 0; i < NUM_FORMATS; i++) {
-		if (zoran_formats[i].flags & flag)
-			num++;
-		if (num == fmt->index)
-			break;
+	for (num = i = 0; i < NUM_FORMATS; i++) {
+		if (zoran_formats[i].flags & flag && num++ == fmt->index) {
+			strncpy(fmt->description, zoran_formats[i].name,
+				sizeof(fmt->description) - 1);
+			/* fmt struct pre-zeroed, so adding '\0' not neeed */
+			fmt->pixelformat = zoran_formats[i].fourcc;
+			if (zoran_formats[i].flags & ZORAN_FORMAT_COMPRESSED)
+				fmt->flags |= V4L2_FMT_FLAG_COMPRESSED;
+			return 0;
+		}
 	}
-	if (fmt->index < 0 /* late, but not too late */  || i == NUM_FORMATS)
-		return -EINVAL;
-
-	strncpy(fmt->description, zoran_formats[i].name, sizeof(fmt->description)-1);
-	fmt->pixelformat = zoran_formats[i].fourcc;
-	if (zoran_formats[i].flags & ZORAN_FORMAT_COMPRESSED)
-		fmt->flags |= V4L2_FMT_FLAG_COMPRESSED;
-	return 0;
+	return -EINVAL;
 }
 
 static int zoran_enum_fmt_vid_cap(struct file *file, void *__fh,
@@ -2090,16 +2088,10 @@ static int zoran_try_fmt_vid_cap(struct file *file, void *__fh,
 		return -EINVAL;
 	}
 
-	bpp = (zoran_formats[i].depth + 7) / 8;
-	fmt->fmt.pix.width &= ~((bpp == 2) ? 1 : 3);
-	if (fmt->fmt.pix.width > BUZ_MAX_WIDTH)
-		fmt->fmt.pix.width = BUZ_MAX_WIDTH;
-	if (fmt->fmt.pix.width < BUZ_MIN_WIDTH)
-		fmt->fmt.pix.width = BUZ_MIN_WIDTH;
-	if (fmt->fmt.pix.height > BUZ_MAX_HEIGHT)
-		fmt->fmt.pix.height = BUZ_MAX_HEIGHT;
-	if (fmt->fmt.pix.height < BUZ_MIN_HEIGHT)
-		fmt->fmt.pix.height = BUZ_MIN_HEIGHT;
+	bpp = DIV_ROUND_UP(zoran_formats[i].depth, 8);
+	v4l_bound_align_image(
+		&fmt->fmt.pix.width, BUZ_MIN_WIDTH, BUZ_MAX_WIDTH, bpp == 2 ? 1 : 2,
+		&fmt->fmt.pix.height, BUZ_MIN_HEIGHT, BUZ_MAX_HEIGHT, 0, 0);
 	mutex_unlock(&zr->resource_lock);
 
 	return 0;

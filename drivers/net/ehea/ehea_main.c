@@ -545,14 +545,17 @@ static inline struct sk_buff *get_skb_by_index(struct sk_buff **skb_array,
 	x &= (arr_len - 1);
 
 	pref = skb_array[x];
-	prefetchw(pref);
-	prefetchw(pref + EHEA_CACHE_LINE);
+	if (pref) {
+		prefetchw(pref);
+		prefetchw(pref + EHEA_CACHE_LINE);
 
-	pref = (skb_array[x]->data);
-	prefetch(pref);
-	prefetch(pref + EHEA_CACHE_LINE);
-	prefetch(pref + EHEA_CACHE_LINE * 2);
-	prefetch(pref + EHEA_CACHE_LINE * 3);
+		pref = (skb_array[x]->data);
+		prefetch(pref);
+		prefetch(pref + EHEA_CACHE_LINE);
+		prefetch(pref + EHEA_CACHE_LINE * 2);
+		prefetch(pref + EHEA_CACHE_LINE * 3);
+	}
+
 	skb = skb_array[skb_index];
 	skb_array[skb_index] = NULL;
 	return skb;
@@ -569,12 +572,14 @@ static inline struct sk_buff *get_skb_by_index_ll(struct sk_buff **skb_array,
 	x &= (arr_len - 1);
 
 	pref = skb_array[x];
-	prefetchw(pref);
-	prefetchw(pref + EHEA_CACHE_LINE);
+	if (pref) {
+		prefetchw(pref);
+		prefetchw(pref + EHEA_CACHE_LINE);
 
-	pref = (skb_array[x]->data);
-	prefetchw(pref);
-	prefetchw(pref + EHEA_CACHE_LINE);
+		pref = (skb_array[x]->data);
+		prefetchw(pref);
+		prefetchw(pref + EHEA_CACHE_LINE);
+	}
 
 	skb = skb_array[wqe_index];
 	skb_array[wqe_index] = NULL;
@@ -3256,7 +3261,7 @@ static ssize_t ehea_probe_port(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
-	struct ehea_adapter *adapter = dev->driver_data;
+	struct ehea_adapter *adapter = dev_get_drvdata(dev);
 	struct ehea_port *port;
 	struct device_node *eth_dn = NULL;
 	int i;
@@ -3311,7 +3316,7 @@ static ssize_t ehea_remove_port(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
-	struct ehea_adapter *adapter = dev->driver_data;
+	struct ehea_adapter *adapter = dev_get_drvdata(dev);
 	struct ehea_port *port;
 	int i;
 	u32 logical_port_id;
@@ -3399,7 +3404,7 @@ static int __devinit ehea_probe_adapter(struct of_device *dev,
 
 	adapter->pd = EHEA_PD_ID;
 
-	dev->dev.driver_data = adapter;
+	dev_set_drvdata(&dev->dev, adapter);
 
 
 	/* initialize adapter and ports */
@@ -3463,7 +3468,7 @@ out:
 
 static int __devexit ehea_remove(struct of_device *dev)
 {
-	struct ehea_adapter *adapter = dev->dev.driver_data;
+	struct ehea_adapter *adapter = dev_get_drvdata(&dev->dev);
 	int i;
 
 	for (i = 0; i < EHEA_MAX_PORTS; i++)

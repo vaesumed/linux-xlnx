@@ -34,7 +34,7 @@
 #include "cxgb3i_offload.h"
 #include "cxgb3i_ddp.h"
 
-#define CXGB3I_SCSI_QDEPTH_DFLT	128
+#define CXGB3I_SCSI_HOST_QDEPTH 1024
 #define CXGB3I_MAX_TARGET	CXGB3I_MAX_CONN
 #define CXGB3I_MAX_LUN		512
 #define ISCSI_PDU_NONPAYLOAD_MAX \
@@ -144,7 +144,6 @@ struct cxgb3i_adapter *cxgb3i_adapter_find_by_tdev(struct t3cdev *);
 void cxgb3i_adapter_open(struct t3cdev *);
 void cxgb3i_adapter_close(struct t3cdev *);
 
-struct cxgb3i_hba *cxgb3i_hba_find_by_netdev(struct net_device *);
 struct cxgb3i_hba *cxgb3i_hba_host_add(struct cxgb3i_adapter *,
 				       struct net_device *);
 void cxgb3i_hba_host_remove(struct cxgb3i_hba *);

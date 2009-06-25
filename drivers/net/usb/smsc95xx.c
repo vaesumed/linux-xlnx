@@ -941,6 +941,16 @@ static int smsc95xx_reset(struct usbnet *dev)
 	if (netif_msg_ifup(dev))
 		devdbg(dev, "ID_REV = 0x%08x", read_buf);
 
+	/* Configure GPIO pins as LED outputs */
+	write_buf = LED_GPIO_CFG_SPD_LED | LED_GPIO_CFG_LNK_LED |
+		LED_GPIO_CFG_FDX_LED;
+	ret = smsc95xx_write_reg(dev, LED_GPIO_CFG, write_buf);
+	if (ret < 0) {
+		devwarn(dev, "Failed to write LED_GPIO_CFG register, ret=%d",
+			ret);
+		return ret;
+	}
+
 	/* Init Tx */
 	write_buf = 0;
 	ret = smsc95xx_write_reg(dev, FLOW, write_buf);
@@ -1124,7 +1134,7 @@ static int smsc95xx_rx_fixup(struct usbnet *dev, struct sk_buff *skb)
 			if (skb->len == size) {
 				if (pdata->use_rx_csum)
 					smsc95xx_rx_csum_offload(skb);
-
+				skb_trim(skb, skb->len - 4); /* remove fcs */
 				skb->truesize = size + sizeof(struct sk_buff);
 
 				return 1;
@@ -1142,7 +1152,7 @@ static int smsc95xx_rx_fixup(struct usbnet *dev, struct sk_buff *skb)
 
 			if (pdata->use_rx_csum)
 				smsc95xx_rx_csum_offload(ax_skb);
-
+			skb_trim(ax_skb, ax_skb->len - 4); /* remove fcs */
 			ax_skb->truesize = size + sizeof(struct sk_buff);
 
 			usbnet_skb_return(dev, ax_skb);
@@ -1229,6 +1239,11 @@ static const struct usb_device_id products[] = {
 	{
 		/* SMSC9500 USB Ethernet Device */
 		USB_DEVICE(0x0424, 0x9500),
+		.driver_info = (unsigned long) &smsc95xx_info,
+	},
+	{
+		/* SMSC9512/9514 USB Hub & Ethernet Device */
+		USB_DEVICE(0x0424, 0xec00),
 		.driver_info = (unsigned long) &smsc95xx_info,
 	},
 	{ },		/* END */

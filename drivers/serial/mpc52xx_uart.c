@@ -76,7 +76,6 @@
 #include <linux/of_platform.h>
 
 #include <asm/mpc52xx.h>
-#include <asm/mpc512x.h>
 #include <asm/mpc52xx_psc.h>
 
 #if defined(CONFIG_SERIAL_MPC52xx_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
@@ -254,7 +253,7 @@ static unsigned long mpc52xx_getuartclk(void *p)
 	 * but the generic serial code assumes 16
 	 * so return ipb freq / 2
 	 */
-	return mpc52xx_find_ipb_freq(p) / 2;
+	return mpc5xxx_get_bus_frequency(p) / 2;
 }
 
 static struct psc_ops mpc52xx_psc_ops = {
@@ -391,7 +390,7 @@ static void mpc512x_psc_cw_restore_ints(struct uart_port *port)
 
 static unsigned long mpc512x_getuartclk(void *p)
 {
-	return mpc512x_find_ips_freq(p);
+	return mpc5xxx_get_bus_frequency(p);
 }
 
 static struct psc_ops mpc512x_psc_ops = {
@@ -988,7 +987,7 @@ mpc52xx_console_setup(struct console *co, char *options)
 	pr_debug("mpc52xx_console_setup co=%p, co->index=%i, options=%s\n",
 		 co, co->index, options);
 
-	if ((co->index < 0) || (co->index > MPC52xx_PSC_MAXNUM)) {
+	if ((co->index < 0) || (co->index >= MPC52xx_PSC_MAXNUM)) {
 		pr_debug("PSC%x out of range\n", co->index);
 		return -EINVAL;
 	}

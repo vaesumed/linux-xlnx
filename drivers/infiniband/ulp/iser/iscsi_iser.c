@@ -257,11 +257,8 @@ static void iscsi_iser_cleanup_task(struct iscsi_task *task)
 {
 	struct iscsi_iser_task *iser_task = task->dd_data;
 
-	/*
-	 * mgmt tasks do not need special cleanup and we do not
-	 * allocate anything in the init task callout
-	 */
-	if (!task->sc || task->state == ISCSI_TASK_PENDING)
+	/* mgmt tasks do not need special cleanup */
+	if (!task->sc)
 		return;
 
 	if (iser_task->status == ISER_TASK_STATUS_STARTED) {
@@ -517,7 +514,8 @@ iscsi_iser_conn_get_stats(struct iscsi_cls_conn *cls_conn, struct iscsi_stats *s
 }
 
 static struct iscsi_endpoint *
-iscsi_iser_ep_connect(struct sockaddr *dst_addr, int non_blocking)
+iscsi_iser_ep_connect(struct Scsi_Host *shost, struct sockaddr *dst_addr,
+		      int non_blocking)
 {
 	int err;
 	struct iser_conn *ib_conn;
@@ -599,6 +597,7 @@ static struct scsi_host_template iscsi_iser_sht = {
 	.eh_abort_handler       = iscsi_eh_abort,
 	.eh_device_reset_handler= iscsi_eh_device_reset,
 	.eh_target_reset_handler= iscsi_eh_target_reset,
+	.target_alloc		= iscsi_target_alloc,
 	.use_clustering         = DISABLE_CLUSTERING,
 	.proc_name              = "iscsi_iser",
 	.this_id                = -1,

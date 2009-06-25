@@ -125,7 +125,7 @@
 #define  SDHCI_INT_DATA_MASK	(SDHCI_INT_DATA_END | SDHCI_INT_DMA_END | \
 		SDHCI_INT_DATA_AVAIL | SDHCI_INT_SPACE_AVAIL | \
 		SDHCI_INT_DATA_TIMEOUT | SDHCI_INT_DATA_CRC | \
-		SDHCI_INT_DATA_END_BIT)
+		SDHCI_INT_DATA_END_BIT | SDHCI_ADMA_ERROR)
 #define SDHCI_INT_ALL_MASK	((unsigned int)-1)
 
 #define SDHCI_ACMD12_ERR	0x3C
@@ -226,6 +226,12 @@ struct sdhci_host {
 #define SDHCI_QUIRK_RESTORE_IRQS_AFTER_RESET		(1<<19)
 /* Controller has to be forced to use block size of 2048 bytes */
 #define SDHCI_QUIRK_FORCE_BLK_SZ_2048			(1<<20)
+/* Controller cannot do multi-block transfers */
+#define SDHCI_QUIRK_NO_MULTIBLOCK			(1<<21)
+/* Controller can only handle 1-bit data transfers */
+#define SDHCI_QUIRK_FORCE_1_BIT_DATA			(1<<22)
+/* Controller needs 10ms delay between applying power and clock */
+#define SDHCI_QUIRK_DELAY_AFTER_POWER			(1<<23)
 
 	int			irq;		/* Device IRQ */
 	void __iomem *		ioaddr;		/* Mapped address */
@@ -255,7 +261,7 @@ struct sdhci_host {
 	unsigned int		timeout_clk;	/* Timeout freq (KHz) */
 
 	unsigned int		clock;		/* Current clock (MHz) */
-	unsigned short		power;		/* Current voltage */
+	u8			pwr;		/* Current voltage */
 
 	struct mmc_request	*mrq;		/* Current request */
 	struct mmc_command	*cmd;		/* Current command */

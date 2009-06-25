@@ -15,6 +15,7 @@
 #include <linux/uaccess.h>
 #include <linux/writeback.h>
 #include <linux/buffer_head.h>
+#include <linux/falloc.h>
 
 #include <asm/ioctls.h>
 
@@ -70,9 +71,7 @@ static int ioctl_fibmap(struct file *filp, int __user *p)
 	res = get_user(block, p);
 	if (res)
 		return res;
-	lock_kernel();
 	res = mapping->a_ops->bmap(mapping, block);
-	unlock_kernel();
 	return put_user(res, p);
 }
 
@@ -258,7 +257,7 @@ int __generic_block_fiemap(struct inode *inode,
 	long long length = 0, map_len = 0;
 	u64 logical = 0, phys = 0, size = 0;
 	u32 flags = FIEMAP_EXTENT_MERGED;
-	int ret = 0;
+	int ret = 0, past_eof = 0, whole_file = 0;
 
 	if ((ret = fiemap_check_flags(fieinfo, FIEMAP_FLAG_SYNC)))
 		return ret;
@@ -266,6 +265,9 @@ int __generic_block_fiemap(struct inode *inode,
 	start_blk = logical_to_blk(inode, start);
 
 	length = (long long)min_t(u64, len, i_size_read(inode));
+	if (length < len)
+		whole_file = 1;
+
 	map_len = length;
 
 	do {
@@ -282,11 +284,26 @@ int __generic_block_fiemap(struct inode *inode,
 
 		/* HOLE */
 		if (!buffer_mapped(&tmp)) {
+			length -= blk_to_logical(inode, 1);
+			start_blk++;
+
+			/*
+			 * we want to handle the case where there is an
+			 * allocated block at the front of the file, and then
+			 * nothing but holes up to the end of the file properly,
+			 * to make sure that extent at the front gets properly
+			 * marked with FIEMAP_EXTENT_LAST
+			 */
+			if (!past_eof &&
+			    blk_to_logical(inode, start_blk) >=
+			    blk_to_logical(inode, 0)+i_size_read(inode))
+				past_eof = 1;
+
 			/*
 			 * first hole after going past the EOF, this is our
 			 * last extent
 			 */
-			if (length <= 0) {
+			if (past_eof && size) {
 				flags = FIEMAP_EXTENT_MERGED|FIEMAP_EXTENT_LAST;
 				ret = fiemap_fill_next_extent(fieinfo, logical,
 							      phys, size,
@@ -294,15 +311,37 @@ int __generic_block_fiemap(struct inode *inode,
 				break;
 			}
 
-			length -= blk_to_logical(inode, 1);
-
 			/* if we have holes up to/past EOF then we're done */
-			if (length <= 0)
+			if (length <= 0 || past_eof)
 				break;
-
-			start_blk++;
 		} else {
-			if (length <= 0 && size) {
+			/*
+			 * we have gone over the length of what we wanted to
+			 * map, and it wasn't the entire file, so add the extent
+			 * we got last time and exit.
+			 *
+			 * This is for the case where say we want to map all the
+			 * way up to the second to the last block in a file, but
+			 * the last block is a hole, making the second to last
+			 * block FIEMAP_EXTENT_LAST.  In this case we want to
+			 * see if there is a hole after the second to last block
+			 * so we can mark it properly.  If we found data after
+			 * we exceeded the length we were requesting, then we
+			 * are good to go, just add the extent to the fieinfo
+			 * and break
+			 */
+			if (length <= 0 && !whole_file) {
+				ret = fiemap_fill_next_extent(fieinfo, logical,
+							      phys, size,
+							      flags);
+				break;
+			}
+
+			/*
+			 * if size != 0 then we know we already have an extent
+			 * to add, so add it.
+			 */
+			if (size) {
 				ret = fiemap_fill_next_extent(fieinfo, logical,
 							      phys, size,
 							      flags);
@@ -319,19 +358,14 @@ int __generic_block_fiemap(struct inode *inode,
 			start_blk += logical_to_blk(inode, size);
 
 			/*
-			 * if we are past the EOF we need to loop again to see
-			 * if there is a hole so we can mark this extent as the
-			 * last one, and if not keep mapping things until we
-			 * find a hole, or we run out of slots in the extent
-			 * array
+			 * If we are past the EOF, then we need to make sure as
+			 * soon as we find a hole that the last extent we found
+			 * is marked with FIEMAP_EXTENT_LAST
 			 */
-			if (length <= 0)
-				continue;
-
-			ret = fiemap_fill_next_extent(fieinfo, logical, phys,
-						      size, flags);
-			if (ret)
-				break;
+			if (!past_eof &&
+			    logical+size >=
+			    blk_to_logical(inode, 0)+i_size_read(inode))
+				past_eof = 1;
 		}
 		cond_resched();
 	} while (1);
@@ -370,6 +404,37 @@ EXPORT_SYMBOL(generic_block_fiemap);
 
 #endif  /*  CONFIG_BLOCK  */
 
+/*
+ * This provides compatibility with legacy XFS pre-allocation ioctls
+ * which predate the fallocate syscall.
+ *
+ * Only the l_start, l_len and l_whence fields of the 'struct space_resv'
+ * are used here, rest are ignored.
+ */
+int ioctl_preallocate(struct file *filp, void __user *argp)
+{
+	struct inode *inode = filp->f_path.dentry->d_inode;
+	struct space_resv sr;
+
+	if (copy_from_user(&sr, argp, sizeof(sr)))
+		return -EFAULT;
+
+	switch (sr.l_whence) {
+	case SEEK_SET:
+		break;
+	case SEEK_CUR:
+		sr.l_start += filp->f_pos;
+		break;
+	case SEEK_END:
+		sr.l_start += i_size_read(inode);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return do_fallocate(filp, FALLOC_FL_KEEP_SIZE, sr.l_start, sr.l_len);
+}
+
 static int file_ioctl(struct file *filp, unsigned int cmd,
 		unsigned long arg)
 {
@@ -379,12 +444,11 @@ static int file_ioctl(struct file *filp, unsigned int cmd,
 	switch (cmd) {
 	case FIBMAP:
 		return ioctl_fibmap(filp, p);
-	case FS_IOC_FIEMAP:
-		return ioctl_fiemap(filp, arg);
-	case FIGETBSZ:
-		return put_user(inode->i_sb->s_blocksize, p);
 	case FIONREAD:
 		return put_user(i_size_read(inode) - filp->f_pos, p);
+	case FS_IOC_RESVSP:
+	case FS_IOC_RESVSP64:
+		return ioctl_preallocate(filp, p);
 	}
 
 	return vfs_ioctl(filp, cmd, arg);
@@ -521,6 +585,16 @@ int do_vfs_ioctl(struct file *filp, unsigned int fd, unsigned int cmd,
 	case FITHAW:
 		error = ioctl_fsthaw(filp);
 		break;
+
+	case FS_IOC_FIEMAP:
+		return ioctl_fiemap(filp, arg);
+
+	case FIGETBSZ:
+	{
+		struct inode *inode = filp->f_path.dentry->d_inode;
+		int __user *p = (int __user *)arg;
+		return put_user(inode->i_sb->s_blocksize, p);
+	}
 
 	default:
 		if (S_ISREG(filp->f_path.dentry->d_inode->i_mode))

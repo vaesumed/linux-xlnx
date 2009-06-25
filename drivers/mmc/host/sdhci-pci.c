@@ -284,6 +284,18 @@ static const struct sdhci_pci_fixes sdhci_jmicron = {
 	.resume		= jmicron_resume,
 };
 
+static int via_probe(struct sdhci_pci_chip *chip)
+{
+	if (chip->pdev->revision == 0x10)
+		chip->quirks |= SDHCI_QUIRK_DELAY_AFTER_POWER;
+
+	return 0;
+}
+
+static const struct sdhci_pci_fixes sdhci_via = {
+	.probe		= via_probe,
+};
+
 static const struct pci_device_id pci_ids[] __devinitdata = {
 	{
 		.vendor		= PCI_VENDOR_ID_RICOH,
@@ -347,6 +359,14 @@ static const struct pci_device_id pci_ids[] __devinitdata = {
 		.subvendor	= PCI_ANY_ID,
 		.subdevice	= PCI_ANY_ID,
 		.driver_data	= (kernel_ulong_t)&sdhci_jmicron,
+	},
+
+	{
+		.vendor		= PCI_VENDOR_ID_VIA,
+		.device		= 0x95d0,
+		.subvendor	= PCI_ANY_ID,
+		.subdevice	= PCI_ANY_ID,
+		.driver_data	= (kernel_ulong_t)&sdhci_via,
 	},
 
 	{	/* Generic SD host controller */
@@ -522,8 +542,8 @@ static struct sdhci_pci_slot * __devinit sdhci_pci_probe_slot(
 
 	host = sdhci_alloc_host(&pdev->dev, sizeof(struct sdhci_pci_slot));
 	if (IS_ERR(host)) {
-		ret = PTR_ERR(host);
-		goto unmap;
+		dev_err(&pdev->dev, "cannot allocate host\n");
+		return ERR_PTR(PTR_ERR(host));
 	}
 
 	slot = sdhci_priv(host);
@@ -541,7 +561,7 @@ static struct sdhci_pci_slot * __devinit sdhci_pci_probe_slot(
 	ret = pci_request_region(pdev, bar, mmc_hostname(host->mmc));
 	if (ret) {
 		dev_err(&pdev->dev, "cannot request region\n");
-		return ERR_PTR(ret);
+		goto free;
 	}
 
 	addr = pci_resource_start(pdev, bar);
@@ -572,6 +592,8 @@ unmap:
 
 release:
 	pci_release_region(pdev, bar);
+
+free:
 	sdhci_free_host(host);
 
 	return ERR_PTR(ret);

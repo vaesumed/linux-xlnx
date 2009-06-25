@@ -229,6 +229,19 @@ void input_dev_i3(struct input_dev *input_dev, struct wacom_wac *wacom_wac)
 	input_set_abs_params(input_dev, ABS_RY, 0, 4096, 0, 0);
 }
 
+void input_dev_i4s(struct input_dev *input_dev, struct wacom_wac *wacom_wac)
+{
+	input_dev->keybit[BIT_WORD(BTN_DIGI)] |= BIT_MASK(BTN_TOOL_FINGER);
+	input_dev->keybit[BIT_WORD(BTN_MISC)] |= BIT_MASK(BTN_0) | BIT_MASK(BTN_1) | BIT_MASK(BTN_2) | BIT_MASK(BTN_3);
+	input_dev->keybit[BIT_WORD(BTN_MISC)] |= BIT_MASK(BTN_4) | BIT_MASK(BTN_5) | BIT_MASK(BTN_6);
+	input_set_abs_params(input_dev, ABS_Z, -900, 899, 0, 0);
+}
+
+void input_dev_i4(struct input_dev *input_dev, struct wacom_wac *wacom_wac)
+{
+	input_dev->keybit[BIT_WORD(BTN_MISC)] |= BIT_MASK(BTN_7) | BIT_MASK(BTN_8);
+}
+
 void input_dev_bee(struct input_dev *input_dev, struct wacom_wac *wacom_wac)
 {
 	input_dev->keybit[BIT_WORD(BTN_MISC)] |= BIT_MASK(BTN_8) | BIT_MASK(BTN_9);
@@ -289,6 +302,7 @@ static int wacom_parse_hid(struct usb_interface *intf, struct hid_descriptor *hi
 			5000); /* 5 secs */
 	} while (result < 0 && limit++ < 5);
 
+	/* No need to parse the Descriptor. It isn't an error though */
 	if (result < 0)
 		goto out;
 
@@ -368,9 +382,8 @@ static int wacom_parse_hid(struct usb_interface *intf, struct hid_descriptor *hi
 		}
 	}
 
-	result = 0;
-
  out:
+	result = 0;
 	kfree(report);
 	return result;
 }
@@ -424,6 +437,15 @@ static int wacom_probe(struct usb_interface *intf, const struct usb_device_id *i
 	input_dev->close = wacom_close;
 
 	endpoint = &intf->cur_altsetting->endpoint[0].desc;
+
+	/* Initialize touch_x_max and touch_y_max in case it is not defined */
+	if (wacom_wac->features->type == TABLETPC) {
+		features->touch_x_max = 1023;
+		features->touch_y_max = 1023;
+	} else {
+		features->touch_x_max = 0;
+		features->touch_y_max = 0;
+	}
 
 	/* TabletPC need to retrieve the physical and logical maximum from report descriptor */
 	if (wacom_wac->features->type == TABLETPC) {

@@ -13,7 +13,8 @@ DOCBOOKS := z8530book.xml mcabook.xml device-drivers.xml \
 	    gadget.xml libata.xml mtdnand.xml librs.xml rapidio.xml \
 	    genericirq.xml s390-drivers.xml uio-howto.xml scsi.xml \
 	    mac80211.xml debugobjects.xml sh.xml regulator.xml \
-	    alsa-driver-api.xml writing-an-alsa-driver.xml
+	    alsa-driver-api.xml writing-an-alsa-driver.xml \
+	    tracepoint.xml
 
 ###
 # The build process is as follows (targets):
@@ -143,7 +144,8 @@ quiet_cmd_db2pdf = PDF     $@
 	$(call cmd,db2pdf)
 
 
-main_idx = Documentation/DocBook/index.html
+index = index.html
+main_idx = Documentation/DocBook/$(index)
 build_main_index = rm -rf $(main_idx) && \
 		   echo '<h1>Linux Kernel HTML Documentation</h1>' >> $(main_idx) && \
 		   echo '<h2>Kernel Version: $(KERNELVERSION)</h2>' >> $(main_idx) && \
@@ -232,7 +234,7 @@ clean-files := $(DOCBOOKS) \
 	$(patsubst %.xml, %.pdf,  $(DOCBOOKS)) \
 	$(patsubst %.xml, %.html, $(DOCBOOKS)) \
 	$(patsubst %.xml, %.9,    $(DOCBOOKS)) \
-	$(C-procfs-example)
+	$(C-procfs-example) $(index)
 
 clean-dirs := $(patsubst %.xml,%,$(DOCBOOKS)) man
 

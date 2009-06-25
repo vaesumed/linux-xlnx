@@ -33,8 +33,11 @@
 #include <mach/common.h>
 #include <mach/dsp_common.h>
 #include <mach/omapfb.h>
+#include <mach/hwa742.h>
 #include <mach/lcd_mipid.h>
 #include <mach/mmc.h>
+#include <mach/usb.h>
+#include <mach/clock.h>
 
 #define ADS7846_PENDOWN_GPIO	15
 
@@ -162,6 +165,15 @@ static struct spi_board_info nokia770_spi_board_info[] __initdata = {
 	},
 };
 
+static struct hwa742_platform_data nokia770_hwa742_platform_data = {
+	.te_connected		= 1,
+};
+
+static void hwa742_dev_init(void)
+{
+	clk_add_alias("hwa_sys_ck", NULL, "bclk", NULL);
+	omapfb_set_ctrl_platform_data(&nokia770_hwa742_platform_data);
+}
 
 /* assume no Mini-AB port */
 
@@ -181,11 +193,7 @@ static struct omap_usb_config nokia770_usb_config __initdata = {
 static int nokia770_mmc_set_power(struct device *dev, int slot, int power_on,
 				int vdd)
 {
-	if (power_on)
-		gpio_set_value(NOKIA770_GPIO_MMC_POWER, 1);
-	else
-		gpio_set_value(NOKIA770_GPIO_MMC_POWER, 0);
-
+	gpio_set_value(NOKIA770_GPIO_MMC_POWER, power_on);
 	return 0;
 }
 
@@ -374,6 +382,7 @@ static void __init omap_nokia770_init(void)
 	omap_serial_init();
 	omap_register_i2c_bus(1, 100, NULL, 0);
 	omap_dsp_init();
+	hwa742_dev_init();
 	ads7846_dev_init();
 	mipid_dev_init();
 	omap_usb_init(&nokia770_usb_config);

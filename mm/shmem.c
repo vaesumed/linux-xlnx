@@ -1097,7 +1097,7 @@ static int shmem_writepage(struct page *page, struct writeback_control *wbc)
 	shmem_swp_unmap(entry);
 unlock:
 	spin_unlock(&info->lock);
-	swap_free(swap);
+	swapcache_free(swap, NULL);
 redirty:
 	set_page_dirty(page);
 	if (wbc->for_reclaim)
@@ -1340,8 +1340,12 @@ repeat:
 			shmem_swp_unmap(entry);
 			spin_unlock(&info->lock);
 			if (error == -ENOMEM) {
-				/* allow reclaim from this memory cgroup */
-				error = mem_cgroup_shrink_usage(swappage,
+				/*
+				 * reclaim from proper memory cgroup and
+				 * call memcg's OOM if needed.
+				 */
+				error = mem_cgroup_shmem_charge_fallback(
+								swappage,
 								current->mm,
 								gfp);
 				if (error) {
@@ -1554,6 +1558,7 @@ static struct inode *shmem_get_inode(struct super_block *sb, int mode,
 		spin_lock_init(&info->lock);
 		info->flags = flags & VM_NORESERVE;
 		INIT_LIST_HEAD(&info->swaplist);
+		cache_no_acl(inode);
 
 		switch (mode & S_IFMT) {
 		default:
@@ -2384,7 +2389,6 @@ static void shmem_destroy_inode(struct inode *inode)
 		/* only struct inode is valid if it's an inline symlink */
 		mpol_free_shared_policy(&SHMEM_I(inode)->policy);
 	}
-	shmem_acl_destroy_inode(inode);
 	kmem_cache_free(shmem_inode_cachep, SHMEM_I(inode));
 }
 
@@ -2393,10 +2397,6 @@ static void init_once(void *foo)
 	struct shmem_inode_info *p = (struct shmem_inode_info *) foo;
 
 	inode_init_once(&p->vfs_inode);
-#ifdef CONFIG_TMPFS_POSIX_ACL
-	p->i_acl = NULL;
-	p->i_default_acl = NULL;
-#endif
 }
 
 static int init_inodecache(void)
@@ -2608,7 +2608,7 @@ int shmem_unuse(swp_entry_t entry, struct page *page)
  * @size: size to be set for the file
  * @flags: VM_NORESERVE suppresses pre-accounting of the entire object size
  */
-struct file *shmem_file_setup(char *name, loff_t size, unsigned long flags)
+struct file *shmem_file_setup(const char *name, loff_t size, unsigned long flags)
 {
 	int error;
 	struct file *file;
@@ -2655,6 +2655,7 @@ struct file *shmem_file_setup(char *name, loff_t size, unsigned long flags)
 	if (error)
 		goto close_file;
 #endif
+	ima_counts_get(file);
 	return file;
 
 close_file:
@@ -2680,7 +2681,6 @@ int shmem_zero_setup(struct vm_area_struct *vma)
 	if (IS_ERR(file))
 		return PTR_ERR(file);
 
-	ima_shm_check(file);
 	if (vma->vm_file)
 		fput(vma->vm_file);
 	vma->vm_file = file;

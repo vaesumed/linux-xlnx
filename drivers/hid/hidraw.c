@@ -285,8 +285,10 @@ static long hidraw_ioctl(struct file *file, unsigned int cmd,
 
 				if (_IOC_NR(cmd) == _IOC_NR(HIDIOCGRAWNAME(0))) {
 					int len;
-					if (!hid->name)
-						return 0;
+					if (!hid->name) {
+						ret = 0;
+						break;
+					}
 					len = strlen(hid->name) + 1;
 					if (len > _IOC_SIZE(cmd))
 						len = _IOC_SIZE(cmd);
@@ -297,8 +299,10 @@ static long hidraw_ioctl(struct file *file, unsigned int cmd,
 
 				if (_IOC_NR(cmd) == _IOC_NR(HIDIOCGRAWPHYS(0))) {
 					int len;
-					if (!hid->phys)
-						return 0;
+					if (!hid->phys) {
+						ret = 0;
+						break;
+					}
 					len = strlen(hid->phys) + 1;
 					if (len > _IOC_SIZE(cmd))
 						len = _IOC_SIZE(cmd);
@@ -345,10 +349,7 @@ int hidraw_connect(struct hid_device *hid)
 	int minor, result;
 	struct hidraw *dev;
 
-	/* TODO currently we accept any HID device. This should later
-	 * probably be fixed to accept only those devices which provide
-	 * non-input applications
-	 */
+	/* we accept any HID device, no matter the applications */
 
 	dev = kzalloc(sizeof(struct hidraw), GFP_KERNEL);
 	if (!dev)

@@ -37,7 +37,6 @@
 #define AMD8111_EDAC_MOD_STR	"amd8111_edac"
 
 #define PCI_DEVICE_ID_AMD_8111_PCI	0x7460
-static int edac_dev_idx;
 
 enum amd8111_edac_devs {
 	LPC_BRIDGE = 0,
@@ -377,7 +376,7 @@ static int amd8111_dev_probe(struct pci_dev *dev,
 	 * edac_device_ctl_info, but make use of existing
 	 * one instead.
 	*/
-	dev_info->edac_idx = edac_dev_idx++;
+	dev_info->edac_idx = edac_device_alloc_index();
 	dev_info->edac_dev =
 		edac_device_alloc_ctl_info(0, dev_info->ctl_name, 1,
 					   NULL, 0, 0,
@@ -389,7 +388,7 @@ static int amd8111_dev_probe(struct pci_dev *dev,
 	dev_info->edac_dev->dev = &dev_info->dev->dev;
 	dev_info->edac_dev->mod_name = AMD8111_EDAC_MOD_STR;
 	dev_info->edac_dev->ctl_name = dev_info->ctl_name;
-	dev_info->edac_dev->dev_name = dev_info->dev->dev.bus_id;
+	dev_info->edac_dev->dev_name = dev_name(&dev_info->dev->dev);
 
 	if (edac_op_state == EDAC_OPSTATE_POLL)
 		dev_info->edac_dev->edac_check = dev_info->check;
@@ -473,7 +472,7 @@ static int amd8111_pci_probe(struct pci_dev *dev,
 	pci_info->edac_dev->dev = &pci_info->dev->dev;
 	pci_info->edac_dev->mod_name = AMD8111_EDAC_MOD_STR;
 	pci_info->edac_dev->ctl_name = pci_info->ctl_name;
-	pci_info->edac_dev->dev_name = pci_info->dev->dev.bus_id;
+	pci_info->edac_dev->dev_name = dev_name(&pci_info->dev->dev);
 
 	if (edac_op_state == EDAC_OPSTATE_POLL)
 		pci_info->edac_dev->edac_check = pci_info->check;

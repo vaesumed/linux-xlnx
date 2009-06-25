@@ -25,6 +25,7 @@
 #include <linux/kbd_kern.h>
 #include <linux/proc_fs.h>
 #include <linux/quotaops.h>
+#include <linux/perf_counter.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/suspend.h>
@@ -120,20 +121,17 @@ static struct sysrq_key_op sysrq_unraw_op = {
 #define sysrq_unraw_op (*(struct sysrq_key_op *)0)
 #endif /* CONFIG_VT */
 
-#ifdef CONFIG_KEXEC
-static void sysrq_handle_crashdump(int key, struct tty_struct *tty)
+static void sysrq_handle_crash(int key, struct tty_struct *tty)
 {
-	crash_kexec(get_irq_regs());
+	char *killer = NULL;
+	*killer = 1;
 }
 static struct sysrq_key_op sysrq_crashdump_op = {
-	.handler	= sysrq_handle_crashdump,
-	.help_msg	= "Crashdump",
-	.action_msg	= "Trigger a crashdump",
+	.handler	= sysrq_handle_crash,
+	.help_msg	= "Crash",
+	.action_msg	= "Trigger a crash",
 	.enable_mask	= SYSRQ_ENABLE_DUMP,
 };
-#else
-#define sysrq_crashdump_op (*(struct sysrq_key_op *)0)
-#endif
 
 static void sysrq_handle_reboot(int key, struct tty_struct *tty)
 {
@@ -243,6 +241,7 @@ static void sysrq_handle_showregs(int key, struct tty_struct *tty)
 	struct pt_regs *regs = get_irq_regs();
 	if (regs)
 		show_regs(regs);
+	perf_counter_print_debug();
 }
 static struct sysrq_key_op sysrq_showregs_op = {
 	.handler	= sysrq_handle_showregs,
@@ -406,7 +405,7 @@ static struct sysrq_key_op *sysrq_key_table[36] = {
 	&sysrq_showlocks_op,		/* d */
 	&sysrq_term_op,			/* e */
 	&sysrq_moom_op,			/* f */
-	/* g: May be registered by ppc for kgdb */
+	/* g: May be registered for the kernel debugger */
 	NULL,				/* g */
 	NULL,				/* h - reserved for help */
 	&sysrq_kill_op,			/* i */
@@ -431,7 +430,7 @@ static struct sysrq_key_op *sysrq_key_table[36] = {
 	&sysrq_sync_op,			/* s */
 	&sysrq_showstate_op,		/* t */
 	&sysrq_mountro_op,		/* u */
-	/* v: May be registered at init time by SMP VOYAGER */
+	/* v: May be registered for frame buffer console restore */
 	NULL,				/* v */
 	&sysrq_showstate_blocked_op,	/* w */
 	/* x: May be registered on ppc/powerpc for xmon */

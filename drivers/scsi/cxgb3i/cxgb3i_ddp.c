@@ -120,20 +120,26 @@ static void clear_ddp_map(struct cxgb3i_ddp_info *ddp, unsigned int tag,
 }
 
 static inline int ddp_find_unused_entries(struct cxgb3i_ddp_info *ddp,
-					  int start, int max, int count,
+					  unsigned int start, unsigned int max,
+					  unsigned int count,
 					  struct cxgb3i_gather_list *gl)
 {
-	unsigned int i, j;
+	unsigned int i, j, k;
 
+	/* not enough entries */
+	if ((max - start) < count)
+		return -EBUSY;
+
+	max -= count;
 	spin_lock(&ddp->map_lock);
-	for (i = start; i <= max;) {
-		for (j = 0; j < count; j++) {
-			if (ddp->gl_map[i + j])
+	for (i = start; i < max;) {
+		for (j = 0, k = i; j < count; j++, k++) {
+			if (ddp->gl_map[k])
 				break;
 		}
 		if (j == count) {
-			for (j = 0; j < count; j++)
-				ddp->gl_map[i + j] = gl;
+			for (j = 0, k = i; j < count; j++, k++)
+				ddp->gl_map[k] = gl;
 			spin_unlock(&ddp->map_lock);
 			return i;
 		}
@@ -198,6 +204,31 @@ int cxgb3i_ddp_find_page_index(unsigned long pgsz)
 	}
 	ddp_log_debug("ddp page size 0x%lx not supported.\n", pgsz);
 	return DDP_PGIDX_MAX;
+}
+
+/**
+ * cxgb3i_ddp_adjust_page_table - adjust page table with PAGE_SIZE
+ * return the ddp page index, if no match is found return DDP_PGIDX_MAX.
+ */
+int cxgb3i_ddp_adjust_page_table(void)
+{
+	int i;
+	unsigned int base_order, order;
+
+	if (PAGE_SIZE < (1UL << ddp_page_shift[0])) {
+		ddp_log_info("PAGE_SIZE 0x%lx too small, min. 0x%lx.\n",
+				PAGE_SIZE, 1UL << ddp_page_shift[0]);
+		return -EINVAL;
+	}
+
+	base_order = get_order(1UL << ddp_page_shift[0]);
+	order = get_order(1 << PAGE_SHIFT);
+	for (i = 0; i < DDP_PGIDX_MAX; i++) {
+		/* first is the kernel page size, then just doubling the size */
+		ddp_page_order[i] = order - base_order + i;
+		ddp_page_shift[i] = PAGE_SHIFT + i;
+	}
+	return 0;
 }
 
 static inline void ddp_gl_unmap(struct pci_dev *pdev,
@@ -354,7 +385,7 @@ int cxgb3i_ddp_tag_reserve(struct t3cdev *tdev, unsigned int tid,
 	struct cxgb3i_ddp_info *ddp = tdev->ulp_iscsi;
 	struct pagepod_hdr hdr;
 	unsigned int npods;
-	int idx = -1, idx_max;
+	int idx = -1;
 	int err = -ENOMEM;
 	u32 sw_tag = *tagp;
 	u32 tag;
@@ -367,17 +398,17 @@ int cxgb3i_ddp_tag_reserve(struct t3cdev *tdev, unsigned int tid,
 	}
 
 	npods = (gl->nelem + PPOD_PAGES_MAX - 1) >> PPOD_PAGES_SHIFT;
-	idx_max = ddp->nppods - npods + 1;
 
 	if (ddp->idx_last == ddp->nppods)
-		idx = ddp_find_unused_entries(ddp, 0, idx_max, npods, gl);
+		idx = ddp_find_unused_entries(ddp, 0, ddp->nppods, npods, gl);
 	else {
 		idx = ddp_find_unused_entries(ddp, ddp->idx_last + 1,
-					      idx_max, npods, gl);
-		if (idx < 0 && ddp->idx_last >= npods)
+					      ddp->nppods, npods, gl);
+		if (idx < 0 && ddp->idx_last >= npods) {
 			idx = ddp_find_unused_entries(ddp, 0,
-						      ddp->idx_last - npods + 1,
+				min(ddp->idx_last + npods, ddp->nppods),
 						      npods, gl);
+		}
 	}
 	if (idx < 0) {
 		ddp_log_debug("xferlen %u, gl %u, npods %u NO DDP.\n",
@@ -592,30 +623,40 @@ int cxgb3i_adapter_ddp_info(struct t3cdev *tdev,
  * release all the resource held by the ddp pagepod manager for a given
  * adapter if needed
  */
+
+static void ddp_cleanup(struct kref *kref)
+{
+	struct cxgb3i_ddp_info *ddp = container_of(kref,
+						struct cxgb3i_ddp_info,
+						refcnt);
+	int i = 0;
+
+	ddp_log_info("kref release ddp 0x%p, t3dev 0x%p.\n", ddp, ddp->tdev);
+
+	ddp->tdev->ulp_iscsi = NULL;
+	while (i < ddp->nppods) {
+		struct cxgb3i_gather_list *gl = ddp->gl_map[i];
+		if (gl) {
+			int npods = (gl->nelem + PPOD_PAGES_MAX - 1)
+					>> PPOD_PAGES_SHIFT;
+			ddp_log_info("t3dev 0x%p, ddp %d + %d.\n",
+					ddp->tdev, i, npods);
+			kfree(gl);
+			ddp_free_gl_skb(ddp, i, npods);
+			i += npods;
+		} else
+			i++;
+	}
+	cxgb3i_free_big_mem(ddp);
+}
+
 void cxgb3i_ddp_cleanup(struct t3cdev *tdev)
 {
-	int i = 0;
 	struct cxgb3i_ddp_info *ddp = (struct cxgb3i_ddp_info *)tdev->ulp_iscsi;
 
 	ddp_log_info("t3dev 0x%p, release ddp 0x%p.\n", tdev, ddp);
-
-	if (ddp) {
-		tdev->ulp_iscsi = NULL;
-		while (i < ddp->nppods) {
-			struct cxgb3i_gather_list *gl = ddp->gl_map[i];
-			if (gl) {
-				int npods = (gl->nelem + PPOD_PAGES_MAX - 1)
-						>> PPOD_PAGES_SHIFT;
-				ddp_log_info("t3dev 0x%p, ddp %d + %d.\n",
-						tdev, i, npods);
-				kfree(gl);
-				ddp_free_gl_skb(ddp, i, npods);
-				i += npods;
-			} else
-				i++;
-		}
-		cxgb3i_free_big_mem(ddp);
-	}
+	if (ddp)
+		kref_put(&ddp->refcnt, ddp_cleanup);
 }
 
 /**
@@ -625,12 +666,13 @@ void cxgb3i_ddp_cleanup(struct t3cdev *tdev)
  */
 static void ddp_init(struct t3cdev *tdev)
 {
-	struct cxgb3i_ddp_info *ddp;
+	struct cxgb3i_ddp_info *ddp = tdev->ulp_iscsi;
 	struct ulp_iscsi_info uinfo;
 	unsigned int ppmax, bits;
 	int i, err;
 
-	if (tdev->ulp_iscsi) {
+	if (ddp) {
+		kref_get(&ddp->refcnt);
 		ddp_log_warn("t3dev 0x%p, ddp 0x%p already set up.\n",
 				tdev, tdev->ulp_iscsi);
 		return;
@@ -664,6 +706,7 @@ static void ddp_init(struct t3cdev *tdev)
 					  ppmax *
 					  sizeof(struct cxgb3i_gather_list *));
 	spin_lock_init(&ddp->map_lock);
+	kref_init(&ddp->refcnt);
 
 	ddp->tdev = tdev;
 	ddp->pdev = uinfo.pdev;
@@ -709,6 +752,17 @@ void cxgb3i_ddp_init(struct t3cdev *tdev)
 {
 	if (page_idx == DDP_PGIDX_MAX) {
 		page_idx = cxgb3i_ddp_find_page_index(PAGE_SIZE);
+
+		if (page_idx == DDP_PGIDX_MAX) {
+			ddp_log_info("system PAGE_SIZE %lu, update hw.\n",
+					PAGE_SIZE);
+			if (cxgb3i_ddp_adjust_page_table() < 0) {
+				ddp_log_info("PAGE_SIZE %lu, ddp disabled.\n",
+						PAGE_SIZE);
+				return;
+			}
+			page_idx = cxgb3i_ddp_find_page_index(PAGE_SIZE);
+		}
 		ddp_log_info("system PAGE_SIZE %lu, ddp idx %u.\n",
 				PAGE_SIZE, page_idx);
 	}

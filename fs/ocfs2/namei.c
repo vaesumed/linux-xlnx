@@ -118,7 +118,7 @@ static struct dentry *ocfs2_lookup(struct inode *dir, struct dentry *dentry,
 	mlog(0, "find name %.*s in directory %llu\n", dentry->d_name.len,
 	     dentry->d_name.name, (unsigned long long)OCFS2_I(dir)->ip_blkno);
 
-	status = ocfs2_inode_lock(dir, NULL, 0);
+	status = ocfs2_inode_lock_nested(dir, NULL, 0, OI_LS_PARENT);
 	if (status < 0) {
 		if (status != -ENOENT)
 			mlog_errno(status);
@@ -636,7 +636,7 @@ static int ocfs2_link(struct dentry *old_dentry,
 	if (S_ISDIR(inode->i_mode))
 		return -EPERM;
 
-	err = ocfs2_inode_lock(dir, &parent_fe_bh, 1);
+	err = ocfs2_inode_lock_nested(dir, &parent_fe_bh, 1, OI_LS_PARENT);
 	if (err < 0) {
 		if (err != -ENOENT)
 			mlog_errno(err);
@@ -800,7 +800,8 @@ static int ocfs2_unlink(struct inode *dir,
 		return -EPERM;
 	}
 
-	status = ocfs2_inode_lock(dir, &parent_node_bh, 1);
+	status = ocfs2_inode_lock_nested(dir, &parent_node_bh, 1,
+					 OI_LS_PARENT);
 	if (status < 0) {
 		if (status != -ENOENT)
 			mlog_errno(status);
@@ -978,7 +979,8 @@ static int ocfs2_double_lock(struct ocfs2_super *osb,
 			inode1 = tmpinode;
 		}
 		/* lock id2 */
-		status = ocfs2_inode_lock(inode2, bh2, 1);
+		status = ocfs2_inode_lock_nested(inode2, bh2, 1,
+						 OI_LS_RENAME1);
 		if (status < 0) {
 			if (status != -ENOENT)
 				mlog_errno(status);
@@ -987,7 +989,7 @@ static int ocfs2_double_lock(struct ocfs2_super *osb,
 	}
 
 	/* lock id1 */
-	status = ocfs2_inode_lock(inode1, bh1, 1);
+	status = ocfs2_inode_lock_nested(inode1, bh1, 1, OI_LS_RENAME2);
 	if (status < 0) {
 		/*
 		 * An error return must mean that no cluster locks
@@ -1025,10 +1027,8 @@ static int ocfs2_rename(struct inode *old_dir,
 	struct inode *orphan_dir = NULL;
 	struct ocfs2_dinode *newfe = NULL;
 	char orphan_name[OCFS2_ORPHAN_NAMELEN + 1];
-	struct buffer_head *orphan_entry_bh = NULL;
 	struct buffer_head *newfe_bh = NULL;
 	struct buffer_head *old_inode_bh = NULL;
-	struct buffer_head *insert_entry_bh = NULL;
 	struct ocfs2_super *osb = NULL;
 	u64 newfe_blkno, old_de_ino;
 	handle_t *handle = NULL;
@@ -1105,7 +1105,8 @@ static int ocfs2_rename(struct inode *old_dir,
 	 * won't have to concurrently downconvert the inode and the
 	 * dentry locks.
 	 */
-	status = ocfs2_inode_lock(old_inode, &old_inode_bh, 1);
+	status = ocfs2_inode_lock_nested(old_inode, &old_inode_bh, 1,
+					 OI_LS_PARENT);
 	if (status < 0) {
 		if (status != -ENOENT)
 			mlog_errno(status);
@@ -1455,8 +1456,6 @@ bail:
 	brelse(old_inode_bh);
 	brelse(old_dir_bh);
 	brelse(new_dir_bh);
-	brelse(orphan_entry_bh);
-	brelse(insert_entry_bh);
 
 	mlog_exit(status);
 

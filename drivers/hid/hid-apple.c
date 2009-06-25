@@ -151,7 +151,7 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 	if (fnmode) {
 		int do_translate;
 
-		trans = apple_find_translation((hid->product < 0x220 ||
+		trans = apple_find_translation((hid->product < 0x21d ||
 					hid->product >= 0x300) ?
 					powerbook_fn_keys : apple_fn_keys,
 					usage->code);
@@ -435,10 +435,6 @@ static const struct hid_device_id apple_devices[] = {
 		.driver_data = APPLE_NUMLOCK_EMULATION | APPLE_HAS_FN },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_GEYSER1_TP_ONLY),
 		.driver_data = APPLE_NUMLOCK_EMULATION | APPLE_HAS_FN },
-
-	/* Apple wireless Mighty Mouse */
-	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_APPLE, 0x030c),
-		.driver_data = APPLE_MIGHTYMOUSE | APPLE_INVERT_HWHEEL },
 
 	{ }
 };

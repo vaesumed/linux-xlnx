@@ -23,8 +23,15 @@
 
 #include "mtdcore.h"
 
+static int mtd_cls_suspend(struct device *dev, pm_message_t state);
+static int mtd_cls_resume(struct device *dev);
 
-static struct class *mtd_class;
+static struct class mtd_class = {
+	.name = "mtd",
+	.owner = THIS_MODULE,
+	.suspend = mtd_cls_suspend,
+	.resume = mtd_cls_resume,
+};
 
 /* These are exported solely for the purpose of mtd_blkdevs.c. You
    should not use them for _anything_ else */
@@ -48,11 +55,30 @@ static LIST_HEAD(mtd_notifiers);
  */
 static void mtd_release(struct device *dev)
 {
-	struct mtd_info *mtd = dev_to_mtd(dev);
+	dev_t index = MTD_DEVT(dev_to_mtd(dev)->index);
 
 	/* remove /dev/mtdXro node if needed */
-	if (MTD_DEVT(mtd->index))
-		device_destroy(mtd_class, MTD_DEVT(mtd->index) + 1);
+	if (index)
+		device_destroy(&mtd_class, index + 1);
+}
+
+static int mtd_cls_suspend(struct device *dev, pm_message_t state)
+{
+	struct mtd_info *mtd = dev_to_mtd(dev);
+	
+	if (mtd->suspend)
+		return mtd->suspend(mtd);
+	else
+		return 0;
+}
+
+static int mtd_cls_resume(struct device *dev)
+{
+	struct mtd_info *mtd = dev_to_mtd(dev);
+	
+	if (mtd->resume)
+		mtd->resume(mtd);
+	return 0;
 }
 
 static ssize_t mtd_type_show(struct device *dev,
@@ -132,6 +158,17 @@ static ssize_t mtd_writesize_show(struct device *dev,
 }
 static DEVICE_ATTR(writesize, S_IRUGO, mtd_writesize_show, NULL);
 
+static ssize_t mtd_subpagesize_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct mtd_info *mtd = dev_to_mtd(dev);
+	unsigned int subpagesize = mtd->writesize >> mtd->subpage_sft;
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", subpagesize);
+
+}
+static DEVICE_ATTR(subpagesize, S_IRUGO, mtd_subpagesize_show, NULL);
+
 static ssize_t mtd_oobsize_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -169,6 +206,7 @@ static struct attribute *mtd_attrs[] = {
 	&dev_attr_size.attr,
 	&dev_attr_erasesize.attr,
 	&dev_attr_writesize.attr,
+	&dev_attr_subpagesize.attr,
 	&dev_attr_oobsize.attr,
 	&dev_attr_numeraseregions.attr,
 	&dev_attr_name.attr,
@@ -257,7 +295,7 @@ int add_mtd_device(struct mtd_info *mtd)
 			 * physical device.
 			 */
 			mtd->dev.type = &mtd_devtype;
-			mtd->dev.class = mtd_class;
+			mtd->dev.class = &mtd_class;
 			mtd->dev.devt = MTD_DEVT(i);
 			dev_set_name(&mtd->dev, "mtd%d", i);
 			if (device_register(&mtd->dev) != 0) {
@@ -266,7 +304,7 @@ int add_mtd_device(struct mtd_info *mtd)
 			}
 
 			if (MTD_DEVT(i))
-				device_create(mtd_class, mtd->dev.parent,
+				device_create(&mtd_class, mtd->dev.parent,
 						MTD_DEVT(i) + 1,
 						NULL, "mtd%dro", i);
 
@@ -592,11 +630,12 @@ done:
 
 static int __init init_mtd(void)
 {
-	mtd_class = class_create(THIS_MODULE, "mtd");
+	int ret;
+	ret = class_register(&mtd_class);
 
-	if (IS_ERR(mtd_class)) {
-		pr_err("Error creating mtd class.\n");
-		return PTR_ERR(mtd_class);
+	if (ret) {
+		pr_err("Error registering mtd class: %d\n", ret);
+		return ret;
 	}
 #ifdef CONFIG_PROC_FS
 	if ((proc_mtd = create_proc_entry( "mtd", 0, NULL )))
@@ -611,7 +650,7 @@ static void __exit cleanup_mtd(void)
         if (proc_mtd)
 		remove_proc_entry( "mtd", NULL);
 #endif /* CONFIG_PROC_FS */
-	class_destroy(mtd_class);
+	class_unregister(&mtd_class);
 }
 
 module_init(init_mtd);
