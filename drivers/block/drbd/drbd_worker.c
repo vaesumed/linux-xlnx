@@ -26,12 +26,11 @@
 #include <linux/autoconf.h>
 #include <linux/module.h>
 #include <linux/version.h>
-
+#include <linux/drbd.h>
 #include <linux/sched.h>
 #include <linux/smp_lock.h>
 #include <linux/wait.h>
 #include <linux/mm.h>
-#include <linux/drbd_config.h>
 #include <linux/memcontrol.h>
 #include <linux/mm_inline.h>
 #include <linux/slab.h>
@@ -40,14 +39,13 @@
 #include <linux/string.h>
 #include <linux/scatterlist.h>
 
-#include <linux/drbd.h>
 #include "drbd_int.h"
 #include "drbd_req.h"
 #include "drbd_tracing.h"
 
 #define SLEEP_TIME (HZ/10)
 
-STATIC int w_make_ov_request(struct drbd_conf *mdev, struct drbd_work *w, int cancel);
+static int w_make_ov_request(struct drbd_conf *mdev, struct drbd_work *w, int cancel);
 
 
 
@@ -293,7 +291,7 @@ int w_resync_inactive(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 	return 1; /* Simply ignore this! */
 }
 
-STATIC void drbd_csum(struct drbd_conf *mdev, struct crypto_hash *tfm, struct bio *bio, void *digest)
+void drbd_csum(struct drbd_conf *mdev, struct crypto_hash *tfm, struct bio *bio, void *digest)
 {
 	struct hash_desc desc;
 	struct scatterlist sg;
@@ -313,7 +311,7 @@ STATIC void drbd_csum(struct drbd_conf *mdev, struct crypto_hash *tfm, struct bi
 	crypto_hash_final(&desc, digest);
 }
 
-STATIC int w_e_send_csum(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
+static int w_e_send_csum(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
 	struct drbd_epoch_entry *e = (struct drbd_epoch_entry *)w;
 	int digest_size;
@@ -329,7 +327,7 @@ STATIC int w_e_send_csum(struct drbd_conf *mdev, struct drbd_work *w, int cancel
 
 	if (likely(drbd_bio_uptodate(e->private_bio))) {
 		digest_size = crypto_hash_digestsize(mdev->csums_tfm);
-		digest = kmalloc(digest_size, GFP_KERNEL);
+		digest = kmalloc(digest_size, GFP_NOIO);
 		if (digest) {
 			drbd_csum(mdev, mdev->csums_tfm, e->private_bio, digest);
 
@@ -359,7 +357,7 @@ STATIC int w_e_send_csum(struct drbd_conf *mdev, struct drbd_work *w, int cancel
 
 #define GFP_TRY	(__GFP_HIGHMEM | __GFP_NOWARN)
 
-STATIC int read_for_csum(struct drbd_conf *mdev, sector_t sector, int size)
+static int read_for_csum(struct drbd_conf *mdev, sector_t sector, int size)
 {
 	struct drbd_epoch_entry *e;
 
@@ -421,9 +419,9 @@ int w_make_resync_request(struct drbd_conf *mdev,
 	unsigned long bit;
 	sector_t sector;
 	const sector_t capacity = drbd_get_capacity(mdev->this_bdev);
-	int max_segment_size = mdev->rq_queue->max_segment_size;
-	int number, i, size;
-	int align;
+	int max_segment_size = queue_max_segment_size(mdev->rq_queue);
+	int number, i, size, pe, mx;
+	int align, queued, sndbuf;
 
 	if (unlikely(cancel))
 		return 1;
@@ -446,15 +444,40 @@ int w_make_resync_request(struct drbd_conf *mdev,
 		mdev->resync_work.cb = w_resync_inactive;
 		return 1;
 	}
-	/* All goto requeses have to happend after this block: get_ldev() */
 
-	number = SLEEP_TIME*mdev->sync_conf.rate / ((BM_BLOCK_SIZE/1024)*HZ);
+	number = SLEEP_TIME * mdev->sync_conf.rate / ((BM_BLOCK_SIZE/1024)*HZ);
+	pe = atomic_read(&mdev->rs_pending_cnt);
 
-	if (atomic_read(&mdev->rs_pending_cnt) > number)
-		goto requeue;
-	number -= atomic_read(&mdev->rs_pending_cnt);
+	mutex_lock(&mdev->data.mutex);
+	if (mdev->data.socket)
+		mx = mdev->data.socket->sk->sk_rcvbuf / sizeof(struct p_block_req);
+	else
+		mx = 1;
+	mutex_unlock(&mdev->data.mutex);
+
+	/* For resync rates >160MB/sec, allow more pending RS requests */
+	if (number > mx)
+		mx = number;
+
+	/* Limit the nunber of pending RS requests to no more than the peer's receive buffer */
+	if ((pe + number) > mx) {
+		number = mx - pe;
+	}
 
 	for (i = 0; i < number; i++) {
+		/* Stop generating RS requests, when half of the sendbuffer is filled */
+		mutex_lock(&mdev->data.mutex);
+		if (mdev->data.socket) {
+			queued = mdev->data.socket->sk->sk_wmem_queued;
+			sndbuf = mdev->data.socket->sk->sk_sndbuf;
+		} else {
+			queued = 1;
+			sndbuf = 0;
+		}
+		mutex_unlock(&mdev->data.mutex);
+		if (queued > sndbuf / 2)
+			goto requeue;
+
 next_sector:
 		size = BM_BLOCK_SIZE;
 		bit  = drbd_bm_find_next(mdev, mdev->bm_resync_fo);
@@ -589,6 +612,11 @@ int w_make_ov_request(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 
 	sector = mdev->ov_position;
 	for (i = 0; i < number; i++) {
+		if (sector >= capacity) {
+			mdev->resync_work.cb = w_resync_inactive;
+			return 1;
+		}
+
 		size = BM_BLOCK_SIZE;
 
 		if (drbd_try_rs_begin_io(mdev, sector)) {
@@ -605,11 +633,6 @@ int w_make_ov_request(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 			return 0;
 		}
 		sector += BM_SECT_PER_BIT;
-		if (sector >= capacity) {
-			mdev->resync_work.cb = w_resync_inactive;
-
-			return 1;
-		}
 	}
 	mdev->ov_position = sector;
 
@@ -628,7 +651,7 @@ int w_ov_finished(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 	return 1;
 }
 
-STATIC int w_resync_finished(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
+static int w_resync_finished(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
 	kfree(w);
 
@@ -766,6 +789,7 @@ out:
 	mdev->rs_total  = 0;
 	mdev->rs_failed = 0;
 	mdev->rs_paused = 0;
+	mdev->ov_start_sector = 0;
 
 	if (test_and_clear_bit(WRITE_BM_AFTER_RESYNC, &mdev->flags)) {
 		dev_warn(DEV, "Writing the whole bitmap, due to failed kmalloc\n");
@@ -911,7 +935,7 @@ int w_e_end_csum_rs_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 		if (mdev->csums_tfm) {
 			digest_size = crypto_hash_digestsize(mdev->csums_tfm);
 			D_ASSERT(digest_size == di->digest_size);
-			digest = kmalloc(digest_size, GFP_KERNEL);
+			digest = kmalloc(digest_size, GFP_NOIO);
 		}
 		if (digest) {
 			drbd_csum(mdev, mdev->csums_tfm, e->private_bio, digest);
@@ -967,13 +991,15 @@ int w_e_end_ov_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 		goto out;
 
 	digest_size = crypto_hash_digestsize(mdev->verify_tfm);
-	digest = kmalloc(digest_size, GFP_KERNEL);
+	/* FIXME if this allocation fails, online verify will not terminate! */
+	digest = kmalloc(digest_size, GFP_NOIO);
 	if (digest) {
 		drbd_csum(mdev, mdev->verify_tfm, e->private_bio, digest);
+		inc_rs_pending(mdev);
 		ok = drbd_send_drequest_csum(mdev, e->sector, e->size,
 					     digest, digest_size, P_OV_REPLY);
-		if (ok)
-			inc_rs_pending(mdev);
+		if (!ok)
+			dec_rs_pending(mdev);
 		kfree(digest);
 	}
 
@@ -1021,7 +1047,7 @@ int w_e_end_ov_reply(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 
 	if (likely(drbd_bio_uptodate(e->private_bio))) {
 		digest_size = crypto_hash_digestsize(mdev->verify_tfm);
-		digest = kmalloc(digest_size, GFP_KERNEL);
+		digest = kmalloc(digest_size, GFP_NOIO);
 		if (digest) {
 			drbd_csum(mdev, mdev->verify_tfm, e->private_bio, digest);
 
@@ -1157,7 +1183,7 @@ int w_send_read_req(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 	return ok;
 }
 
-STATIC int _drbd_may_sync_now(struct drbd_conf *mdev)
+static int _drbd_may_sync_now(struct drbd_conf *mdev)
 {
 	struct drbd_conf *odev = mdev;
 
@@ -1180,7 +1206,7 @@ STATIC int _drbd_may_sync_now(struct drbd_conf *mdev)
  *
  * Called from process context only (admin command and after_state_ch).
  */
-STATIC int _drbd_pause_after(struct drbd_conf *mdev)
+static int _drbd_pause_after(struct drbd_conf *mdev)
 {
 	struct drbd_conf *odev;
 	int i, rv = 0;
@@ -1205,7 +1231,7 @@ STATIC int _drbd_pause_after(struct drbd_conf *mdev)
  *
  * Called from process context only (admin command and worker).
  */
-STATIC int _drbd_resume_next(struct drbd_conf *mdev)
+static int _drbd_resume_next(struct drbd_conf *mdev)
 {
 	struct drbd_conf *odev;
 	int i, rv = 0;
@@ -1240,19 +1266,46 @@ void suspend_other_sg(struct drbd_conf *mdev)
 	write_unlock_irq(&global_state_lock);
 }
 
-void drbd_alter_sa(struct drbd_conf *mdev, int na)
+static int sync_after_error(struct drbd_conf *mdev, int o_minor)
+{
+	struct drbd_conf *odev;
+
+	if (o_minor == -1)
+		return NO_ERROR;
+	if (o_minor < -1 || minor_to_mdev(o_minor) == NULL)
+		return ERR_SYNC_AFTER;
+
+	/* check for loops */
+	odev = minor_to_mdev(o_minor);
+	while (1) {
+		if (odev == mdev)
+			return ERR_SYNC_AFTER_CYCLE;
+
+		/* dependency chain ends here, no cycles. */
+		if (odev->sync_conf.after == -1)
+			return NO_ERROR;
+
+		/* follow the dependency chain */
+		odev = minor_to_mdev(odev->sync_conf.after);
+	}
+}
+
+int drbd_alter_sa(struct drbd_conf *mdev, int na)
 {
 	int changes;
+	int retcode;
 
 	write_lock_irq(&global_state_lock);
-	mdev->sync_conf.after = na;
-
-	do {
-		changes  = _drbd_pause_after(mdev);
-		changes |= _drbd_resume_next(mdev);
-	} while (changes);
-
+	retcode = sync_after_error(mdev, na);
+	if (retcode == NO_ERROR) {
+		mdev->sync_conf.after = na;
+		do {
+			changes  = _drbd_pause_after(mdev);
+			changes |= _drbd_resume_next(mdev);
+		} while (changes);
+	}
 	write_unlock_irq(&global_state_lock);
+	return retcode;
 }
 
 /**
@@ -1267,6 +1320,11 @@ void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side)
 {
 	union drbd_state ns;
 	int r;
+
+	if (mdev->state.conn >= C_SYNC_SOURCE) {
+		dev_err(DEV, "Resync already running!\n");
+		return;
+	}
 
 	trace_drbd_resync(mdev, TRACE_LVL_SUMMARY, "Resync starting: side=%s\n",
 			  side == C_SYNC_TARGET ? "SyncTarget" : "SyncSource");

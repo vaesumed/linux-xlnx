@@ -77,7 +77,7 @@ void trace_drbd_resync(struct drbd_conf *mdev, int level, const char *fmt, ...)
 	va_end(ap);
 }
 
-STATIC int _drbd_md_sync_page_io(struct drbd_conf *mdev,
+static int _drbd_md_sync_page_io(struct drbd_conf *mdev,
 				 struct drbd_backing_dev *bdev,
 				 struct page *page, sector_t sector,
 				 int rw, int size)
@@ -133,7 +133,7 @@ STATIC int _drbd_md_sync_page_io(struct drbd_conf *mdev,
 int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 			 sector_t sector, int rw)
 {
-	int hardsect_size, mask, ok;
+	int logical_block_size, mask, ok;
 	int offset = 0;
 	struct page *iop = mdev->md_io_page;
 
@@ -141,15 +141,15 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 
 	BUG_ON(!bdev->md_bdev);
 
-	hardsect_size = drbd_get_hardsect_size(bdev->md_bdev);
-	if (hardsect_size == 0)
-		hardsect_size = MD_SECTOR_SIZE;
+	logical_block_size = bdev_logical_block_size(bdev->md_bdev);
+	if (logical_block_size == 0)
+		logical_block_size = MD_SECTOR_SIZE;
 
-	/* in case hardsect_size != 512 [ s390 only? ] */
-	if (hardsect_size != MD_SECTOR_SIZE) {
-		mask = (hardsect_size / MD_SECTOR_SIZE) - 1;
+	/* in case logical_block_size != 512 [ s390 only? ] */
+	if (logical_block_size != MD_SECTOR_SIZE) {
+		mask = (logical_block_size / MD_SECTOR_SIZE) - 1;
 		D_ASSERT(mask == 1 || mask == 3 || mask == 7);
-		D_ASSERT(hardsect_size == (mask+1) * MD_SECTOR_SIZE);
+		D_ASSERT(logical_block_size == (mask+1) * MD_SECTOR_SIZE);
 		offset = sector & mask;
 		sector = sector & ~mask;
 		iop = mdev->md_io_tmpp;
@@ -161,11 +161,11 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 			void *hp = page_address(mdev->md_io_tmpp);
 
 			ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector,
-					READ, hardsect_size);
+					READ, logical_block_size);
 
 			if (unlikely(!ok)) {
 				dev_err(DEV, "drbd_md_sync_page_io(,%llus,"
-				    "READ [hardsect_size!=512]) failed!\n",
+				    "READ [logical_block_size!=512]) failed!\n",
 				    (unsigned long long)sector);
 				return 0;
 			}
@@ -180,14 +180,14 @@ int drbd_md_sync_page_io(struct drbd_conf *mdev, struct drbd_backing_dev *bdev,
 		     current->comm, current->pid, __func__,
 		     (unsigned long long)sector, (rw & WRITE) ? "WRITE" : "READ");
 
-	ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector, rw, hardsect_size);
+	ok = _drbd_md_sync_page_io(mdev, bdev, iop, sector, rw, logical_block_size);
 	if (unlikely(!ok)) {
 		dev_err(DEV, "drbd_md_sync_page_io(,%llus,%s) failed!\n",
 		    (unsigned long long)sector, (rw & WRITE) ? "WRITE" : "READ");
 		return 0;
 	}
 
-	if (hardsect_size != MD_SECTOR_SIZE && !(rw & WRITE)) {
+	if (logical_block_size != MD_SECTOR_SIZE && !(rw & WRITE)) {
 		void *p = page_address(mdev->md_io_page);
 		void *hp = page_address(mdev->md_io_tmpp);
 
@@ -378,7 +378,7 @@ w_al_write_transaction(struct drbd_conf *mdev, struct drbd_work *w, int unused)
  *
  * Returns -1 on IO error, 0 on checksum error and 1 upon success.
  */
-STATIC int drbd_al_read_tr(struct drbd_conf *mdev,
+static int drbd_al_read_tr(struct drbd_conf *mdev,
 			   struct drbd_backing_dev *bdev,
 			   struct al_transaction *b,
 			   int index)
@@ -416,14 +416,14 @@ int drbd_al_read_log(struct drbd_conf *mdev, struct drbd_backing_dev *bdev)
 	int i;
 	int rv;
 	int mx;
-	int cnr;
 	int active_extents = 0;
 	int transactions = 0;
-	int overflow = 0;
-	int from = -1;
-	int to = -1;
-	u32 from_tnr = -1;
+	int found_valid = 0;
+	int from = 0;
+	int to = 0;
+	u32 from_tnr = 0;
 	u32 to_tnr = 0;
+	u32 cnr;
 
 	mx = div_ceil(mdev->act_log->nr_elements, AL_EXTENTS_PT);
 
@@ -444,22 +444,27 @@ int drbd_al_read_log(struct drbd_conf *mdev, struct drbd_backing_dev *bdev)
 		}
 		cnr = be32_to_cpu(buffer->tr_number);
 
-		if (cnr == -1)
-			overflow = 1;
-
-		if (cnr < from_tnr && !overflow) {
+		if (++found_valid == 1) {
+			from = i;
+			to = i;
+			from_tnr = cnr;
+			to_tnr = cnr;
+			continue;
+		}
+		if ((int)cnr - (int)from_tnr < 0) {
+			D_ASSERT(from_tnr - cnr + i - from == mx+1);
 			from = i;
 			from_tnr = cnr;
 		}
-		if (cnr > to_tnr) {
+		if ((int)cnr - (int)to_tnr > 0) {
+			D_ASSERT(cnr - to_tnr == i - to);
 			to = i;
 			to_tnr = cnr;
 		}
 	}
 
-	if (from == -1 || to == -1) {
+	if (!found_valid) {
 		dev_warn(DEV, "No usable activity log found.\n");
-
 		mutex_unlock(&mdev->md_io_mutex);
 		return 1;
 	}
@@ -524,7 +529,7 @@ cancel:
 	return 1;
 }
 
-STATIC void atodb_endio(struct bio *bio, int error)
+static void atodb_endio(struct bio *bio, int error)
 {
 	struct drbd_atodb_wait *wc = bio->bi_private;
 	struct drbd_conf *mdev = wc->mdev;
@@ -555,7 +560,7 @@ STATIC void atodb_endio(struct bio *bio, int error)
 #define S2W(s)	((s)<<(BM_EXT_SHIFT-BM_BLOCK_SHIFT-LN2_BPL))
 /* activity log to on disk bitmap -- prepare bio unless that sector
  * is already covered by previously prepared bios */
-STATIC int atodb_prepare_unless_covered(struct drbd_conf *mdev,
+static int atodb_prepare_unless_covered(struct drbd_conf *mdev,
 					struct bio **bios,
 					unsigned int enr,
 					struct drbd_atodb_wait *wc) __must_hold(local)
@@ -803,7 +808,7 @@ void drbd_al_shrink(struct drbd_conf *mdev)
 	wake_up(&mdev->al_wait);
 }
 
-STATIC int w_update_odbm(struct drbd_conf *mdev, struct drbd_work *w, int unused)
+static int w_update_odbm(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 {
 	struct update_odbm_work *udw = (struct update_odbm_work *)w;
 
@@ -840,7 +845,7 @@ STATIC int w_update_odbm(struct drbd_conf *mdev, struct drbd_work *w, int unused
  *
  * TODO will be obsoleted once we have a caching lru of the on disk bitmap
  */
-STATIC void drbd_try_clear_on_disk_bm(struct drbd_conf *mdev, sector_t sector,
+static void drbd_try_clear_on_disk_bm(struct drbd_conf *mdev, sector_t sector,
 				      int count, int success)
 {
 	struct lc_element *e;

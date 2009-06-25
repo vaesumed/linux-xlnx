@@ -106,22 +106,6 @@ extern char usermode_helper[];
 
 struct drbd_conf;
 
-#ifdef DBG_ALL_SYMBOLS
-# define STATIC
-#else
-# define STATIC static
-#endif
-
-/*
- * Some Message Macros
- *************************/
-
-#define DUMPP(A)   dev_err(DEV, #A " = %p in %s:%d\n", (A), __FILE__, __LINE__);
-#define DUMPLU(A)  dev_err(DEV, #A " = %lu in %s:%d\n", (unsigned long)(A), __FILE__, __LINE__);
-#define DUMPLLU(A) dev_err(DEV, #A " = %llu in %s:%d\n", (unsigned long long)(A), __FILE__, __LINE__);
-#define DUMPLX(A)  dev_err(DEV, #A " = %lx in %s:%d\n", (A), __FILE__, __LINE__);
-#define DUMPI(A)   dev_err(DEV, #A " = %d in %s:%d\n", (int)(A), __FILE__, __LINE__);
-
 
 /* to shorten dev_warn(DEV, "msg"); and relatives statements */
 #define DEV (disk_to_dev(mdev->vdisk))
@@ -139,14 +123,14 @@ struct drbd_conf;
 /* Defines to control fault insertion */
 enum {
     DRBD_FAULT_MD_WR = 0,	/* meta data write */
-    DRBD_FAULT_MD_RD,		/*           read  */
-    DRBD_FAULT_RS_WR,		/* resync          */
-    DRBD_FAULT_RS_RD,
-    DRBD_FAULT_DT_WR,		/* data            */
-    DRBD_FAULT_DT_RD,
-    DRBD_FAULT_DT_RA,		/* data read ahead */
-    DRBD_FAULT_BM_ALLOC,        /* bitmap allocation */
-    DRBD_FAULT_AL_EE,		/* alloc ee */
+    DRBD_FAULT_MD_RD = 1,	/*           read  */
+    DRBD_FAULT_RS_WR = 2,	/* resync          */
+    DRBD_FAULT_RS_RD = 3,
+    DRBD_FAULT_DT_WR = 4,	/* data            */
+    DRBD_FAULT_DT_RD = 5,
+    DRBD_FAULT_DT_RA = 6,	/* data read ahead */
+    DRBD_FAULT_BM_ALLOC = 7,	/* bitmap allocation */
+    DRBD_FAULT_AL_EE = 8,	/* alloc ee */
 
     DRBD_FAULT_MAX,
 };
@@ -331,6 +315,10 @@ static inline void bm_xfer_ctx_bit_to_word_offset(struct bm_xfer_ctx *c)
 # error "unsupported BITS_PER_LONG"
 #endif
 }
+
+#ifndef __packed
+#define __packed __attribute__((packed))
+#endif
 
 /* This is the layout for a packet on the wire.
  * The byteorder is the network byte order.
@@ -543,6 +531,7 @@ struct p_compressed_bm {
 	u8 code[0];
 } __packed;
 
+/* DCBP: Drbd Compressed Bitmap Packet ... */
 static inline enum drbd_bitmap_code
 DCBP_get_code(struct p_compressed_bm *p)
 {
@@ -795,6 +784,8 @@ enum {
 				 * but worker thread is still handling the cleanup.
 				 * reconfiguring (nl_disk_conf, nl_net_conf) is dissalowed,
 				 * while this is set. */
+	RESIZE_PENDING,		/* Size change detected locally, waiting for the response from
+				 * the peer, if it changed there as well. */
 };
 
 struct drbd_bitmap; /* opaque for drbd_conf */
@@ -946,12 +937,16 @@ struct drbd_conf {
 	unsigned long rs_mark_time;
 	/* skipped because csum was equeal [unit BM_BLOCK_SIZE] */
 	unsigned long rs_same_csum;
+
+	/* where does the admin want us to start? (sector) */
+	sector_t ov_start_sector;
+	/* where are we now? (sector) */
 	sector_t ov_position;
-	/* Start sector of out of sync range. */
+	/* Start sector of out of sync range (to merge printk reporting). */
 	sector_t ov_last_oos_start;
 	/* size of out-of-sync range in sectors. */
 	sector_t ov_last_oos_size;
-	unsigned long ov_left;
+	unsigned long ov_left; /* in bits */
 	struct crypto_hash *csums_tfm;
 	struct crypto_hash *verify_tfm;
 
@@ -991,7 +986,7 @@ struct drbd_conf {
 	atomic_t pp_in_use;
 	wait_queue_head_t ee_wait;
 	struct page *md_io_page;	/* one page buffer for md_io */
-	struct page *md_io_tmpp;	/* for hardsect_size != 512 [s390 only?] */
+	struct page *md_io_tmpp;	/* for logical_block_size != 512 */
 	struct mutex md_io_mutex;	/* protects the md_io_buffer */
 	spinlock_t al_lock;
 	wait_queue_head_t al_wait;
@@ -1103,7 +1098,7 @@ extern int drbd_send_protocol(struct drbd_conf *mdev);
 extern int drbd_send_uuids(struct drbd_conf *mdev);
 extern int drbd_send_uuids_skip_initial_sync(struct drbd_conf *mdev);
 extern int drbd_send_sync_uuid(struct drbd_conf *mdev, u64 val);
-extern int drbd_send_sizes(struct drbd_conf *mdev);
+extern int drbd_send_sizes(struct drbd_conf *mdev, int trigger_reply);
 extern int _drbd_send_state(struct drbd_conf *mdev);
 extern int drbd_send_state(struct drbd_conf *mdev);
 extern int _drbd_send_cmd(struct drbd_conf *mdev, struct socket *sock,
@@ -1127,8 +1122,6 @@ extern int drbd_send_ack_dp(struct drbd_conf *mdev, enum drbd_packets cmd,
 			struct p_data *dp);
 extern int drbd_send_ack_ex(struct drbd_conf *mdev, enum drbd_packets cmd,
 			    sector_t sector, int blksize, u64 block_id);
-extern int _drbd_send_page(struct drbd_conf *mdev, struct page *page,
-			int offset, size_t size);
 extern int drbd_send_block(struct drbd_conf *mdev, enum drbd_packets cmd,
 			   struct drbd_epoch_entry *e);
 extern int drbd_send_dblock(struct drbd_conf *mdev, struct drbd_request *req);
@@ -1348,7 +1341,9 @@ extern int drbd_bm_count_bits(struct drbd_conf *mdev, const unsigned long s, con
 /* drbd_main.c */
 
 extern struct kmem_cache *drbd_request_cache;
-extern struct kmem_cache *drbd_ee_cache;
+extern struct kmem_cache *drbd_ee_cache;	/* epoch entries */
+extern struct kmem_cache *drbd_bm_ext_cache;	/* bitmap extents */
+extern struct kmem_cache *drbd_al_ext_cache;	/* activity log extents */
 extern mempool_t *drbd_request_mempool;
 extern mempool_t *drbd_ee_mempool;
 
@@ -1388,7 +1383,7 @@ extern int drbd_khelper(struct drbd_conf *mdev, char *cmd);
 
 /* drbd_worker.c */
 extern int drbd_worker(struct drbd_thread *thi);
-extern void drbd_alter_sa(struct drbd_conf *mdev, int na);
+extern int drbd_alter_sa(struct drbd_conf *mdev, int na);
 extern void drbd_start_resync(struct drbd_conf *mdev, enum drbd_conns side);
 extern void resume_next_sg(struct drbd_conf *mdev);
 extern void suspend_other_sg(struct drbd_conf *mdev);
@@ -1409,7 +1404,7 @@ static inline void ov_oos_print(struct drbd_conf *mdev)
 }
 
 
-void drbd_csum(struct drbd_conf *, struct crypto_hash *, struct bio *, void *);
+extern void drbd_csum(struct drbd_conf *, struct crypto_hash *, struct bio *, void *);
 /* worker callbacks */
 extern int w_req_cancel_conflict(struct drbd_conf *, struct drbd_work *, int);
 extern int w_read_retry_remote(struct drbd_conf *, struct drbd_work *, int);
@@ -1704,9 +1699,11 @@ static inline sector_t drbd_md_last_sector(struct drbd_backing_dev *bdev)
 	}
 }
 
+/* Returns the number of 512 byte sectors of the device */
 static inline sector_t drbd_get_capacity(struct block_device *bdev)
 {
-	return bdev ? get_capacity(bdev->bd_disk) : 0;
+	/* return bdev ? get_capacity(bdev->bd_disk) : 0; */
+	return bdev ? bdev->bd_inode->i_size >> 9 : 0;
 }
 
 /**

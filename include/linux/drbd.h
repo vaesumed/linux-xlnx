@@ -26,7 +26,6 @@
 #ifndef DRBD_H
 #define DRBD_H
 #include <linux/connector.h>
-
 #include <asm/types.h>
 
 #ifdef __KERNEL__
@@ -51,6 +50,13 @@
 #endif
 
 #endif
+
+
+extern const char *drbd_buildtag(void);
+#define REL_VERSION "8.3.2rc2"
+#define API_VERSION 88
+#define PRO_VERSION_MIN 86
+#define PRO_VERSION_MAX 90
 
 
 enum drbd_io_error_p {
@@ -171,8 +177,8 @@ enum drbd_conns {
 	C_WF_CONNECTION,
 	C_WF_REPORT_PARAMS, /* we have a socket */
 	C_CONNECTED,      /* we have introduced each other */
-	C_STARTING_SYNC_S,  /* starting full sync by IOCTL. */
-	C_STARTING_SYNC_T,  /* stariing full sync by IOCTL. */
+	C_STARTING_SYNC_S,  /* starting full sync by admin request. */
+	C_STARTING_SYNC_T,  /* stariing full sync by admin request. */
 	C_WF_BITMAP_S,
 	C_WF_BITMAP_T,
 	C_WF_SYNC_UUID,
@@ -249,8 +255,8 @@ enum drbd_state_ret_codes {
 	SS_UNKNOWN_ERROR = 0, /* Used to sleep longer in _drbd_request_state */
 	SS_TWO_PRIMARIES = -1,
 	SS_NO_UP_TO_DATE_DISK = -2,
-	SS_BOTH_INCONSISTENT = -4,
-	SS_SYNCING_DISKLESS = -5,
+	SS_NO_LOCAL_DISK = -4,
+	SS_NO_REMOTE_DISK = -5,
 	SS_CONNECTED_OUTDATES = -6,
 	SS_PRIMARY_NOP = -7,
 	SS_RESYNC_RUNNING = -8,

@@ -121,8 +121,8 @@ static void _req_is_done(struct drbd_conf *mdev, struct drbd_request *req, const
 		      list_empty(&req->w.list))) {
 			/* DEBUG ASSERT only; if this triggers, we
 			 * probably corrupt the worker list here */
-			DUMPP(req->w.list.next);
-			DUMPP(req->w.list.prev);
+			dev_err(DEV, "req->w.list.next = %p\n", req->w.list.next);
+			dev_err(DEV, "req->w.list.prev = %p\n", req->w.list.prev);
 		}
 		req->w.cb = w_io_error;
 		drbd_queue_work(&mdev->data.work, &req->w);
@@ -326,7 +326,7 @@ void _req_may_be_done(struct drbd_request *req, int error)
  * second hlist_for_each_entry becomes a noop. This is even simpler than to
  * grab a reference on the net_conf, and check for the two_primaries flag...
  */
-STATIC int _req_conflicts(struct drbd_request *req)
+static int _req_conflicts(struct drbd_request *req)
 {
 	struct drbd_conf *mdev = req->mdev;
 	const sector_t sector = req->sector;
@@ -689,7 +689,7 @@ void _req_mod(struct drbd_request *req, enum drbd_req_event what, int error)
  *   since size may be bigger than BM_BLOCK_SIZE,
  *   we may need to check several bits.
  */
-STATIC int drbd_may_do_local_read(struct drbd_conf *mdev, sector_t sector, int size)
+static int drbd_may_do_local_read(struct drbd_conf *mdev, sector_t sector, int size)
 {
 	unsigned long sbnr, ebnr;
 	sector_t esector, nr_sectors;
@@ -713,7 +713,7 @@ STATIC int drbd_may_do_local_read(struct drbd_conf *mdev, sector_t sector, int s
 	return 0 == drbd_bm_count_bits(mdev, sbnr, ebnr);
 }
 
-STATIC int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
+static int drbd_make_request_common(struct drbd_conf *mdev, struct bio *bio)
 {
 	const int rw = bio_rw(bio);
 	const int size = bio->bi_size;

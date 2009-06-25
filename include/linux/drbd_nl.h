@@ -55,6 +55,7 @@ NL_PACKET(net_conf, 5,
 	NL_INTEGER(	26,	T_MAY_IGNORE,	after_sb_2p)
 	NL_INTEGER(	39,	T_MAY_IGNORE,	rr_conflict)
 	NL_INTEGER(	40,	T_MAY_IGNORE,	ping_timeo)
+	NL_INTEGER(	67,	T_MAY_IGNORE,	rcvbuf_size)
 	  /* 59 addr_family was available in GIT, never released */
 	NL_BIT(		60,	T_MANDATORY,	mind_af)
 	NL_BIT(		27,	T_MAY_IGNORE,	want_lose)
@@ -77,7 +78,7 @@ NL_PACKET(syncer_conf, 8,
 	NL_STRING(      52,     T_MAY_IGNORE,   verify_alg,     SHARED_SECRET_MAX)
 	NL_STRING(      51,     T_MAY_IGNORE,   cpu_mask,       32)
 	NL_STRING(	64,	T_MAY_IGNORE,	csums_alg,	SHARED_SECRET_MAX)
-	NL_BIT(         65,     T_MAY_IGNORE,   use_rle_encoding)
+	NL_BIT(         65,     T_MAY_IGNORE,   use_rle)
 )
 
 NL_PACKET(invalidate, 9, )
@@ -121,6 +122,7 @@ NL_PACKET(dump_ee, 24,
 )
 
 NL_PACKET(start_ov, 25,
+	NL_INT64(	66,	T_MAY_IGNORE,	start_sector)
 )
 
 NL_PACKET(new_c_uuid, 26,

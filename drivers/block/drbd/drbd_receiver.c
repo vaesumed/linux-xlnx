@@ -30,11 +30,11 @@
 #include <net/sock.h>
 
 #include <linux/version.h>
+#include <linux/drbd.h>
 #include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/in.h>
 #include <linux/mm.h>
-#include <linux/drbd_config.h>
 #include <linux/memcontrol.h>
 #include <linux/mm_inline.h>
 #include <linux/slab.h>
@@ -47,7 +47,6 @@
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/scatterlist.h>
-#include <linux/drbd.h>
 #include "drbd_int.h"
 #include "drbd_tracing.h"
 #include "drbd_req.h"
@@ -65,11 +64,11 @@ enum finish_epoch {
 	FE_RECYCLED,
 };
 
-STATIC int drbd_do_handshake(struct drbd_conf *mdev);
-STATIC int drbd_do_auth(struct drbd_conf *mdev);
+static int drbd_do_handshake(struct drbd_conf *mdev);
+static int drbd_do_auth(struct drbd_conf *mdev);
 
-STATIC enum finish_epoch drbd_may_finish_epoch(struct drbd_conf *, struct drbd_epoch *, enum epoch_event);
-STATIC int e_end_block(struct drbd_conf *, struct drbd_work *, int);
+static enum finish_epoch drbd_may_finish_epoch(struct drbd_conf *, struct drbd_epoch *, enum epoch_event);
+static int e_end_block(struct drbd_conf *, struct drbd_work *, int);
 
 static struct drbd_epoch *previous_epoch(struct drbd_conf *mdev, struct drbd_epoch *epoch)
 {
@@ -93,7 +92,7 @@ static struct drbd_epoch *previous_epoch(struct drbd_conf *mdev, struct drbd_epo
  * allocation would go beyond the max_buffers setting, this function sleeps
  * until DRBD frees a page somewhere else.
  */
-STATIC struct page *drbd_pp_alloc(struct drbd_conf *mdev, gfp_t gfp_mask)
+static struct page *drbd_pp_alloc(struct drbd_conf *mdev, gfp_t gfp_mask)
 {
 	unsigned long flags = 0;
 	struct page *page;
@@ -162,7 +161,7 @@ STATIC struct page *drbd_pp_alloc(struct drbd_conf *mdev, gfp_t gfp_mask)
 	return page;
 }
 
-STATIC void drbd_pp_free(struct drbd_conf *mdev, struct page *page)
+static void drbd_pp_free(struct drbd_conf *mdev, struct page *page)
 {
 	unsigned long flags = 0;
 	int free_it;
@@ -260,10 +259,10 @@ struct drbd_epoch_entry *drbd_alloc_ee(struct drbd_conf *mdev,
 			}
 
 			/* dump more of the bio. */
-			DUMPI(bio->bi_max_vecs);
-			DUMPI(bio->bi_vcnt);
-			DUMPI(bio->bi_size);
-			DUMPI(bio->bi_phys_segments);
+			dev_err(DEV, "bio->bi_max_vecs = %d\n", bio->bi_max_vecs);
+			dev_err(DEV, "bio->bi_vcnt = %d\n", bio->bi_vcnt);
+			dev_err(DEV, "bio->bi_size = %d\n", bio->bi_size);
+			dev_err(DEV, "bio->bi_phys_segments = %d\n", bio->bi_phys_segments);
 
 			goto fail2;
 			break;
@@ -339,7 +338,7 @@ int drbd_release_ee(struct drbd_conf *mdev, struct list_head *list)
 }
 
 
-STATIC void reclaim_net_ee(struct drbd_conf *mdev)
+static void reclaim_net_ee(struct drbd_conf *mdev)
 {
 	struct drbd_epoch_entry *e;
 	struct list_head *le, *tle;
@@ -368,7 +367,7 @@ STATIC void reclaim_net_ee(struct drbd_conf *mdev)
  * Grab done_ee, call all callbacks, free the entries.
  * The callbacks typically send out ACKs.
  */
-STATIC int drbd_process_done_ee(struct drbd_conf *mdev)
+static int drbd_process_done_ee(struct drbd_conf *mdev)
 {
 	LIST_HEAD(work_list);
 	struct drbd_epoch_entry *e, *t;
@@ -458,7 +457,7 @@ void drbd_wait_ee_list_empty(struct drbd_conf *mdev, struct list_head *head)
 
 /* see also kernel_accept; which is only present since 2.6.18.
  * also we want to log which part of it failed, exactly */
-STATIC int drbd_accept(struct drbd_conf *mdev, const char **what,
+static int drbd_accept(struct drbd_conf *mdev, const char **what,
 		struct socket *sock, struct socket **newsock)
 {
 	struct sock *sk = sock->sk;
@@ -488,7 +487,7 @@ out:
 	return err;
 }
 
-STATIC int drbd_recv_short(struct drbd_conf *mdev, struct socket *sock,
+static int drbd_recv_short(struct drbd_conf *mdev, struct socket *sock,
 		    void *buf, size_t size, int flags)
 {
 	mm_segment_t oldfs;
@@ -511,7 +510,7 @@ STATIC int drbd_recv_short(struct drbd_conf *mdev, struct socket *sock,
 	return rv;
 }
 
-STATIC int drbd_recv(struct drbd_conf *mdev, void *buf, size_t size)
+static int drbd_recv(struct drbd_conf *mdev, void *buf, size_t size)
 {
 	mm_segment_t oldfs;
 	struct kvec iov = {
@@ -564,7 +563,7 @@ STATIC int drbd_recv(struct drbd_conf *mdev, void *buf, size_t size)
 	return rv;
 }
 
-STATIC struct socket *drbd_try_connect(struct drbd_conf *mdev)
+static struct socket *drbd_try_connect(struct drbd_conf *mdev)
 {
 	const char *what;
 	struct socket *sock;
@@ -640,7 +639,7 @@ out:
 	return sock;
 }
 
-STATIC struct socket *drbd_wait_for_connect(struct drbd_conf *mdev)
+static struct socket *drbd_wait_for_connect(struct drbd_conf *mdev)
 {
 	int timeo, err;
 	struct socket *s_estab = NULL, *s_listen;
@@ -687,7 +686,7 @@ out:
 	return s_estab;
 }
 
-STATIC int drbd_send_fp(struct drbd_conf *mdev,
+static int drbd_send_fp(struct drbd_conf *mdev,
 	struct socket *sock, enum drbd_packets cmd)
 {
 	struct p_header *h = (struct p_header *) &mdev->data.sbuf.header;
@@ -695,7 +694,7 @@ STATIC int drbd_send_fp(struct drbd_conf *mdev,
 	return _drbd_send_cmd(mdev, sock, cmd, h, sizeof(*h), 0);
 }
 
-STATIC enum drbd_packets drbd_recv_fp(struct drbd_conf *mdev, struct socket *sock)
+static enum drbd_packets drbd_recv_fp(struct drbd_conf *mdev, struct socket *sock)
 {
 	struct p_header *h = (struct p_header *) &mdev->data.sbuf.header;
 	int rr;
@@ -740,7 +739,7 @@ static int drbd_socket_okay(struct drbd_conf *mdev, struct socket **sock)
  *     no point in trying again, please go standalone.
  *  -2 We do not have a network config...
  */
-STATIC int drbd_connect(struct drbd_conf *mdev)
+static int drbd_connect(struct drbd_conf *mdev)
 {
 	struct socket *s, *sock, *msock;
 	int try, h, ok;
@@ -856,8 +855,12 @@ retry:
 
 	if (mdev->net_conf->sndbuf_size) {
 		sock->sk->sk_sndbuf = mdev->net_conf->sndbuf_size;
-		sock->sk->sk_rcvbuf = mdev->net_conf->sndbuf_size;
-		sock->sk->sk_userlocks |= SOCK_SNDBUF_LOCK | SOCK_RCVBUF_LOCK;
+		sock->sk->sk_userlocks |= SOCK_SNDBUF_LOCK;
+	}
+
+	if (mdev->net_conf->rcvbuf_size) {
+		sock->sk->sk_rcvbuf = mdev->net_conf->rcvbuf_size;
+		sock->sk->sk_userlocks |= SOCK_RCVBUF_LOCK;
 	}
 
 	/* NOT YET ...
@@ -906,15 +909,16 @@ retry:
 
 	drbd_send_protocol(mdev);
 	drbd_send_sync_param(mdev, &mdev->sync_conf);
-	drbd_send_sizes(mdev);
+	drbd_send_sizes(mdev, 0);
 	drbd_send_uuids(mdev);
 	drbd_send_state(mdev);
 	clear_bit(USE_DEGR_WFC_T, &mdev->flags);
+	clear_bit(RESIZE_PENDING, &mdev->flags);
 
 	return 1;
 }
 
-STATIC int drbd_recv_header(struct drbd_conf *mdev, struct p_header *h)
+static int drbd_recv_header(struct drbd_conf *mdev, struct p_header *h)
 {
 	int r;
 
@@ -937,7 +941,7 @@ STATIC int drbd_recv_header(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC enum finish_epoch drbd_flush_after_epoch(struct drbd_conf *mdev, struct drbd_epoch *epoch)
+static enum finish_epoch drbd_flush_after_epoch(struct drbd_conf *mdev, struct drbd_epoch *epoch)
 {
 	int rv;
 
@@ -956,7 +960,7 @@ STATIC enum finish_epoch drbd_flush_after_epoch(struct drbd_conf *mdev, struct d
 	return drbd_may_finish_epoch(mdev, epoch, EV_BARRIER_DONE);
 }
 
-STATIC int w_flush(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
+static int w_flush(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
 {
 	struct flush_work *fw = (struct flush_work *)w;
 	struct drbd_epoch *epoch = fw->epoch;
@@ -978,7 +982,7 @@ STATIC int w_flush(struct drbd_conf *mdev, struct drbd_work *w, int cancel)
  * @epoch:	Epoch object.
  * @ev:		Epoch event.
  */
-STATIC enum finish_epoch drbd_may_finish_epoch(struct drbd_conf *mdev,
+static enum finish_epoch drbd_may_finish_epoch(struct drbd_conf *mdev,
 					       struct drbd_epoch *epoch,
 					       enum epoch_event ev)
 {
@@ -1173,7 +1177,7 @@ int w_e_reissue(struct drbd_conf *mdev, struct drbd_work *w, int cancel) __relea
 	return 1;
 }
 
-STATIC int receive_Barrier(struct drbd_conf *mdev, struct p_header *h)
+static int receive_Barrier(struct drbd_conf *mdev, struct p_header *h)
 {
 	int rv, issue_flush;
 	struct p_barrier *p = (struct p_barrier *)h;
@@ -1219,7 +1223,9 @@ STATIC int receive_Barrier(struct drbd_conf *mdev, struct p_header *h)
 		break;
 	}
 
-	epoch = kmalloc(sizeof(struct drbd_epoch), GFP_KERNEL);
+	/* receiver context, in the writeout path of the other node.
+	 * avoid potential distributed deadlock */
+	epoch = kmalloc(sizeof(struct drbd_epoch), GFP_NOIO);
 	if (!epoch) {
 		dev_warn(DEV, "Allocation of an epoch failed, slowing down\n");
 		issue_flush = !test_and_set_bit(DE_BARRIER_IN_NEXT_EPOCH_ISSUED, &epoch->flags);
@@ -1256,7 +1262,7 @@ STATIC int receive_Barrier(struct drbd_conf *mdev, struct p_header *h)
 
 /* used from receive_RSDataReply (recv_resync_read)
  * and from receive_Data */
-STATIC struct drbd_epoch_entry *
+static struct drbd_epoch_entry *
 read_in_block(struct drbd_conf *mdev, u64 id, sector_t sector, int data_size) __must_hold(local)
 {
 	struct drbd_epoch_entry *e;
@@ -1319,7 +1325,7 @@ read_in_block(struct drbd_conf *mdev, u64 id, sector_t sector, int data_size) __
 /* drbd_drain_block() just takes a data block
  * out of the socket input buffer, and discards it.
  */
-STATIC int drbd_drain_block(struct drbd_conf *mdev, int data_size)
+static int drbd_drain_block(struct drbd_conf *mdev, int data_size)
 {
 	struct page *page;
 	int rr, rv = 1;
@@ -1352,7 +1358,7 @@ static void maybe_kick_lo(struct drbd_conf *mdev)
 		drbd_kick_lo(mdev);
 }
 
-STATIC int recv_dless_read(struct drbd_conf *mdev, struct drbd_request *req,
+static int recv_dless_read(struct drbd_conf *mdev, struct drbd_request *req,
 			   sector_t sector, int data_size)
 {
 	struct bio_vec *bvec;
@@ -1407,7 +1413,7 @@ STATIC int recv_dless_read(struct drbd_conf *mdev, struct drbd_request *req,
 
 /* e_end_resync_block() is called via
  * drbd_process_done_ee() by asender only */
-STATIC int e_end_resync_block(struct drbd_conf *mdev, struct drbd_work *w, int unused)
+static int e_end_resync_block(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 {
 	struct drbd_epoch_entry *e = (struct drbd_epoch_entry *)w;
 	sector_t sector = e->sector;
@@ -1430,7 +1436,7 @@ STATIC int e_end_resync_block(struct drbd_conf *mdev, struct drbd_work *w, int u
 	return ok;
 }
 
-STATIC int recv_resync_read(struct drbd_conf *mdev, sector_t sector, int data_size) __releases(local)
+static int recv_resync_read(struct drbd_conf *mdev, sector_t sector, int data_size) __releases(local)
 {
 	struct drbd_epoch_entry *e;
 
@@ -1463,7 +1469,7 @@ STATIC int recv_resync_read(struct drbd_conf *mdev, sector_t sector, int data_si
 	return TRUE;
 }
 
-STATIC int receive_DataReply(struct drbd_conf *mdev, struct p_header *h)
+static int receive_DataReply(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct drbd_request *req;
 	sector_t sector;
@@ -1503,7 +1509,7 @@ STATIC int receive_DataReply(struct drbd_conf *mdev, struct p_header *h)
 	return ok;
 }
 
-STATIC int receive_RSDataReply(struct drbd_conf *mdev, struct p_header *h)
+static int receive_RSDataReply(struct drbd_conf *mdev, struct p_header *h)
 {
 	sector_t sector;
 	unsigned int header_size, data_size;
@@ -1541,7 +1547,7 @@ STATIC int receive_RSDataReply(struct drbd_conf *mdev, struct p_header *h)
 /* e_end_block() is called via drbd_process_done_ee().
  * this means this function only runs in the asender thread
  */
-STATIC int e_end_block(struct drbd_conf *mdev, struct drbd_work *w, int unused)
+static int e_end_block(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 {
 	struct drbd_epoch_entry *e = (struct drbd_epoch_entry *)w;
 	sector_t sector = e->sector;
@@ -1590,7 +1596,7 @@ STATIC int e_end_block(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 	return ok;
 }
 
-STATIC int e_send_discard_ack(struct drbd_conf *mdev, struct drbd_work *w, int unused)
+static int e_send_discard_ack(struct drbd_conf *mdev, struct drbd_work *w, int unused)
 {
 	struct drbd_epoch_entry *e = (struct drbd_epoch_entry *)w;
 	int ok = 1;
@@ -1662,7 +1668,7 @@ static int drbd_wait_peer_seq(struct drbd_conf *mdev, const u32 packet_seq)
 }
 
 /* mirrored write */
-STATIC int receive_Data(struct drbd_conf *mdev, struct p_header *h)
+static int receive_Data(struct drbd_conf *mdev, struct p_header *h)
 {
 	sector_t sector;
 	struct drbd_epoch_entry *e;
@@ -1918,7 +1924,7 @@ out_interrupted:
 	return FALSE;
 }
 
-STATIC int receive_DataRequest(struct drbd_conf *mdev, struct p_header *h)
+static int receive_DataRequest(struct drbd_conf *mdev, struct p_header *h)
 {
 	sector_t sector;
 	const sector_t capacity = drbd_get_capacity(mdev->this_bdev);
@@ -1992,7 +1998,7 @@ STATIC int receive_DataRequest(struct drbd_conf *mdev, struct p_header *h)
 	case P_CSUM_RS_REQUEST:
 		fault_type = DRBD_FAULT_RS_RD;
 		digest_size = h->length - brps ;
-		di = kmalloc(sizeof(*di) + digest_size, GFP_KERNEL);
+		di = kmalloc(sizeof(*di) + digest_size, GFP_NOIO);
 		if (!di) {
 			put_ldev(mdev);
 			drbd_free_ee(mdev, e);
@@ -2030,6 +2036,18 @@ STATIC int receive_DataRequest(struct drbd_conf *mdev, struct p_header *h)
 		break;
 
 	case P_OV_REQUEST:
+		if (mdev->state.conn >= C_CONNECTED &&
+		    mdev->state.conn != C_VERIFY_T)
+			dev_warn(DEV, "ASSERT FAILED: got P_OV_REQUEST while being %s\n",
+				conns_to_name(mdev->state.conn));
+		if (mdev->ov_start_sector == ~(sector_t)0 &&
+		    mdev->agreed_pro_version >= 90) {
+			mdev->ov_start_sector = sector;
+			mdev->ov_position = sector;
+			mdev->ov_left = mdev->rs_total - BM_SECT_TO_BIT(sector);
+			dev_info(DEV, "Online Verify start sector: %llu\n",
+					(unsigned long long)sector);
+		}
 		e->w.cb = w_e_end_ov_req;
 		fault_type = DRBD_FAULT_RS_RD;
 		/* Eventually this should become asynchrously. Currently it
@@ -2068,7 +2086,7 @@ STATIC int receive_DataRequest(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int drbd_asb_recover_0p(struct drbd_conf *mdev) __must_hold(local)
+static int drbd_asb_recover_0p(struct drbd_conf *mdev) __must_hold(local)
 {
 	int self, peer, rv = -100;
 	unsigned long ch_self, ch_peer;
@@ -2140,7 +2158,7 @@ STATIC int drbd_asb_recover_0p(struct drbd_conf *mdev) __must_hold(local)
 	return rv;
 }
 
-STATIC int drbd_asb_recover_1p(struct drbd_conf *mdev) __must_hold(local)
+static int drbd_asb_recover_1p(struct drbd_conf *mdev) __must_hold(local)
 {
 	int self, peer, hg, rv = -100;
 
@@ -2173,6 +2191,10 @@ STATIC int drbd_asb_recover_1p(struct drbd_conf *mdev) __must_hold(local)
 		hg = drbd_asb_recover_0p(mdev);
 		if (hg == -1 && mdev->state.role == R_PRIMARY) {
 			self = drbd_set_role(mdev, R_SECONDARY, 0);
+			 /* drbd_change_state() does not sleep while in SS_IN_TRANSIENT_STATE,
+			  * we might be here in C_WF_REPORT_PARAMS which is transient.
+			  * we do not need to wait for the after state change work either. */
+			self = drbd_change_state(mdev, CS_VERBOSE, NS(role, R_SECONDARY));
 			if (self != SS_SUCCESS) {
 				drbd_khelper(mdev, "pri-lost-after-sb");
 			} else {
@@ -2186,7 +2208,7 @@ STATIC int drbd_asb_recover_1p(struct drbd_conf *mdev) __must_hold(local)
 	return rv;
 }
 
-STATIC int drbd_asb_recover_2p(struct drbd_conf *mdev) __must_hold(local)
+static int drbd_asb_recover_2p(struct drbd_conf *mdev) __must_hold(local)
 {
 	int self, peer, hg, rv = -100;
 
@@ -2211,7 +2233,10 @@ STATIC int drbd_asb_recover_2p(struct drbd_conf *mdev) __must_hold(local)
 	case ASB_CALL_HELPER:
 		hg = drbd_asb_recover_0p(mdev);
 		if (hg == -1) {
-			self = drbd_set_role(mdev, R_SECONDARY, 0);
+			 /* drbd_change_state() does not sleep while in SS_IN_TRANSIENT_STATE,
+			  * we might be here in C_WF_REPORT_PARAMS which is transient.
+			  * we do not need to wait for the after state change work either. */
+			self = drbd_change_state(mdev, CS_VERBOSE, NS(role, R_SECONDARY));
 			if (self != SS_SUCCESS) {
 				drbd_khelper(mdev, "pri-lost-after-sb");
 			} else {
@@ -2225,7 +2250,7 @@ STATIC int drbd_asb_recover_2p(struct drbd_conf *mdev) __must_hold(local)
 	return rv;
 }
 
-STATIC void drbd_uuid_dump(struct drbd_conf *mdev, char *text, u64 *uuid,
+static void drbd_uuid_dump(struct drbd_conf *mdev, char *text, u64 *uuid,
 			   u64 bits, u64 flags)
 {
 	if (!uuid) {
@@ -2252,7 +2277,7 @@ STATIC void drbd_uuid_dump(struct drbd_conf *mdev, char *text, u64 *uuid,
  -100	after split brain, disconnect
 -1000	unrelated data
  */
-STATIC int drbd_uuid_compare(struct drbd_conf *mdev, int *rule_nr) __must_hold(local)
+static int drbd_uuid_compare(struct drbd_conf *mdev, int *rule_nr) __must_hold(local)
 {
 	u64 self, peer;
 	int i, j;
@@ -2326,7 +2351,7 @@ STATIC int drbd_uuid_compare(struct drbd_conf *mdev, int *rule_nr) __must_hold(l
 
 	*rule_nr = 10;
 	for (i = UI_HISTORY_START; i <= UI_HISTORY_END; i++) {
-		self = mdev->p_uuid[i] & ~((u64)1);
+		self = mdev->ldev->md.uuid[i] & ~((u64)1);
 		for (j = UI_HISTORY_START; j <= UI_HISTORY_END; j++) {
 			peer = mdev->p_uuid[j] & ~((u64)1);
 			if (self == peer)
@@ -2340,7 +2365,7 @@ STATIC int drbd_uuid_compare(struct drbd_conf *mdev, int *rule_nr) __must_hold(l
 /* drbd_sync_handshake() returns the new conn state on success, or
    CONN_MASK (-1) on failure.
  */
-STATIC enum drbd_conns drbd_sync_handshake(struct drbd_conf *mdev, enum drbd_role peer_role,
+static enum drbd_conns drbd_sync_handshake(struct drbd_conf *mdev, enum drbd_role peer_role,
 					   enum drbd_disk_state peer_disk) __must_hold(local)
 {
 	int hg, rule_nr;
@@ -2465,7 +2490,7 @@ STATIC enum drbd_conns drbd_sync_handshake(struct drbd_conf *mdev, enum drbd_rol
 }
 
 /* returns 1 if invalid */
-STATIC int cmp_after_sb(enum drbd_after_sb_p peer, enum drbd_after_sb_p self)
+static int cmp_after_sb(enum drbd_after_sb_p peer, enum drbd_after_sb_p self)
 {
 	/* ASB_DISCARD_REMOTE - ASB_DISCARD_LOCAL is valid */
 	if ((peer == ASB_DISCARD_REMOTE && self == ASB_DISCARD_LOCAL) ||
@@ -2485,7 +2510,7 @@ STATIC int cmp_after_sb(enum drbd_after_sb_p peer, enum drbd_after_sb_p self)
 	return 1;
 }
 
-STATIC int receive_protocol(struct drbd_conf *mdev, struct p_header *h)
+static int receive_protocol(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_protocol *p = (struct p_protocol *)h;
 	int header_size, data_size;
@@ -2577,7 +2602,7 @@ struct crypto_hash *drbd_crypto_alloc_digest_safe(const struct drbd_conf *mdev,
 			alg, name, PTR_ERR(tfm));
 		return tfm;
 	}
-	if (crypto_tfm_alg_type(crypto_hash_tfm(tfm)) != CRYPTO_ALG_TYPE_DIGEST) {
+	if (!drbd_crypto_is_hash(crypto_hash_tfm(tfm))) {
 		crypto_free_hash(tfm);
 		dev_err(DEV, "\"%s\" is not a digest (%s)\n", alg, name);
 		return ERR_PTR(-EINVAL);
@@ -2585,7 +2610,7 @@ struct crypto_hash *drbd_crypto_alloc_digest_safe(const struct drbd_conf *mdev,
 	return tfm;
 }
 
-STATIC int receive_SyncParam(struct drbd_conf *mdev, struct p_header *h)
+static int receive_SyncParam(struct drbd_conf *mdev, struct p_header *h)
 {
 	int ok = TRUE;
 	struct p_rs_param_89 *p = (struct p_rs_param_89 *)h;
@@ -2656,8 +2681,10 @@ STATIC int receive_SyncParam(struct drbd_conf *mdev, struct p_header *h)
 			}
 			verify_tfm = drbd_crypto_alloc_digest_safe(mdev,
 					p->verify_alg, "verify-alg");
-			if (IS_ERR(verify_tfm))
+			if (IS_ERR(verify_tfm)) {
+				verify_tfm = NULL;
 				goto disconnect;
+			}
 		}
 
 		if (apv >= 89 && strcmp(mdev->sync_conf.csums_alg, p->csums_alg)) {
@@ -2668,8 +2695,10 @@ STATIC int receive_SyncParam(struct drbd_conf *mdev, struct p_header *h)
 			}
 			csums_tfm = drbd_crypto_alloc_digest_safe(mdev,
 					p->csums_alg, "csums-alg");
-			if (IS_ERR(csums_tfm))
+			if (IS_ERR(csums_tfm)) {
+				csums_tfm = NULL;
 				goto disconnect;
+			}
 		}
 
 
@@ -2694,12 +2723,16 @@ STATIC int receive_SyncParam(struct drbd_conf *mdev, struct p_header *h)
 
 	return ok;
 disconnect:
+	/* just for completeness: actually not needed,
+	 * as this is not reached if csums_tfm was ok. */
+	crypto_free_hash(csums_tfm);
+	/* but free the verify_tfm again, if csums_tfm did not work out */
 	crypto_free_hash(verify_tfm);
 	drbd_force_state(mdev, NS(conn, C_DISCONNECTING));
 	return FALSE;
 }
 
-STATIC void drbd_setup_order_type(struct drbd_conf *mdev, int peer)
+static void drbd_setup_order_type(struct drbd_conf *mdev, int peer)
 {
 	/* sorry, we currently have no working implementation
 	 * of distributed TCQ */
@@ -2718,7 +2751,7 @@ static void warn_if_differ_considerably(struct drbd_conf *mdev,
 		     (unsigned long long)a, (unsigned long long)b);
 }
 
-STATIC int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
+static int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_sizes *p = (struct p_sizes *)h;
 	enum determine_dev_size dd = unchanged;
@@ -2815,7 +2848,7 @@ STATIC int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
 		}
 
 		max_seg_s = be32_to_cpu(p->max_segment_size);
-		if (max_seg_s != mdev->rq_queue->max_segment_size)
+		if (max_seg_s != queue_max_segment_size(mdev->rq_queue))
 			drbd_setup_queue_param(mdev, max_seg_s);
 
 		drbd_setup_order_type(mdev, be32_to_cpu(p->queue_order_type));
@@ -2827,9 +2860,10 @@ STATIC int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
 		    drbd_get_capacity(mdev->this_bdev) || ldsc) {
 			/* we have different sizes, probabely peer
 			 * needs to know my new size... */
-			drbd_send_sizes(mdev);
+			drbd_send_sizes(mdev, 0);
 		}
-		if (dd == grew && mdev->state.conn == C_CONNECTED) {
+		if (test_and_clear_bit(RESIZE_PENDING, &mdev->flags) ||
+		    (dd == grew && mdev->state.conn == C_CONNECTED)) {
 			if (mdev->state.pdsk >= D_INCONSISTENT &&
 			    mdev->state.disk >= D_INCONSISTENT)
 				resync_after_online_grow(mdev);
@@ -2841,7 +2875,7 @@ STATIC int receive_sizes(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int receive_uuids(struct drbd_conf *mdev, struct p_header *h)
+static int receive_uuids(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_uuids *p = (struct p_uuids *)h;
 	u64 *p_uuid;
@@ -2851,7 +2885,7 @@ STATIC int receive_uuids(struct drbd_conf *mdev, struct p_header *h)
 	if (drbd_recv(mdev, h->payload, h->length) != h->length)
 		return FALSE;
 
-	p_uuid = kmalloc(sizeof(u64)*UI_EXTENDED_SIZE, GFP_KERNEL);
+	p_uuid = kmalloc(sizeof(u64)*UI_EXTENDED_SIZE, GFP_NOIO);
 
 	for (i = UI_CURRENT; i < UI_EXTENDED_SIZE; i++)
 		p_uuid[i] = be64_to_cpu(p->uuid[i]);
@@ -2903,7 +2937,7 @@ STATIC int receive_uuids(struct drbd_conf *mdev, struct p_header *h)
  * convert_state() - Converts the peer's view of the cluster state to our point of view
  * @ps:		The state as seen by the peer.
  */
-STATIC union drbd_state convert_state(union drbd_state ps)
+static union drbd_state convert_state(union drbd_state ps)
 {
 	union drbd_state ms;
 
@@ -2929,7 +2963,7 @@ STATIC union drbd_state convert_state(union drbd_state ps)
 	return ms;
 }
 
-STATIC int receive_req_state(struct drbd_conf *mdev, struct p_header *h)
+static int receive_req_state(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_req_state *p = (struct p_req_state *)h;
 	union drbd_state mask, val;
@@ -2959,7 +2993,7 @@ STATIC int receive_req_state(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int receive_state(struct drbd_conf *mdev, struct p_header *h)
+static int receive_state(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_state *p = (struct p_state *)h;
 	enum drbd_conns nconn, oconn;
@@ -2993,12 +3027,21 @@ STATIC int receive_state(struct drbd_conf *mdev, struct p_header *h)
 	    get_ldev_if_state(mdev, D_NEGOTIATING)) {
 		int cr; /* consider resync */
 
+		/* if we established a new connection */
 		cr  = (oconn < C_CONNECTED);
+		/* if we had an established connection
+		 * and one of the nodes newly attaches a disk */
 		cr |= (oconn == C_CONNECTED &&
 		       (peer_state.disk == D_NEGOTIATING ||
 			mdev->state.disk == D_NEGOTIATING));
-		cr |= test_bit(CONSIDER_RESYNC, &mdev->flags); /* peer forced */
-		cr |= (oconn == C_CONNECTED && peer_state.conn > C_CONNECTED);
+		/* if we have both been inconsistent, and the peer has been
+		 * forced to be UpToDate with --overwrite-data */
+		cr |= test_bit(CONSIDER_RESYNC, &mdev->flags);
+		/* if we had been plain connected, and the admin requested to
+		 * start a sync by "invalidate" or "invalidate-remote" */
+		cr |= (oconn == C_CONNECTED &&
+				(peer_state.conn >= C_STARTING_SYNC_S &&
+				 peer_state.conn <= C_WF_BITMAP_T));
 
 		if (cr)
 			nconn = drbd_sync_handshake(mdev, peer_state.role, real_peer_disk);
@@ -3058,7 +3101,7 @@ STATIC int receive_state(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int receive_sync_uuid(struct drbd_conf *mdev, struct p_header *h)
+static int receive_sync_uuid(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_rs_uuid *p = (struct p_rs_uuid *)h;
 
@@ -3233,7 +3276,7 @@ void INFO_bm_xfer_stats(struct drbd_conf *mdev,
    in order to be agnostic to the 32 vs 64 bits issue.
 
    returns 0 on failure, 1 if we suceessfully received it. */
-STATIC int receive_bitmap(struct drbd_conf *mdev, struct p_header *h)
+static int receive_bitmap(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct bm_xfer_ctx c;
 	void *buffer;
@@ -3321,7 +3364,7 @@ STATIC int receive_bitmap(struct drbd_conf *mdev, struct p_header *h)
 	return ok;
 }
 
-STATIC int receive_skip(struct drbd_conf *mdev, struct p_header *h)
+static int receive_skip(struct drbd_conf *mdev, struct p_header *h)
 {
 	/* TODO zero copy sink :) */
 	static char sink[128];
@@ -3340,7 +3383,7 @@ STATIC int receive_skip(struct drbd_conf *mdev, struct p_header *h)
 	return size == 0;
 }
 
-STATIC int receive_UnplugRemote(struct drbd_conf *mdev, struct p_header *h)
+static int receive_UnplugRemote(struct drbd_conf *mdev, struct p_header *h)
 {
 	if (mdev->state.disk >= D_INCONSISTENT)
 		drbd_kick_lo(mdev);
@@ -3383,7 +3426,7 @@ static drbd_cmd_handler_f drbd_default_handler[] = {
 static drbd_cmd_handler_f *drbd_cmd_handler = drbd_default_handler;
 static drbd_cmd_handler_f *drbd_opt_cmd_handler;
 
-STATIC void drbdd(struct drbd_conf *mdev)
+static void drbdd(struct drbd_conf *mdev)
 {
 	drbd_cmd_handler_f handler;
 	struct p_header *header = &mdev->data.rbuf.header;
@@ -3421,7 +3464,7 @@ STATIC void drbdd(struct drbd_conf *mdev)
 	}
 }
 
-STATIC void drbd_fail_pending_reads(struct drbd_conf *mdev)
+static void drbd_fail_pending_reads(struct drbd_conf *mdev)
 {
 	struct hlist_head *slot;
 	struct hlist_node *pos;
@@ -3454,7 +3497,7 @@ STATIC void drbd_fail_pending_reads(struct drbd_conf *mdev)
 	spin_unlock_irq(&mdev->req_lock);
 }
 
-STATIC void drbd_disconnect(struct drbd_conf *mdev)
+static void drbd_disconnect(struct drbd_conf *mdev)
 {
 	struct drbd_work prev_work_done;
 	enum drbd_fencing_p fp;
@@ -3611,7 +3654,7 @@ STATIC void drbd_disconnect(struct drbd_conf *mdev)
  *
  * for now, they are expected to be zero, but ignored.
  */
-STATIC int drbd_send_handshake(struct drbd_conf *mdev)
+static int drbd_send_handshake(struct drbd_conf *mdev)
 {
 	/* ASSERT current == mdev->receiver ... */
 	struct p_handshake *p = &mdev->data.sbuf.handshake;
@@ -3761,7 +3804,7 @@ int drbd_do_auth(struct drbd_conf *mdev)
 		goto fail;
 	}
 
-	peers_ch = kmalloc(p.length, GFP_KERNEL);
+	peers_ch = kmalloc(p.length, GFP_NOIO);
 	if (peers_ch == NULL) {
 		dev_err(DEV, "kmalloc of peers_ch failed\n");
 		rv = 0;
@@ -3777,7 +3820,7 @@ int drbd_do_auth(struct drbd_conf *mdev)
 	}
 
 	resp_size = crypto_hash_digestsize(mdev->cram_hmac_tfm);
-	response = kmalloc(resp_size, GFP_KERNEL);
+	response = kmalloc(resp_size, GFP_NOIO);
 	if (response == NULL) {
 		dev_err(DEV, "kmalloc of response failed\n");
 		rv = 0;
@@ -3823,7 +3866,7 @@ int drbd_do_auth(struct drbd_conf *mdev)
 		goto fail;
 	}
 
-	right_response = kmalloc(resp_size, GFP_KERNEL);
+	right_response = kmalloc(resp_size, GFP_NOIO);
 	if (response == NULL) {
 		dev_err(DEV, "kmalloc of right_response failed\n");
 		rv = 0;
@@ -3854,7 +3897,7 @@ int drbd_do_auth(struct drbd_conf *mdev)
 }
 #endif
 
-STATIC int drbdd_init(struct drbd_thread *thi)
+int drbdd_init(struct drbd_thread *thi)
 {
 	struct drbd_conf *mdev = thi->mdev;
 	unsigned int minor = mdev_to_minor(mdev);
@@ -3892,7 +3935,7 @@ STATIC int drbdd_init(struct drbd_thread *thi)
 
 /* ********* acknowledge sender ******** */
 
-STATIC int got_RqSReply(struct drbd_conf *mdev, struct p_header *h)
+static int got_RqSReply(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_req_state_reply *p = (struct p_req_state_reply *)h;
 
@@ -3910,13 +3953,13 @@ STATIC int got_RqSReply(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_Ping(struct drbd_conf *mdev, struct p_header *h)
+static int got_Ping(struct drbd_conf *mdev, struct p_header *h)
 {
 	return drbd_send_ping_ack(mdev);
 
 }
 
-STATIC int got_PingAck(struct drbd_conf *mdev, struct p_header *h)
+static int got_PingAck(struct drbd_conf *mdev, struct p_header *h)
 {
 	/* restore idle timeout */
 	mdev->meta.socket->sk->sk_rcvtimeo = mdev->net_conf->ping_int*HZ;
@@ -3924,7 +3967,7 @@ STATIC int got_PingAck(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_IsInSync(struct drbd_conf *mdev, struct p_header *h)
+static int got_IsInSync(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_block_ack *p = (struct p_block_ack *)h;
 	sector_t sector = be64_to_cpu(p->sector);
@@ -3969,7 +4012,7 @@ static struct drbd_request *_ack_id_to_req(struct drbd_conf *mdev,
 	return NULL;
 }
 
-STATIC int got_BlockAck(struct drbd_conf *mdev, struct p_header *h)
+static int got_BlockAck(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct drbd_request *req;
 	struct p_block_ack *p = (struct p_block_ack *)h;
@@ -4021,7 +4064,7 @@ STATIC int got_BlockAck(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_NegAck(struct drbd_conf *mdev, struct p_header *h)
+static int got_NegAck(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_block_ack *p = (struct p_block_ack *)h;
 	sector_t sector = be64_to_cpu(p->sector);
@@ -4055,7 +4098,7 @@ STATIC int got_NegAck(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_NegDReply(struct drbd_conf *mdev, struct p_header *h)
+static int got_NegDReply(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct drbd_request *req;
 	struct p_block_ack *p = (struct p_block_ack *)h;
@@ -4080,7 +4123,7 @@ STATIC int got_NegDReply(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_NegRSDReply(struct drbd_conf *mdev, struct p_header *h)
+static int got_NegRSDReply(struct drbd_conf *mdev, struct p_header *h)
 {
 	sector_t sector;
 	int size;
@@ -4103,7 +4146,7 @@ STATIC int got_NegRSDReply(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_BarrierAck(struct drbd_conf *mdev, struct p_header *h)
+static int got_BarrierAck(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_barrier_ack *p = (struct p_barrier_ack *)h;
 
@@ -4112,7 +4155,7 @@ STATIC int got_BarrierAck(struct drbd_conf *mdev, struct p_header *h)
 	return TRUE;
 }
 
-STATIC int got_OVResult(struct drbd_conf *mdev, struct p_header *h)
+static int got_OVResult(struct drbd_conf *mdev, struct p_header *h)
 {
 	struct p_block_ack *p = (struct p_block_ack *)h;
 	struct drbd_work *w;
@@ -4133,12 +4176,13 @@ STATIC int got_OVResult(struct drbd_conf *mdev, struct p_header *h)
 	dec_rs_pending(mdev);
 
 	if (--mdev->ov_left == 0) {
-		w = kmalloc(sizeof(*w), GFP_KERNEL);
+		w = kmalloc(sizeof(*w), GFP_NOIO);
 		if (w) {
 			w->cb = w_ov_finished;
 			drbd_queue_work_front(&mdev->data.work, w);
 		} else {
 			dev_err(DEV, "kmalloc(w) failed.");
+			ov_oos_print(mdev);
 			drbd_resync_finished(mdev);
 		}
 	}
@@ -4165,16 +4209,18 @@ static struct asender_cmd *get_asender_cmd(int cmd)
 	[P_NEG_ACK]	    = { sizeof(struct p_block_ack), got_NegAck },
 	[P_NEG_DREPLY]	    = { sizeof(struct p_block_ack), got_NegDReply },
 	[P_NEG_RS_DREPLY]   = { sizeof(struct p_block_ack), got_NegRSDReply},
+	[P_OV_RESULT]	    = { sizeof(struct p_block_ack), got_OVResult },
 	[P_BARRIER_ACK]	    = { sizeof(struct p_barrier_ack), got_BarrierAck },
 	[P_STATE_CHG_REPLY] = { sizeof(struct p_req_state_reply), got_RqSReply },
 	[P_RS_IS_IN_SYNC]   = { sizeof(struct p_block_ack), got_IsInSync },
+	[P_MAX_CMD]	    = { 0, NULL },
 	};
-	if (cmd > P_MAX_CMD)
+	if (cmd > P_MAX_CMD || asender_tbl[cmd].process == NULL)
 		return NULL;
 	return &asender_tbl[cmd];
 }
 
-STATIC int drbd_asender(struct drbd_thread *thi)
+int drbd_asender(struct drbd_thread *thi)
 {
 	struct drbd_conf *mdev = thi->mdev;
 	struct p_header *h = &mdev->meta.rbuf.header;
@@ -4285,7 +4331,6 @@ STATIC int drbd_asender(struct drbd_thread *thi)
 			expect = cmd->pkt_size;
 			ERR_IF(len != expect-sizeof(struct p_header)) {
 				trace_drbd_packet(mdev, mdev->meta.socket, 1, (void *)h, __FILE__, __LINE__);
-				DUMPI(expect);
 				goto reconnect;
 			}
 		}

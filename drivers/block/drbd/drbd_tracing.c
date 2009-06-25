@@ -71,7 +71,7 @@ enum dbg_print_flags {
 };
 
 /* Macro stuff */
-STATIC char *nl_packet_name(int packet_type)
+static char *nl_packet_name(int packet_type)
 {
 /* Generate packet type strings */
 #define NL_PACKET(name, number, fields) \
@@ -371,7 +371,7 @@ static void probe_drbd_resync(struct drbd_conf *mdev, int level, const char *fmt
 static void probe_drbd_bio(struct drbd_conf *mdev, const char *pfx, struct bio *bio, int complete,
 			   struct drbd_request *r)
 {
-#ifdef CONFIG_LBD
+#if defined(CONFIG_LBDAF) || defined(CONFIG_LBD)
 #define SECTOR_FORMAT "%Lx"
 #else
 #define SECTOR_FORMAT "%lx"
@@ -387,7 +387,7 @@ static void probe_drbd_bio(struct drbd_conf *mdev, const char *pfx, struct bio *
 	const int rw = bio->bi_rw;
 	const int biorw      = (rw & (RW_MASK|RWA_MASK));
 	const int biobarrier = (rw & (1<<BIO_RW_BARRIER));
-	const int biosync    = (rw & ((1<<BIO_RW_UNPLUG) | (1<<BIO_RW_SYNCIO)));
+	const int biosync = (rw & ((1<<BIO_RW_UNPLUG) | (1<<BIO_RW_SYNCIO)));
 
 	if (!is_mdev_trace(mdev, TRACE_LVL_ALWAYS))
 		return;
@@ -504,7 +504,7 @@ do {								\
 	}							\
 } while (0)
 
-STATIC char *dump_st(char *p, int len, union drbd_state mask, union drbd_state val)
+static char *dump_st(char *p, int len, union drbd_state mask, union drbd_state val)
 {
 	char *op = p;
 	*p = '\0';
@@ -531,7 +531,7 @@ do { \
 	} \
 } while (0)
 
-STATIC char *_dump_block_id(u64 block_id, char *buff)
+static char *_dump_block_id(u64 block_id, char *buff)
 {
 	if (is_syncer_block_id(block_id))
 		strcpy(buff, "SyncerId");

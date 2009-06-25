@@ -25,34 +25,40 @@
 
 #include <linux/autoconf.h>
 #include <linux/module.h>
+#include <linux/drbd.h>
 #include <linux/in.h>
 #include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/connector.h>
-#include <linux/drbd_config.h>
-#include <linux/drbd.h>
 #include <linux/blkpg.h>
 #include <linux/cpumask.h>
 #include "drbd_int.h"
 #include "drbd_tracing.h"
 #include "drbd_wrappers.h"
+#include <asm/unaligned.h>
 #include <linux/drbd_tag_magic.h>
 #include <linux/drbd_limits.h>
+
+static unsigned short *tl_add_blob(unsigned short *, enum drbd_tags, const void *, int);
+static unsigned short *tl_add_str(unsigned short *, enum drbd_tags, const char *);
+static unsigned short *tl_add_int(unsigned short *, enum drbd_tags, const void *);
 
 /* see get_sb_bdev and bd_claim */
 static char *drbd_m_holder = "Hands off! this is DRBD's meta data device.";
 
 /* Generate the tag_list to struct functions */
 #define NL_PACKET(name, number, fields) \
-STATIC int name ## _from_tags(struct drbd_conf *mdev, \
+static int name ## _from_tags(struct drbd_conf *mdev, \
+	unsigned short *tags, struct name *arg) __attribute__ ((unused)); \
+static int name ## _from_tags(struct drbd_conf *mdev, \
 	unsigned short *tags, struct name *arg) \
 { \
 	int tag; \
 	int dlen; \
 	\
-	while ((tag = *tags++) != TT_END) { \
-		dlen = *tags++; \
+	while ((tag = get_unaligned(tags++)) != TT_END) {	\
+		dlen = get_unaligned(tags++);			\
 		switch (tag_number(tag)) { \
 		fields \
 		default: \
@@ -67,16 +73,16 @@ STATIC int name ## _from_tags(struct drbd_conf *mdev, \
 }
 #define NL_INTEGER(pn, pr, member) \
 	case pn: /* D_ASSERT( tag_type(tag) == TT_INTEGER ); */ \
-		 arg->member = *(int *)(tags); \
-		 break;
+		arg->member = get_unaligned((int *)(tags));	\
+		break;
 #define NL_INT64(pn, pr, member) \
 	case pn: /* D_ASSERT( tag_type(tag) == TT_INT64 ); */ \
-		 arg->member = *(u64 *)(tags); \
-		 break;
+		arg->member = get_unaligned((u64 *)(tags));	\
+		break;
 #define NL_BIT(pn, pr, member) \
 	case pn: /* D_ASSERT( tag_type(tag) == TT_BIT ); */ \
-		 arg->member = *(char *)(tags) ? 1 : 0; \
-		 break;
+		arg->member = *(char *)(tags) ? 1 : 0; \
+		break;
 #define NL_STRING(pn, pr, member, len) \
 	case pn: /* D_ASSERT( tag_type(tag) == TT_STRING ); */ \
 		if (dlen > len) { \
@@ -91,7 +97,10 @@ STATIC int name ## _from_tags(struct drbd_conf *mdev, \
 
 /* Generate the struct to tag_list functions */
 #define NL_PACKET(name, number, fields) \
-STATIC unsigned short* \
+static unsigned short* \
+name ## _to_tags(struct drbd_conf *mdev, \
+	struct name *arg, unsigned short *tags) __attribute__ ((unused)); \
+static unsigned short* \
 name ## _to_tags(struct drbd_conf *mdev, \
 	struct name *arg, unsigned short *tags) \
 { \
@@ -100,23 +109,23 @@ name ## _to_tags(struct drbd_conf *mdev, \
 }
 
 #define NL_INTEGER(pn, pr, member) \
-	*tags++ = pn | pr | TT_INTEGER; \
-	*tags++ = sizeof(int); \
-	*(int *)tags = arg->member; \
+	put_unaligned(pn | pr | TT_INTEGER, tags++);	\
+	put_unaligned(sizeof(int), tags++);		\
+	put_unaligned(arg->member, (int *)tags);	\
 	tags = (unsigned short *)((char *)tags+sizeof(int));
 #define NL_INT64(pn, pr, member) \
-	*tags++ = pn | pr | TT_INT64; \
-	*tags++ = sizeof(u64); \
-	*(u64 *)tags = arg->member; \
+	put_unaligned(pn | pr | TT_INT64, tags++);	\
+	put_unaligned(sizeof(u64), tags++);		\
+	put_unaligned(arg->member, (u64 *)tags);	\
 	tags = (unsigned short *)((char *)tags+sizeof(u64));
 #define NL_BIT(pn, pr, member) \
-	*tags++ = pn | pr | TT_BIT; \
-	*tags++ = sizeof(char); \
+	put_unaligned(pn | pr | TT_BIT, tags++);	\
+	put_unaligned(sizeof(char), tags++);		\
 	*(char *)tags = arg->member; \
 	tags = (unsigned short *)((char *)tags+sizeof(char));
 #define NL_STRING(pn, pr, member, len) \
-	*tags++ = pn | pr | TT_STRING; \
-	*tags++ = arg->member ## _len; \
+	put_unaligned(pn | pr | TT_STRING, tags++);	\
+	put_unaligned(arg->member ## _len, tags++);	\
 	memcpy(tags, arg->member, arg->member ## _len); \
 	tags = (unsigned short *)((char *)tags + arg->member ## _len);
 #include "linux/drbd_nl.h"
@@ -126,15 +135,41 @@ void drbd_nl_send_reply(struct cn_msg *, int);
 
 int drbd_khelper(struct drbd_conf *mdev, char *cmd)
 {
-	char mb[12];
+	char *envp[] = { "HOME=/",
+			"TERM=linux",
+			"PATH=/sbin:/usr/sbin:/bin:/usr/bin",
+			NULL, /* Will be set to address family */
+			NULL, /* Will be set to address */
+			NULL };
+
+	char mb[12], af[20], ad[60], *afs;
 	char *argv[] = {usermode_helper, cmd, mb, NULL };
 	int ret;
-	static char *envp[] = { "HOME=/",
-				"TERM=linux",
-				"PATH=/sbin:/usr/sbin:/bin:/usr/bin",
-				NULL };
 
 	snprintf(mb, 12, "minor-%d", mdev_to_minor(mdev));
+
+	if (get_net_conf(mdev)) {
+		switch (((struct sockaddr *)mdev->net_conf->peer_addr)->sa_family) {
+		case AF_INET6:
+			afs = "ipv6";
+			snprintf(ad, 60, "DRBD_PEER_ADDRESS=%pI6",
+				 &((struct sockaddr_in6 *)mdev->net_conf->peer_addr)->sin6_addr);
+			break;
+		case AF_INET:
+			afs = "ipv4";
+			snprintf(ad, 60, "DRBD_PEER_ADDRESS=%pI4",
+				 &((struct sockaddr_in *)mdev->net_conf->peer_addr)->sin_addr);
+			break;
+		default:
+			afs = "ssocks";
+			snprintf(ad, 60, "DRBD_PEER_ADDRESS=%pI4",
+				 &((struct sockaddr_in *)mdev->net_conf->peer_addr)->sin_addr);
+		}
+		snprintf(af, 20, "DRBD_PEER_AF=%s", afs);
+		envp[3]=af;
+		envp[4]=ad;
+		put_net_conf(mdev);
+	}
 
 	dev_info(DEV, "helper command: %s %s %s\n", usermode_helper, cmd, mb);
 
@@ -354,7 +389,7 @@ int drbd_set_role(struct drbd_conf *mdev, enum drbd_role new_role, int force)
 }
 
 
-STATIC int drbd_nl_primary(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_primary(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			   struct drbd_nl_cfg_reply *reply)
 {
 	struct primary primary_args;
@@ -371,7 +406,7 @@ STATIC int drbd_nl_primary(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	return 0;
 }
 
-STATIC int drbd_nl_secondary(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_secondary(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			     struct drbd_nl_cfg_reply *reply)
 {
 	reply->ret_code = drbd_set_role(mdev, R_SECONDARY, 0);
@@ -381,7 +416,7 @@ STATIC int drbd_nl_secondary(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 
 /* initializes the md.*_offset members, so we are able to find
  * the on disk meta data */
-STATIC void drbd_md_set_sector_offsets(struct drbd_conf *mdev,
+static void drbd_md_set_sector_offsets(struct drbd_conf *mdev,
 				       struct drbd_backing_dev *bdev)
 {
 	sector_t md_size_sect = 0;
@@ -533,15 +568,12 @@ enum determine_dev_size drbd_determin_dev_size(struct drbd_conf *mdev) __must_ho
 	md_moved = prev_first_sect != drbd_md_first_sector(mdev->ldev)
 		|| prev_size	   != mdev->ldev->md.md_size_sect;
 
-	if (md_moved) {
-		dev_warn(DEV, "Moving meta-data.\n");
-		/* assert: (flexible) internal meta data */
-	}
-
 	if (la_size_changed || md_moved) {
 		drbd_al_shrink(mdev); /* All extents inactive. */
-		dev_info(DEV, "Writing the whole bitmap, size changed\n");
-		rv = drbd_bitmap_io(mdev, &drbd_bm_write, "size changed");
+		dev_info(DEV, "Writing the whole bitmap, %s\n",
+			 la_size_changed && md_moved ? "size changed and md moved" :
+			 la_size_changed ? "size changed" : "md moved");
+		rv = drbd_bitmap_io(mdev, &drbd_bm_write, "size changed"); /* does drbd_resume_io() ! */
 		drbd_md_mark_dirty(mdev);
 	}
 
@@ -607,7 +639,7 @@ drbd_new_dev_size(struct drbd_conf *mdev, struct drbd_backing_dev *bdev)
  * failed, and 0 on success. You should call drbd_md_sync() after you called
  * this function.
  */
-STATIC int drbd_check_al_size(struct drbd_conf *mdev)
+static int drbd_check_al_size(struct drbd_conf *mdev)
 {
 	struct lru_cache *n, *t;
 	struct lc_element *e;
@@ -623,8 +655,8 @@ STATIC int drbd_check_al_size(struct drbd_conf *mdev)
 
 	in_use = 0;
 	t = mdev->act_log;
-	n = lc_create("act_log", mdev->sync_conf.al_extents,
-		     sizeof(struct lc_element), 0);
+	n = lc_create("act_log", drbd_al_ext_cache,
+		mdev->sync_conf.al_extents, sizeof(struct lc_element), 0);
 
 	if (n == NULL) {
 		dev_err(DEV, "Cannot allocate act_log lru!\n");
@@ -659,31 +691,25 @@ void drbd_setup_queue_param(struct drbd_conf *mdev, unsigned int max_seg_s) __mu
 {
 	struct request_queue * const q = mdev->rq_queue;
 	struct request_queue * const b = mdev->ldev->backing_bdev->bd_disk->queue;
-	/* unsigned int old_max_seg_s = q->max_segment_size; */
 	int max_segments = mdev->ldev->dc.max_bio_bvecs;
 
 	if (b->merge_bvec_fn && !mdev->ldev->dc.use_bmbv)
 		max_seg_s = PAGE_SIZE;
 
-	max_seg_s = min(b->max_sectors * b->hardsect_size, max_seg_s);
+	max_seg_s = min(queue_max_sectors(b) * queue_logical_block_size(b), max_seg_s);
 
-	q->max_sectors	     = max_seg_s >> 9;
-	if (max_segments) {
-		q->max_phys_segments = max_segments;
-		q->max_hw_segments   = max_segments;
-	} else {
-		q->max_phys_segments = MAX_PHYS_SEGMENTS;
-		q->max_hw_segments   = MAX_HW_SEGMENTS;
-	}
-	q->max_segment_size  = max_seg_s;
-	q->hardsect_size     = 512;
-	q->seg_boundary_mask = PAGE_SIZE-1;
+	blk_queue_max_sectors(q, max_seg_s >> 9);
+	blk_queue_max_phys_segments(q, max_segments ? max_segments : MAX_PHYS_SEGMENTS);
+	blk_queue_max_hw_segments(q, max_segments ? max_segments : MAX_HW_SEGMENTS);
+	blk_queue_max_segment_size(q, max_seg_s);
+	blk_queue_logical_block_size(q, 512);
+	blk_queue_segment_boundary(q, PAGE_SIZE-1);
 	blk_queue_stack_limits(q, b);
 
 	if (b->merge_bvec_fn)
 		dev_warn(DEV, "Backing device's merge_bvec_fn() = %p\n",
 		     b->merge_bvec_fn);
-	dev_info(DEV, "max_segment_size ( = BIO size ) = %u\n", q->max_segment_size);
+	dev_info(DEV, "max_segment_size ( = BIO size ) = %u\n", queue_max_segment_size(q));
 
 	if (q->backing_dev_info.ra_pages != b->backing_dev_info.ra_pages) {
 		dev_info(DEV, "Adjusting my ra_pages to backing device's (%lu -> %lu)\n",
@@ -725,7 +751,7 @@ static void drbd_reconfig_done(struct drbd_conf *mdev)
 
 /* does always return 0;
  * interesting return code is in reply->ret_code */
-STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			     struct drbd_nl_cfg_reply *reply)
 {
 	enum drbd_ret_codes retcode;
@@ -738,7 +764,7 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	union drbd_state ns, os;
 	int rv;
 	int cp_discovered = 0;
-	int hardsect_size;
+	int logical_block_size;
 
 	drbd_reconfig_start(mdev);
 
@@ -748,14 +774,13 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		goto fail;
 	}
 
-	nbc = kmalloc(sizeof(struct drbd_backing_dev), GFP_KERNEL);
+	/* allocation not in the IO path, cqueue thread context */
+	nbc = kzalloc(sizeof(struct drbd_backing_dev), GFP_KERNEL);
 	if (!nbc) {
 		retcode = ERR_NOMEM;
 		goto fail;
 	}
 
-	memset(&nbc->md, 0, sizeof(struct drbd_md));
-	memset(&nbc->dc, 0, sizeof(struct disk_conf));
 	nbc->dc.disk_size     = DRBD_DISK_SIZE_SECT_DEF;
 	nbc->dc.on_io_error   = DRBD_ON_IO_ERROR_DEF;
 	nbc->dc.fencing       = DRBD_FENCING_DEF;
@@ -765,9 +790,6 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		retcode = ERR_MANDATORY_TAG;
 		goto fail;
 	}
-
-	nbc->lo_file = NULL;
-	nbc->md_file = NULL;
 
 	if (nbc->dc.meta_dev_idx < DRBD_MD_INDEX_FLEX_INT) {
 		retcode = ERR_MD_IDX_INVALID;
@@ -817,18 +839,24 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		goto fail;
 	}
 
-	resync_lru = lc_create("resync", 61, sizeof(struct bm_extent),
+	resync_lru = lc_create("resync", drbd_bm_ext_cache,
+			61, sizeof(struct bm_extent),
 			offsetof(struct bm_extent, lce));
 	if (!resync_lru) {
 		retcode = ERR_NOMEM;
 		goto release_bdev_fail;
 	}
 
+	/* meta_dev_idx >= 0: external fixed size,
+	 * possibly multiple drbd sharing one meta device.
+	 * TODO in that case, paranoia check that [md_bdev, meta_dev_idx] is
+	 * not yet used by some other drbd minor!
+	 * (if you use drbd.conf + drbdadm,
+	 * that should check it for you already; but if you don't, or someone
+	 * fooled it, we need to double check here) */
 	nbc->md_bdev = inode2->i_bdev;
-	if (bd_claim(nbc->md_bdev,
-		     (nbc->dc.meta_dev_idx == DRBD_MD_INDEX_INTERNAL ||
-		      nbc->dc.meta_dev_idx == DRBD_MD_INDEX_FLEX_INT) ?
-		     (void *)mdev : (void *) drbd_m_holder)) {
+	if (bd_claim(nbc->md_bdev, (nbc->dc.meta_dev_idx < 0) ? (void *)mdev
+				: (void *) drbd_m_holder)) {
 		retcode = ERR_BDCLAIM_MD_DISK;
 		goto release_bdev_fail;
 	}
@@ -936,19 +964,19 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 		goto force_diskless_dec;
 	}
 
-	/* allocate a second IO page if hardsect_size != 512 */
-	hardsect_size = drbd_get_hardsect_size(nbc->md_bdev);
-	if (hardsect_size == 0)
-		hardsect_size = MD_SECTOR_SIZE;
+	/* allocate a second IO page if logical_block_size != 512 */
+	logical_block_size = bdev_logical_block_size(nbc->md_bdev);
+	if (logical_block_size == 0)
+		logical_block_size = MD_SECTOR_SIZE;
 
-	if (hardsect_size != MD_SECTOR_SIZE) {
+	if (logical_block_size != MD_SECTOR_SIZE) {
 		if (!mdev->md_io_tmpp) {
 			struct page *page = alloc_page(GFP_NOIO);
 			if (!page)
 				goto force_diskless_dec;
 
-			dev_warn(DEV, "Meta data's bdev hardsect_size = %d != %d\n",
-			     hardsect_size, MD_SECTOR_SIZE);
+			dev_warn(DEV, "Meta data's bdev logical_block_size = %d != %d\n",
+			     logical_block_size, MD_SECTOR_SIZE);
 			dev_warn(DEV, "Workaround engaged (has performace impact).\n");
 
 			mdev->md_io_tmpp = page;
@@ -1122,14 +1150,14 @@ STATIC int drbd_nl_disk_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	return 0;
 }
 
-STATIC int drbd_nl_detach(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_detach(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			  struct drbd_nl_cfg_reply *reply)
 {
 	reply->ret_code = drbd_request_state(mdev, NS(disk, D_DISKLESS));
 	return 0;
 }
 
-STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			    struct drbd_nl_cfg_reply *reply)
 {
 	int i, ns;
@@ -1154,6 +1182,7 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 		goto fail;
 	}
 
+	/* allocation not in the IO path, cqueue thread context */
 	new_conf = kmalloc(sizeof(struct net_conf), GFP_KERNEL);
 	if (!new_conf) {
 		retcode = ERR_NOMEM;
@@ -1168,6 +1197,7 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	new_conf->max_buffers	   = DRBD_MAX_BUFFERS_DEF;
 	new_conf->unplug_watermark = DRBD_UNPLUG_WATERMARK_DEF;
 	new_conf->sndbuf_size	   = DRBD_SNDBUF_SIZE_DEF;
+	new_conf->rcvbuf_size	   = DRBD_RCVBUF_SIZE_DEF;
 	new_conf->ko_count	   = DRBD_KO_COUNT_DEF;
 	new_conf->after_sb_0p	   = DRBD_AFTER_SB_0P_DEF;
 	new_conf->after_sb_1p	   = DRBD_AFTER_SB_1P_DEF;
@@ -1184,7 +1214,7 @@ STATIC int drbd_nl_net_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	}
 
 	if (new_conf->two_primaries
-	&& (new_conf->wire_protocol != DRBD_PROT_C)) {
+	    && (new_conf->wire_protocol != DRBD_PROT_C)) {
 		retcode = ERR_NOT_PROTO_C;
 		goto fail;
 	};
@@ -1366,7 +1396,7 @@ fail:
 	return 0;
 }
 
-STATIC int drbd_nl_disconnect(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_disconnect(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			      struct drbd_nl_cfg_reply *reply)
 {
 	int retcode;
@@ -1427,7 +1457,7 @@ void resync_after_online_grow(struct drbd_conf *mdev)
 		_drbd_request_state(mdev, NS(conn, C_WF_SYNC_UUID), CS_VERBOSE + CS_SERIALIZE);
 }
 
-STATIC int drbd_nl_resize(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_resize(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			  struct drbd_nl_cfg_reply *reply)
 {
 	struct resize rs;
@@ -1472,10 +1502,11 @@ STATIC int drbd_nl_resize(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	}
 
 	if (mdev->state.conn == C_CONNECTED && (dd != unchanged || ldsc)) {
-		drbd_send_uuids(mdev);
-		drbd_send_sizes(mdev);
 		if (dd == grew)
-			resync_after_online_grow(mdev);
+			set_bit(RESIZE_PENDING, &mdev->flags);
+
+		drbd_send_uuids(mdev);
+		drbd_send_sizes(mdev, 1);
 	}
 
  fail:
@@ -1483,14 +1514,13 @@ STATIC int drbd_nl_resize(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 	return 0;
 }
 
-STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			       struct drbd_nl_cfg_reply *reply)
 {
 	int retcode = NO_ERROR;
 	int err;
 	int ovr; /* online verify running */
 	int rsr; /* re-sync running */
-	struct drbd_conf *odev;
 	struct crypto_hash *verify_tfm = NULL;
 	struct crypto_hash *csums_tfm = NULL;
 	struct syncer_conf sc;
@@ -1508,23 +1538,6 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	if (!syncer_conf_from_tags(mdev, nlp->tag_list, &sc)) {
 		retcode = ERR_MANDATORY_TAG;
 		goto fail;
-	}
-
-	if (sc.after != -1) {
-		if (sc.after < -1 || minor_to_mdev(sc.after) == NULL) {
-			retcode = ERR_SYNC_AFTER;
-			goto fail;
-		}
-		odev = minor_to_mdev(sc.after); /* check against loops in */
-		while (1) {
-			if (odev == mdev) {
-				retcode = ERR_SYNC_AFTER_CYCLE;
-				goto fail;
-			}
-			if (odev->sync_conf.after == -1)
-				break; /* no cycles. */
-			odev = minor_to_mdev(odev->sync_conf.after);
-		}
 	}
 
 	/* re-sync running */
@@ -1576,7 +1589,8 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 		}
 	}
 
-	if (sc.cpu_mask[0] != 0) {
+	/* silently ignore cpu mask on UP kernel */
+	if (NR_CPUS > 1 && sc.cpu_mask[0] != 0) {
 		err = __bitmap_parse(sc.cpu_mask, 32, 0, (unsigned long *)&n_cpu_mask, NR_CPUS);
 		if (err) {
 			dev_warn(DEV, "__bitmap_parse() failed with %d\n", err);
@@ -1594,8 +1608,16 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	}
 #undef AL_MAX
 
+	/* most sanity checks done, try to assign the new sync-after
+	 * dependency.  need to hold the global lock in there,
+	 * to avoid a race in the dependency loop check. */
+	retcode = drbd_alter_sa(mdev, sc.after);
+	if (retcode != NO_ERROR)
+		goto fail;
+
+	/* ok, assign the rest of it as well.
+	 * lock against receive_SyncParam() */
 	spin_lock(&mdev->peer_seq_lock);
-	/* lock against receive_SyncParam() */
 	mdev->sync_conf = sc;
 
 	if (!rsr) {
@@ -1630,8 +1652,6 @@ STATIC int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	if (mdev->state.conn >= C_CONNECTED)
 		drbd_send_sync_param(mdev, &sc);
 
-	drbd_alter_sa(mdev, sc.after);
-
 	if (!cpus_equal(mdev->cpu_mask, n_cpu_mask)) {
 		mdev->cpu_mask = n_cpu_mask;
 		mdev->cpu_mask = drbd_calc_cpu_mask(mdev);
@@ -1648,7 +1668,7 @@ fail:
 	return 0;
 }
 
-STATIC int drbd_nl_invalidate(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_invalidate(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			      struct drbd_nl_cfg_reply *reply)
 {
 	int retcode;
@@ -1674,7 +1694,7 @@ STATIC int drbd_nl_invalidate(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 	return 0;
 }
 
-STATIC int drbd_nl_invalidate_peer(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_invalidate_peer(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 				   struct drbd_nl_cfg_reply *reply)
 {
 
@@ -1683,7 +1703,7 @@ STATIC int drbd_nl_invalidate_peer(struct drbd_conf *mdev, struct drbd_nl_cfg_re
 	return 0;
 }
 
-STATIC int drbd_nl_pause_sync(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_pause_sync(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			      struct drbd_nl_cfg_reply *reply)
 {
 	int retcode = NO_ERROR;
@@ -1695,7 +1715,7 @@ STATIC int drbd_nl_pause_sync(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 	return 0;
 }
 
-STATIC int drbd_nl_resume_sync(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_resume_sync(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			       struct drbd_nl_cfg_reply *reply)
 {
 	int retcode = NO_ERROR;
@@ -1707,7 +1727,7 @@ STATIC int drbd_nl_resume_sync(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	return 0;
 }
 
-STATIC int drbd_nl_suspend_io(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_suspend_io(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			      struct drbd_nl_cfg_reply *reply)
 {
 	reply->ret_code = drbd_request_state(mdev, NS(susp, 1));
@@ -1715,21 +1735,21 @@ STATIC int drbd_nl_suspend_io(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 	return 0;
 }
 
-STATIC int drbd_nl_resume_io(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_resume_io(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			     struct drbd_nl_cfg_reply *reply)
 {
 	reply->ret_code = drbd_request_state(mdev, NS(susp, 0));
 	return 0;
 }
 
-STATIC int drbd_nl_outdate(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_outdate(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			   struct drbd_nl_cfg_reply *reply)
 {
 	reply->ret_code = drbd_request_state(mdev, NS(disk, D_OUTDATED));
 	return 0;
 }
 
-STATIC int drbd_nl_get_config(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_get_config(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			   struct drbd_nl_cfg_reply *reply)
 {
 	unsigned short *tl;
@@ -1747,12 +1767,12 @@ STATIC int drbd_nl_get_config(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 	}
 	tl = syncer_conf_to_tags(mdev, &mdev->sync_conf, tl);
 
-	*tl++ = TT_END; /* Close the tag list */
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	return (int)((char *)tl - (char *)reply->tag_list);
 }
 
-STATIC int drbd_nl_get_state(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_get_state(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			     struct drbd_nl_cfg_reply *reply)
 {
 	unsigned short *tl = reply->tag_list;
@@ -1766,19 +1786,16 @@ STATIC int drbd_nl_get_state(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	if (s.conn >= C_SYNC_SOURCE && s.conn <= C_PAUSED_SYNC_T) {
 		if (get_ldev(mdev)) {
 			drbd_get_syncer_progress(mdev, &rs_left, &res);
-			*tl++ = T_sync_progress;
-			*tl++ = sizeof(int);
-			memcpy(tl, &res, sizeof(int));
-			tl = (unsigned short *)((char *)tl + sizeof(int));
+			tl = tl_add_int(tl, T_sync_progress, &res);
 			put_ldev(mdev);
 		}
 	}
-	*tl++ = TT_END; /* Close the tag list */
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	return (int)((char *)tl - (char *)reply->tag_list);
 }
 
-STATIC int drbd_nl_get_uuids(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_get_uuids(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			     struct drbd_nl_cfg_reply *reply)
 {
 	unsigned short *tl;
@@ -1786,18 +1803,11 @@ STATIC int drbd_nl_get_uuids(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
 	tl = reply->tag_list;
 
 	if (get_ldev(mdev)) {
-		/* This is a hand crafted add tag ;) */
-		*tl++ = T_uuids;
-		*tl++ = UI_SIZE*sizeof(u64);
-		memcpy(tl, mdev->ldev->md.uuid, UI_SIZE*sizeof(u64));
-		tl = (unsigned short *)((char *)tl + UI_SIZE*sizeof(u64));
-		*tl++ = T_uuids_flags;
-		*tl++ = sizeof(int);
-		memcpy(tl, &mdev->ldev->md.flags, sizeof(int));
-		tl = (unsigned short *)((char *)tl + sizeof(int));
+		tl = tl_add_blob(tl, T_uuids, mdev->ldev->md.uuid, UI_SIZE*sizeof(u64));
+		tl = tl_add_int(tl, T_uuids_flags, &mdev->ldev->md.flags);
 		put_ldev(mdev);
 	}
-	*tl++ = TT_END; /* Close the tag list */
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	return (int)((char *)tl - (char *)reply->tag_list);
 }
@@ -1808,7 +1818,7 @@ STATIC int drbd_nl_get_uuids(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp
  * @nlp:	Netlink/connector packet from drbdsetup
  * @reply:	Reply packet for drbdsetup
  */
-STATIC int drbd_nl_get_timeout_flag(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_get_timeout_flag(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 				    struct drbd_nl_cfg_reply *reply)
 {
 	unsigned short *tl;
@@ -1819,26 +1829,31 @@ STATIC int drbd_nl_get_timeout_flag(struct drbd_conf *mdev, struct drbd_nl_cfg_r
 	rv = mdev->state.pdsk == D_OUTDATED        ? UT_PEER_OUTDATED :
 	  test_bit(USE_DEGR_WFC_T, &mdev->flags) ? UT_DEGRADED : UT_DEFAULT;
 
-	/* This is a hand crafted add tag ;) */
-	*tl++ = T_use_degraded;
-	*tl++ = sizeof(char);
-	*((char *)tl) = rv;
-	tl = (unsigned short *)((char *)tl + sizeof(char));
-	*tl++ = TT_END;
+	tl = tl_add_blob(tl, T_use_degraded, &rv, sizeof(rv));
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	return (int)((char *)tl - (char *)reply->tag_list);
 }
 
-STATIC int drbd_nl_start_ov(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_start_ov(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 				    struct drbd_nl_cfg_reply *reply)
 {
-	reply->ret_code = drbd_request_state(mdev,NS(conn,C_VERIFY_S));
+	/* default to resume from last known position, if possible */
+	struct start_ov args =
+		{ .start_sector = mdev->ov_start_sector };
 
+	if (!start_ov_from_tags(mdev, nlp->tag_list, &args)) {
+		reply->ret_code = ERR_MANDATORY_TAG;
+		return 0;
+	}
+	/* w_make_ov_request expects position to be aligned */
+	mdev->ov_start_sector = args.start_sector & ~BM_SECT_PER_BIT;
+	reply->ret_code = drbd_request_state(mdev,NS(conn,C_VERIFY_S));
 	return 0;
 }
 
 
-STATIC int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
+static int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nlp,
 			      struct drbd_nl_cfg_reply *reply)
 {
 	int retcode = NO_ERROR;
@@ -1865,7 +1880,7 @@ STATIC int drbd_nl_new_c_uuid(struct drbd_conf *mdev, struct drbd_nl_cfg_req *nl
 	    mdev->ldev->md.uuid[UI_CURRENT] == UUID_JUST_CREATED && args.clear_bm) {
 		dev_info(DEV, "Preparing to skip initial sync\n");
 		skip_initial_sync = 1;
-	} else if (mdev->state.conn >= C_CONNECTED) {
+	} else if (mdev->state.conn != C_STANDALONE) {
 		retcode = ERR_CONNECTED;
 		goto out_dec;
 	}
@@ -1899,7 +1914,7 @@ out:
 	return 0;
 }
 
-STATIC struct drbd_conf *ensure_mdev(struct drbd_nl_cfg_req *nlp)
+static struct drbd_conf *ensure_mdev(struct drbd_nl_cfg_req *nlp)
 {
 	struct drbd_conf *mdev;
 
@@ -1971,7 +1986,7 @@ static struct cn_handler_struct cnd_table[] = {
 	[ P_new_c_uuid ]	= { &drbd_nl_new_c_uuid,	0 },
 };
 
-STATIC void drbd_connector_callback(void *data)
+static void drbd_connector_callback(void *data)
 {
 	struct cn_msg *req = data;
 	struct drbd_nl_cfg_req *nlp = (struct drbd_nl_cfg_req *)req->data;
@@ -2012,6 +2027,7 @@ STATIC void drbd_connector_callback(void *data)
 
 	reply_size += cm->reply_body_size;
 
+	/* allocation not in the IO path, cqueue thread context */
 	cn_reply = kmalloc(reply_size, GFP_KERNEL);
 	if (!cn_reply) {
 		retcode = ERR_NOMEM;
@@ -2050,18 +2066,13 @@ static atomic_t drbd_nl_seq = ATOMIC_INIT(2); /* two. */
 
 static unsigned short *
 __tl_add_blob(unsigned short *tl, enum drbd_tags tag, const void *data,
-	int len, int nul_terminated)
+	unsigned short len, int nul_terminated)
 {
-	int l = tag_descriptions[tag_number(tag)].max_len;
-	l = (len < l) ? len :  l;
-	*tl++ = tag;
-	*tl++ = len;
+	unsigned short l = tag_descriptions[tag_number(tag)].max_len;
+	len = (len < l) ? len :  l;
+	put_unaligned(tag, tl++);
+	put_unaligned(len, tl++);
 	memcpy(tl, data, len);
-	/* TODO
-	 * maybe we need to add some padding to the data stream.
-	 * otherwise we may get strange effects on architectures
-	 * that require certain data types to be strictly aligned,
-	 * because now the next "unsigned short" may be misaligned. */
 	tl = (unsigned short*)((char*)tl + len);
 	if (nul_terminated)
 		*((char*)tl - 1) = 0;
@@ -2083,17 +2094,16 @@ tl_add_str(unsigned short *tl, enum drbd_tags tag, const char *str)
 static unsigned short *
 tl_add_int(unsigned short *tl, enum drbd_tags tag, const void *val)
 {
+	put_unaligned(tag, tl++);
 	switch(tag_type(tag)) {
 	case TT_INTEGER:
-		*tl++ = tag;
-		*tl++ = sizeof(int);
-		*(int*)tl = *(int*)val;
+		put_unaligned(sizeof(int), tl++);
+		put_unaligned(*(int *)val, (int *)tl++);
 		tl = (unsigned short*)((char*)tl+sizeof(int));
 		break;
 	case TT_INT64:
-		*tl++ = tag;
-		*tl++ = sizeof(u64);
-		*(u64*)tl = *(u64*)val;
+		put_unaligned(sizeof(u64), tl++);
+		put_unaligned(*(u64 *)val, (u64 *)tl++);
 		tl = (unsigned short*)((char*)tl+sizeof(u64));
 		break;
 	default:
@@ -2117,7 +2127,8 @@ void drbd_bcast_state(struct drbd_conf *mdev, union drbd_state state)
 	/* dev_warn(DEV, "drbd_bcast_state() got called\n"); */
 
 	tl = get_state_to_tags(mdev, (struct get_state *)&state, tl);
-	*tl++ = TT_END; /* Close the tag list */
+
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	cn_reply->id.idx = CN_IDX_DRBD;
 	cn_reply->id.val = CN_VAL_DRBD;
@@ -2146,16 +2157,11 @@ void drbd_bcast_ev_helper(struct drbd_conf *mdev, char *helper_name)
 	struct drbd_nl_cfg_reply *reply =
 		(struct drbd_nl_cfg_reply *)cn_reply->data;
 	unsigned short *tl = reply->tag_list;
-	int str_len;
 
 	/* dev_warn(DEV, "drbd_bcast_state() got called\n"); */
 
-	str_len = strlen(helper_name)+1;
-	*tl++ = T_helper;
-	*tl++ = str_len;
-	memcpy(tl, helper_name, str_len);
-	tl = (unsigned short *)((char *)tl + str_len);
-	*tl++ = TT_END; /* Close the tag list */
+	tl = tl_add_str(tl, T_helper, helper_name);
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	cn_reply->id.idx = CN_IDX_DRBD;
 	cn_reply->id.val = CN_VAL_DRBD;
@@ -2193,12 +2199,15 @@ void drbd_bcast_ee(struct drbd_conf *mdev,
 	/* aparently we have to memcpy twice, first to prepare the data for the
 	 * struct cn_msg, then within cn_netlink_send from the cn_msg to the
 	 * netlink skb. */
+	/* receiver thread context, which is not in the writeout path (of this node),
+	 * but may be in the writeout path of the _other_ node.
+	 * GFP_NOIO to avoid potential "distributed deadlock". */
 	cn_reply = kmalloc(
 		sizeof(struct cn_msg)+
 		sizeof(struct drbd_nl_cfg_reply)+
 		sizeof(struct dump_ee_tag_len_struct)+
-		sizeof(short int)
-		, GFP_KERNEL);
+		sizeof(short int),
+		GFP_NOIO);
 
 	if (!cn_reply) {
 		dev_err(DEV, "could not kmalloc buffer for drbd_bcast_ee, sector %llu, size %u\n",
@@ -2215,8 +2224,8 @@ void drbd_bcast_ee(struct drbd_conf *mdev,
 	tl = tl_add_int(tl, T_ee_sector, &e->sector);
 	tl = tl_add_int(tl, T_ee_block_id, &e->block_id);
 
-	*tl++ = T_ee_data;
-	*tl++ = e->size;
+	put_unaligned(T_ee_data, tl++);
+	put_unaligned(e->size, tl++);
 
 	__bio_for_each_segment(bvec, e->private_bio, i, 0) {
 		void *d = kmap(bvec->bv_page);
@@ -2224,7 +2233,7 @@ void drbd_bcast_ee(struct drbd_conf *mdev,
 		kunmap(bvec->bv_page);
 		tl=(unsigned short*)((char*)tl + bvec->bv_len);
 	}
-	*tl++ = TT_END; /* Close the tag list */
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	cn_reply->id.idx = CN_IDX_DRBD;
 	cn_reply->id.val = CN_VAL_DRBD;
@@ -2263,11 +2272,8 @@ void drbd_bcast_sync_progress(struct drbd_conf *mdev)
 	drbd_get_syncer_progress(mdev, &rs_left, &res);
 	put_ldev(mdev);
 
-	*tl++ = T_sync_progress;
-	*tl++ = sizeof(int);
-	memcpy(tl, &res, sizeof(int));
-	tl = (unsigned short *)((char *)tl + sizeof(int));
-	*tl++ = TT_END; /* Close the tag list */
+	tl = tl_add_int(tl, T_sync_progress, &res);
+	put_unaligned(TT_END, tl++); /* Close the tag list */
 
 	cn_reply->id.idx = CN_IDX_DRBD;
 	cn_reply->id.val = CN_VAL_DRBD;

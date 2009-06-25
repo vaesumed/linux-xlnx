@@ -26,6 +26,7 @@
 #include <linux/vmalloc.h>
 #include <linux/string.h>
 #include <linux/drbd.h>
+#include <asm/kmap_types.h>
 #include "drbd_int.h"
 
 /* OPAQUE outside this file!
@@ -150,7 +151,7 @@ void drbd_bm_unlock(struct drbd_conf *mdev)
 }
 
 /* word offset to long pointer */
-STATIC unsigned long *__bm_map_paddr(struct drbd_bitmap *b, unsigned long offset, const enum km_type km)
+static unsigned long *__bm_map_paddr(struct drbd_bitmap *b, unsigned long offset, const enum km_type km)
 {
 	struct page *page;
 	unsigned long page_nr;
@@ -197,7 +198,7 @@ void bm_unmap(unsigned long *p_addr)
  * to be able to report device specific.
  */
 
-STATIC void bm_free_pages(struct page **pages, unsigned long number)
+static void bm_free_pages(struct page **pages, unsigned long number)
 {
 	unsigned long i;
 	if (!pages)
@@ -215,7 +216,7 @@ STATIC void bm_free_pages(struct page **pages, unsigned long number)
 	}
 }
 
-STATIC void bm_vk_free(void *ptr, int v)
+static void bm_vk_free(void *ptr, int v)
 {
 	if (v)
 		vfree(ptr);
@@ -226,7 +227,7 @@ STATIC void bm_vk_free(void *ptr, int v)
 /*
  * "have" and "want" are NUMBER OF PAGES.
  */
-STATIC struct page **bm_realloc_pages(struct drbd_bitmap *b, unsigned long want)
+static struct page **bm_realloc_pages(struct drbd_bitmap *b, unsigned long want)
 {
 	struct page **old_pages = b->bm_pages;
 	struct page **new_pages, *page;
@@ -239,7 +240,11 @@ STATIC struct page **bm_realloc_pages(struct drbd_bitmap *b, unsigned long want)
 	if (have == want)
 		return old_pages;
 
-	/* Trying kmalloc first, falling back to vmalloc... */
+	/* Trying kmalloc first, falling back to vmalloc.
+	 * GFP_KERNEL is ok, as this is done when a lower level disk is
+	 * "attached" to the drbd.  Context is receiver thread or cqueue
+	 * thread.  As we have no disk yet, we are not in the IO path,
+	 * not even the IO path of the peer. */
 	bytes = sizeof(struct page *)*want;
 	new_pages = kmalloc(bytes, GFP_KERNEL);
 	if (!new_pages) {
@@ -320,7 +325,7 @@ void drbd_bm_cleanup(struct drbd_conf *mdev)
  * this masks out the remaining bits.
  * Rerturns the number of bits cleared.
  */
-STATIC int bm_clear_surplus(struct drbd_bitmap *b)
+static int bm_clear_surplus(struct drbd_bitmap *b)
 {
 	const unsigned long mask = (1UL << (b->bm_bits & (BITS_PER_LONG-1))) - 1;
 	size_t w = b->bm_bits >> LN2_BPL;
@@ -343,7 +348,7 @@ STATIC int bm_clear_surplus(struct drbd_bitmap *b)
 	return cleared;
 }
 
-STATIC void bm_set_surplus(struct drbd_bitmap *b)
+static void bm_set_surplus(struct drbd_bitmap *b)
 {
 	const unsigned long mask = (1UL << (b->bm_bits & (BITS_PER_LONG-1))) - 1;
 	size_t w = b->bm_bits >> LN2_BPL;
@@ -362,7 +367,7 @@ STATIC void bm_set_surplus(struct drbd_bitmap *b)
 	bm_unmap(p_addr);
 }
 
-STATIC unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endian)
+static unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endian)
 {
 	unsigned long *p_addr, *bm, offset = 0;
 	unsigned long bits = 0;
@@ -420,7 +425,7 @@ void _drbd_bm_recount_bits(struct drbd_conf *mdev, char *file, int line)
 }
 
 /* offset and len in long words.*/
-STATIC void bm_memset(struct drbd_bitmap *b, size_t offset, int c, size_t len)
+static void bm_memset(struct drbd_bitmap *b, size_t offset, int c, size_t len)
 {
 	unsigned long *p_addr, *bm;
 	size_t do_now, end;
@@ -752,7 +757,7 @@ static void bm_async_io_complete(struct bio *bio, int error)
 	bio_put(bio);
 }
 
-STATIC void bm_page_io_async(struct drbd_conf *mdev, struct drbd_bitmap *b, int page_nr, int rw) __must_hold(local)
+static void bm_page_io_async(struct drbd_conf *mdev, struct drbd_bitmap *b, int page_nr, int rw) __must_hold(local)
 {
 	/* we are process context. we always get a bio */
 	struct bio *bio = bio_alloc(GFP_KERNEL, 1);
@@ -790,6 +795,8 @@ void bm_cpu_to_lel(struct drbd_bitmap *b)
 	 * this may be optimized by using
 	 * cpu_to_lel(-1) == -1 and cpu_to_lel(0) == 0;
 	 * the following is still not optimal, but better than nothing */
+	unsigned int i;
+	unsigned long *p_addr, *bm;
 	if (b->bm_set == 0) {
 		/* no page at all; avoid swap if all is 0 */
 		i = b->bm_number_of_pages;
@@ -801,12 +808,10 @@ void bm_cpu_to_lel(struct drbd_bitmap *b)
 		i = 0;
 	}
 	for (; i < b->bm_number_of_pages; i++) {
-		unsigned long *bm;
-		/* if you'd want to use kmap_atomic, you'd have to disable irq! */
-		p_addr = kmap(b->bm_pages[i]);
+		p_addr = kmap_atomic(b->bm_pages[i], KM_USER0);
 		for (bm = p_addr; bm < p_addr + PAGE_SIZE/sizeof(long); bm++)
 			*bm = cpu_to_lel(*bm);
-		kunmap(p_addr);
+		kunmap_atomic(p_addr, KM_USER0);
 	}
 }
 # endif
@@ -816,7 +821,7 @@ void bm_cpu_to_lel(struct drbd_bitmap *b)
 /*
  * bm_rw: read/write the whole bitmap from/to its on disk location.
  */
-STATIC int bm_rw(struct drbd_conf *mdev, int rw) __must_hold(local)
+static int bm_rw(struct drbd_conf *mdev, int rw) __must_hold(local)
 {
 	struct drbd_bitmap *b = mdev->bitmap;
 	/* sector_t sector; */
