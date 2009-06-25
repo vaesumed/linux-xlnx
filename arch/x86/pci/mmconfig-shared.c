@@ -608,7 +608,8 @@ static void __init __pci_mmcfg_init(int early)
 
 	if (!known_bridge)
 		if (acpi_table_parse(ACPI_SIG_MCFG, pci_parse_mcfg))
-			sfi_acpi_table_parse(ACPI_SIG_MCFG, NULL, NULL, 0, pci_parse_mcfg);
+			sfi_acpi_table_parse(ACPI_SIG_MCFG, NULL, NULL, 0,
+				pci_parse_mcfg);
 
 	pci_mmcfg_reject_broken(early);
 

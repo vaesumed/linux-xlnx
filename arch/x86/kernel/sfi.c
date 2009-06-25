@@ -73,7 +73,8 @@ static __init struct sfi_table_simple *sfi_early_find_syst(void)
 	/* SFI spec defines the SYST starts at a 16-byte boundary */
 	for (i = 0; SFI_SYST_SEARCH_BEGIN + i < SFI_SYST_SEARCH_END; i += 16) {
 		if (!strncmp(SFI_SIG_SYST, pchar, SFI_SIGNATURE_SIZE))
-			return (struct sfi_table_simple *)(SFI_SYST_SEARCH_BEGIN + i);
+			return (struct sfi_table_simple *)
+					(SFI_SYST_SEARCH_BEGIN + i);
 
 		pchar += 16;
 	}
@@ -100,7 +101,8 @@ int __init sfi_init_memory_map(void)
 	if (!syst)
 		return -1;
 
-	tbl_cnt = (syst->header.length - sizeof(struct sfi_table_header)) / sizeof(u64);
+	tbl_cnt = (syst->header.length - sizeof(struct sfi_table_header)) /
+			sizeof(u64);
 	pentry = syst->pentry;
 
 	/* walk through the syst to search the mmap table */

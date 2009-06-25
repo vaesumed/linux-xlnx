@@ -54,7 +54,7 @@
 #define SFI_SIG_MRTC		"MRTC"
 #define SFI_SIG_MMAP		"MMAP"
 #define SFI_SIG_APIC		"APIC"
-#define SFI_SIG_XSDT		"XSDT"	/* ACPI Extended System Description Table */
+#define SFI_SIG_XSDT		"XSDT"
 #define SFI_SIG_WAKE		"WAKE"
 
 #define SFI_SIGNATURE_SIZE	4

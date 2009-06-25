@@ -48,8 +48,11 @@ int sfi_acpi_table_parse(char *signature, char *oem_id, char* oem_table_id,
 
 #else /* !CONFIG_SFI */
 
-static inline int sfi_acpi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-	unsigned int flags, acpi_table_handler handler) { return -1; }
+static inline int sfi_acpi_table_parse(char *signature, char *oem_id,
+	char* oem_table_id, unsigned int flags, acpi_table_handler handler)
+{
+	return -1;
+}
 
 #endif	/* CONFIG_SFI */
 
