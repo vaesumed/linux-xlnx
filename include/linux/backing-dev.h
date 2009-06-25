@@ -24,8 +24,8 @@ struct dentry;
  * Bits in backing_dev_info.state
  */
 enum bdi_state {
-	BDI_pdflush,		/* A pdflush thread is working this device */
 	BDI_pending,		/* On its way to being activated */
+	BDI_wb_alloc,		/* Default embedded wb allocated */
 	BDI_async_congested,	/* The async (write) queue is getting full */
 	BDI_sync_congested,	/* The sync queue is getting full */
 	BDI_unused,		/* Available bits start here */
@@ -41,15 +41,22 @@ enum bdi_stat_item {
 
 #define BDI_STAT_BATCH (8*(1+ilog2(nr_cpu_ids)))
 
-struct bdi_writeback_arg {
-	unsigned long nr_pages;
-	struct super_block *sb;
+struct bdi_writeback {
+	struct backing_dev_info *bdi;		/* our parent bdi */
+	unsigned int nr;
+
+	struct task_struct	*task;		/* writeback task */
+	struct list_head	b_dirty;	/* dirty inodes */
+	struct list_head	b_io;		/* parked for writeback */
+	struct list_head	b_more_io;	/* parked for more writeback */
+
+	unsigned long		nr_pages;
+	struct super_block	*sb;
 	enum writeback_sync_modes sync_mode;
 };
 
 struct backing_dev_info {
 	struct list_head bdi_list;
-
 	unsigned long ra_pages;	/* max readahead in PAGE_CACHE_SIZE units */
 	unsigned long state;	/* Always use atomic bitops on this */
 	unsigned int capabilities; /* Device capabilities */
@@ -66,13 +73,11 @@ struct backing_dev_info {
 	unsigned int min_ratio;
 	unsigned int max_ratio, max_prop_frac;
 
-	struct device *dev;
+	struct bdi_writeback wb;  /* default writeback info for this bdi */
+	unsigned long wb_active;  /* bitmap of active tasks */
+	unsigned long wb_mask;	  /* number of registered tasks */
 
-	struct task_struct	*task;		/* writeback task */
-	struct bdi_writeback_arg wb_arg;	/* protected by BDI_pdflush */
-	struct list_head	b_dirty;	/* dirty inodes */
-	struct list_head	b_io;		/* parked for writeback */
-	struct list_head	b_more_io;	/* parked for more writeback */
+	struct device *dev;
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debug_dir;
@@ -89,17 +94,18 @@ int bdi_register_dev(struct backing_dev_info *bdi, dev_t dev);
 void bdi_unregister(struct backing_dev_info *bdi);
 void bdi_start_writeback(struct backing_dev_info *bdi, struct super_block *sb,
 			 long nr_pages, enum writeback_sync_modes sync_mode);
-int bdi_writeback_task(struct backing_dev_info *bdi);
+int bdi_writeback_task(struct bdi_writeback *wb);
 void bdi_writeback_all(struct super_block *sb, struct writeback_control *wbc);
+int bdi_has_dirty_io(struct backing_dev_info *bdi);
 
 extern spinlock_t bdi_lock;
 extern struct list_head bdi_list;
 
-static inline int bdi_has_dirty_io(struct backing_dev_info *bdi)
+static inline int wb_has_dirty_io(struct bdi_writeback *wb)
 {
-	return !list_empty(&bdi->b_dirty) ||
-	       !list_empty(&bdi->b_io) ||
-	       !list_empty(&bdi->b_more_io);
+	return !list_empty(&wb->b_dirty) ||
+	       !list_empty(&wb->b_io) ||
+	       !list_empty(&wb->b_more_io);
 }
 
 static inline void __add_bdi_stat(struct backing_dev_info *bdi,
