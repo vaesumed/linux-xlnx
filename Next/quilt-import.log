@@ -1,0 +1,60 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.31-rc1
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 28d0325ce6e0a52f53d8af687e6427fee59004d3
+HEAD is now at 28d0325 Linux 2.6.31-rc1
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-designware-needs-clk.patch
+i2c-drop-i2c_driver-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + c5a46a6...72f3c35 master     -> quilt/i2c  (forced update)
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper 404befef85416871c37656765e75b10ae0e53ed0
+Importing ttydev based on 28d0325ce6e0a52f53d8af687e6427fee59004d3
+$ cd ../quilt-tmp
+$ git reset --hard 28d0325ce6e0a52f53d8af687e6427fee59004d3
+HEAD is now at 28d0325 Linux 2.6.31-rc1
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-acm-fix-error
+tty-acm-open-error-oops
+tty-usb-serial-oops-fix
+serial-add-irqflags-support
+tty-x86-termios-clean
+tty-usb-ftdi-ccsnew
+serial-txen-iir-fix
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+net-slip-ttyfix
+kfifo-const
+dmi-sanity
+pata-more-d3-quirks
+pata-rdc
+se401-spaces
+serial-f81216-helper
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 32393d1...31398c6 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
