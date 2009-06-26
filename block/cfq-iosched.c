@@ -1678,7 +1678,12 @@ retry:
 	/* cic always exists here */
 	cfqq = cic_to_cfqq(cic, is_sync);
 
-	if (!cfqq) {
+	/*
+	 * Always try a new alloc if we fell back to the OOM cfqq
+	 * originally, since it should just be a temporary situation.
+	 */
+	if (!cfqq || cfqq == &cfqd->oom_cfqq) {
+		cfqq = NULL;
 		if (new_cfqq) {
 			cfqq = new_cfqq;
 			new_cfqq = NULL;
