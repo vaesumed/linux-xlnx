@@ -266,6 +266,17 @@ config SERIAL_8250_AU1X00
 	  say Y to this option. The driver can handle up to 4 serial ports,
 	  depending on the SOC. If unsure, say N.
 
+config SERIAL_8250_F81216
+	tristate "Manage suspend and restore of F81216 devices"
+	depends on SERIAL_8250 != n
+	help
+	  Say Y here if you have a board such as the IEI Kino 69OS1 with an
+	  F81216 SuperIO chip which requires Linux to restore the serial port
+	  configuration when you suspend and resume. If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called 8250_f81216.
+
 config SERIAL_8250_RM9K
 	bool "Support for MIPS RM9xxx integrated serial port"
 	depends on SERIAL_8250 != n && SERIAL_RM9000

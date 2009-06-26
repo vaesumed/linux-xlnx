@@ -79,8 +79,8 @@ static void *rvmalloc(unsigned long size)
 	adr = (unsigned long) mem;
 	while (size > 0) {
 		SetPageReserved(vmalloc_to_page((void *)adr));
-		adr +=  PAGE_SIZE;
-		size -=  PAGE_SIZE;
+		adr += PAGE_SIZE;
+		size -= PAGE_SIZE;
 	}
 
 	return mem;
@@ -96,8 +96,8 @@ static void rvfree(void *mem, unsigned long size)
 	adr = (unsigned long) mem;
 	while ((long) size > 0) {
 		ClearPageReserved(vmalloc_to_page((void *)adr));
-		adr +=  PAGE_SIZE;
-		size -=  PAGE_SIZE;
+		adr += PAGE_SIZE;
+		size -= PAGE_SIZE;
 	}
 	vfree(mem);
 }
@@ -231,8 +231,8 @@ static int se401_set_pict(struct usb_se401 *se401, struct video_picture *p)
 		return 1;
 	se401->palette = p->palette;
 	if (p->hue != se401->hue) {
-		se401->rgain =  p->hue >> 10;
-		se401->bgain =  0x40-(p->hue >> 10);
+		se401->rgain = p->hue >> 10;
+		se401->bgain = 0x40-(p->hue >> 10);
 		se401->hue = p->hue;
 	}
 	if (p->brightness != se401->brightness)
@@ -314,7 +314,7 @@ static void se401_button_irq(struct urb *urb)
 		goto exit;
 	}
 
-	if (urb->actual_length  >= 2)
+	if (urb->actual_length >= 2)
 		if (se401->button)
 			se401->buttonpressed = 1;
 exit:
@@ -646,7 +646,7 @@ static inline void decode_JangGu_vlc(struct usb_se401 *se401,
 			} else {
 				if (vlc_cod == 2) {
 					if (!bit)
-						vlc_data =  -(1 << vlc_size) + 1;
+						vlc_data = -(1 << vlc_size) + 1;
 					vlc_cod--;
 				}
 				vlc_size--;
@@ -676,7 +676,7 @@ static inline void decode_JangGu(struct usb_se401 *se401,
 	if (!se401->frame[se401->curframe].curpix) {
 		se401->frame[se401->curframe].curlinepix = 0;
 		se401->frame[se401->curframe].curline =
-		    se401->frame[se401->curframe].data+
+		    se401->frame[se401->curframe].data +
 		    se401->cwidth * 3 - 1;
 		if (se401->frame[se401->curframe].grabstate == FRAME_READY)
 			se401->frame[se401->curframe].grabstate = FRAME_GRABBING;
@@ -1060,7 +1060,7 @@ static long se401_do_ioctl(struct file *file, unsigned int cmd, void *arg)
 	{
 		struct video_window *vw = arg;
 
-		vw->x = 0;               /* FIXME */
+		vw->x = 0;			/* FIXME */
 		vw->y = 0;
 		vw->chromakey = 0;
 		vw->flags = 0;
@@ -1164,7 +1164,7 @@ static ssize_t se401_read(struct file *file, char __user *buf,
 	struct usb_se401 *se401 = (struct usb_se401 *)dev;
 
 
-	if (se401->dev ==  NULL)
+	if (se401->dev == NULL)
 		return -EIO;
 	if (realcount > se401->cwidth*se401->cheight*3)
 		realcount = se401->cwidth*se401->cheight*3;
@@ -1202,12 +1202,12 @@ static int se401_mmap(struct file *file, struct vm_area_struct *vma)
 	struct video_device *dev = file->private_data;
 	struct usb_se401 *se401 = (struct usb_se401 *)dev;
 	unsigned long start = vma->vm_start;
-	unsigned long size  = vma->vm_end-vma->vm_start;
+	unsigned long size = vma->vm_end-vma->vm_start;
 	unsigned long page, pos;
 
 	mutex_lock(&se401->lock);
 
-	if (se401->dev ==  NULL) {
+	if (se401->dev == NULL) {
 		mutex_unlock(&se401->lock);
 		return -EIO;
 	}
@@ -1223,10 +1223,10 @@ static int se401_mmap(struct file *file, struct vm_area_struct *vma)
 			mutex_unlock(&se401->lock);
 			return -EAGAIN;
 		}
-		start +=  PAGE_SIZE;
-		pos +=  PAGE_SIZE;
+		start += PAGE_SIZE;
+		pos += PAGE_SIZE;
 		if (size > PAGE_SIZE)
-			size -=  PAGE_SIZE;
+			size -= PAGE_SIZE;
 		else
 			size = 0;
 	}
@@ -1236,17 +1236,17 @@ static int se401_mmap(struct file *file, struct vm_area_struct *vma)
 }
 
 static const struct v4l2_file_operations se401_fops = {
-	.owner  = 	THIS_MODULE,
-	.open =         se401_open,
-	.release =      se401_close,
-	.read =         se401_read,
-	.mmap =         se401_mmap,
-	.ioctl =        se401_ioctl,
+	.owner		=	THIS_MODULE,
+	.open		=	se401_open,
+	.release	=	se401_close,
+	.read		=	se401_read,
+	.mmap		=	se401_mmap,
+	.ioctl		=	se401_ioctl,
 };
 static struct video_device se401_template = {
-	.name =         "se401 USB camera",
-	.fops =         &se401_fops,
-	.release = video_device_release_empty,
+	.name		=	"se401 USB camera",
+	.fops		=	&se401_fops,
+	.release	=	video_device_release_empty,
 };
 
 
@@ -1286,7 +1286,7 @@ static int se401_init(struct usb_se401 *se401, int button)
 	}
 	slen += snprintf(temp + slen, 200 - slen, " Sizes:");
 	for (i = 0; i < se401->sizes; i++) {
-		slen +=  snprintf(temp + slen, 200 - slen,
+		slen += snprintf(temp + slen, 200 - slen,
 			" %dx%d", se401->width[i], se401->height[i]);
 	}
 	dev_info(&se401->dev->dev, "%s\n", temp);
@@ -1368,20 +1368,20 @@ static int se401_probe(struct usb_interface *intf,
 	interface = &intf->cur_altsetting->desc;
 
 	/* Is it an se401? */
-	if (le16_to_cpu(dev->descriptor.idVendor) ==  0x03e8 &&
-	    le16_to_cpu(dev->descriptor.idProduct) ==  0x0004) {
+	if (le16_to_cpu(dev->descriptor.idVendor) == 0x03e8 &&
+	    le16_to_cpu(dev->descriptor.idProduct) == 0x0004) {
 		camera_name = "Endpoints/Aox SE401";
-	} else if (le16_to_cpu(dev->descriptor.idVendor) ==  0x0471 &&
-	    le16_to_cpu(dev->descriptor.idProduct) ==  0x030b) {
+	} else if (le16_to_cpu(dev->descriptor.idVendor) == 0x0471 &&
+	    le16_to_cpu(dev->descriptor.idProduct) == 0x030b) {
 		camera_name = "Philips PCVC665K";
-	} else if (le16_to_cpu(dev->descriptor.idVendor) ==  0x047d &&
-	    le16_to_cpu(dev->descriptor.idProduct) ==  0x5001) {
+	} else if (le16_to_cpu(dev->descriptor.idVendor) == 0x047d &&
+	    le16_to_cpu(dev->descriptor.idProduct) == 0x5001) {
 		camera_name = "Kensington VideoCAM 67014";
-	} else if (le16_to_cpu(dev->descriptor.idVendor) ==  0x047d &&
-	    le16_to_cpu(dev->descriptor.idProduct) ==  0x5002) {
+	} else if (le16_to_cpu(dev->descriptor.idVendor) == 0x047d &&
+	    le16_to_cpu(dev->descriptor.idProduct) == 0x5002) {
 		camera_name = "Kensington VideoCAM 6701(5/7)";
-	} else if (le16_to_cpu(dev->descriptor.idVendor) ==  0x047d &&
-	    le16_to_cpu(dev->descriptor.idProduct) ==  0x5003) {
+	} else if (le16_to_cpu(dev->descriptor.idVendor) == 0x047d &&
+	    le16_to_cpu(dev->descriptor.idProduct) == 0x5003) {
 		camera_name = "Kensington VideoCAM 67016";
 		button = 0;
 	} else
@@ -1397,7 +1397,7 @@ static int se401_probe(struct usb_interface *intf,
 	dev_info(&intf->dev, "SE401 camera found: %s\n", camera_name);
 
 	se401 = kzalloc(sizeof(*se401), GFP_KERNEL);
-	if (se401 ==  NULL) {
+	if (se401 == NULL) {
 		err("couldn't kmalloc se401 struct");
 		return -ENOMEM;
 	}
