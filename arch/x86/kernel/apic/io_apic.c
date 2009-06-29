@@ -3948,7 +3948,7 @@ int io_apic_set_pci_routing(struct device *dev, int irq,
                           ACPI-based IOAPIC Configuration
    -------------------------------------------------------------------------- */
 
-#if defined(CONFIG_ACPI) || defined(CONFIG_SFI)
+#ifdef CONFIG_ACPI
 
 #ifdef CONFIG_X86_32
 int __init io_apic_get_unique_id(int ioapic, int apic_id)
@@ -4057,7 +4057,7 @@ int acpi_get_override_irq(int bus_irq, int *trigger, int *polarity)
 	return 0;
 }
 
-#endif /* CONFIG_ACPI || CONFIG_SFI */
+#endif /* CONFIG_ACPI */
 
 /*
  * This function currently is only a helper for the i386 smp boot process where
