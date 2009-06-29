@@ -135,9 +135,6 @@ typedef int (*sfi_table_handler) (struct sfi_table_header *table);
 int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 			uint flag, sfi_table_handler handler);
 
-void __init __iomem *arch_early_ioremap(unsigned long phys, unsigned long size);
-void __init arch_early_iounmap(void __iomem * virt, unsigned long size);
-
 extern int sfi_disabled;
 static inline void disable_sfi(void)
 {

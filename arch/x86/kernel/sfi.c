@@ -55,16 +55,6 @@ static struct mp_ioapic_routing {
 } mp_ioapic_routing[MAX_IO_APICS];
 #endif
 
-void __init __iomem *arch_early_ioremap(unsigned long phys, unsigned long size)
-{
-	return early_ioremap(phys, size);
-}
-
-void __init arch_early_iounmap(void __iomem *virt, unsigned long size)
-{
-	early_iounmap(virt, size);
-}
-
 static __init struct sfi_table_simple *sfi_early_find_syst(void)
 {
 	unsigned long i;

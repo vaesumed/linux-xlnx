@@ -81,7 +81,7 @@ static void __iomem *sfi_map_memory(u32 phys, u32 size)
 	if (sfi_tbl_permanent_mapped)
 		return ioremap((unsigned long)phys, size);
 	else
-		return arch_early_ioremap((unsigned long)phys, size);
+		return early_ioremap((unsigned long)phys, size);
 }
 
 static void sfi_unmap_memory(void __iomem *virt, u32 size)
@@ -92,7 +92,7 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 	if (sfi_tbl_permanent_mapped)
 		iounmap(virt);
 	else
-		arch_early_iounmap(virt, size);
+		early_iounmap(virt, size);
 }
 
 static void sfi_print_table_header(u32 address, struct sfi_table_header *header)
