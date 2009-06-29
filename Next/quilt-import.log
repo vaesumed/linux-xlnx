@@ -1,0 +1,142 @@
+Importing driver-core.current based on 2.6.31-rc1
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 28d0325ce6e0a52f53d8af687e6427fee59004d3
+HEAD is now at 28d0325 Linux 2.6.31-rc1
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+devres-warn-and-return-don-t-crash-on-device_del-of-uninitialized-device.patch
+partitions-fix-broken-uevent_suppress-conversion.patch
+sound-remove-direct-access-of-driver_data.patch
+omap-video-remove-direct-access-of-driver_data.patch
+wm97xx_batery-replace-driver_data-with-dev_get_drvdata.patch
+driver-core-move-dev_get-set_drvdata-to-drivers-base-dd.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+ + d61771d...2c42869 master     -> quilt/driver-core.current  (forced update)
+Importing usb.current based on quilt/driver-core.current
+$ cd ../quilt-tmp
+$ git reset --hard 2c428694256482dcbe74c65d770d722253786b4f
+HEAD is now at 2c42869 Driver core: move dev_get/set_drvdata to drivers/base/dd.c
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-pl2303-new-vendor-and-product-id-for-the-prolific-driver.patch
+usb-gadget-fix-imx_udc-entry-in-kconfig.patch
+usb-ftdi_sio-product-id-s-for-ccs-pic-programmers.patch
+usb-fhci-mutually-exclusive-port_status.patch
+usb-ehci-update-toggle-state-for-linked-qhs.patch
+usb-isp1760-use-__devexit_p-for-remove-function.patch
+usb-option.c-add-qualcomm-option-icon-210-modem.patch
+usb-option.c-to-support-qisda-h21-h20-usb-modem.patch
+revert-usb-add-intel-langwell-usb-otg-transceiver-drive.patch
+usb-gadget-audio-provide-correct-device-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 40d7e8e...0bd15da master     -> quilt/usb.current  (forced update)
+Importing i2c based on 2.6.31-rc1-git3
+$ cd ../quilt-tmp
+$ git reset --hard 4075ea8c54a7506844a69f674990241e7766357b
+HEAD is now at 4075ea8 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/bp/bp
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-drop-i2c_driver-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + 72f3c35...02d02ac master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.31-rc1-git3
+$ cd ../quilt-tmp
+$ git reset --hard 4075ea8c54a7506844a69f674990241e7766357b
+HEAD is now at 4075ea8 Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/bp/bp
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-max6650-fix-lock-imbalance.patch
+hwmon-sht15-remove-unnecessary-semicolons.patch
+hwmon-vid-limit-AMD-0Fh-6-bit-VID.patch
+hwmon-abituguru3-dmi-probing-for-ab9-ab9-quadqt-and-ix38-quadgt.patch
+hwmon-driver-for-TI-TMP421-TMP422-TMP423-chips.patch
+hwmon-tmp421-add-documentation.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 96b0c49...ee84ec1 master     -> quilt/jdelvare-hwmon  (forced update)
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series device-mapper
+Importing ttydev based on 987fed3bf6982f2627d4fa242caa9026ef61132a
+$ cd ../quilt-tmp
+$ git reset --hard 987fed3bf6982f2627d4fa242caa9026ef61132a
+HEAD is now at 987fed3 Merge branch 'drm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-termios-leakfix
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:24: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+serial-add-irqflags-support
+tty-x86-termios-clean
+tty-usb-ftdi-ccsnew
+serial-txen-iir-fix
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+tty-cyclades-fix-const-assign
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 31398c6...6d08a65 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard 0bd15da27e066350cd212482c8bb8ad2a584f3cb
+HEAD is now at 0bd15da USB: gadget: audio: provide correct device id
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-devtmpfs-driver-core-maintained-dev-tmpfs.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 0e16dea...7625a54 master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard 7625a54f8339095bcebf594de4998774fc9f51ca
+HEAD is now at 7625a54 Driver Core: devtmpfs - kernel-maintained tmpfs-based /dev
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-ehci-dbg.c-no-need-for-checking-it-before-call-vfree.patch
+usb-sisusbvga-drop-usb_buffer_alloc.patch
+usb-usbmon-drop-kconfig-defaults.patch
+usb-usbmon-touch-up-the-documentation.patch
+usb-usbmon-end-ugly-tricks-with-dma-peeking.patch
+usb-let-usb_sg_init-to-set-transfer_buffer-more-often.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + 5aaf2ee...0c929aa master     -> quilt/usb  (forced update)
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 0c929aa0a313299ffc72ec6d8c8fca501d8ff70f
+HEAD is now at 0c929aa USB: Let usb_sg_init to set transfer_buffer more often
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-rt2870-add-usb-id-for-sitecom-wl-608.patch
+staging-vt6655-compile-fix.patch
+staging-rspiusb-use-null-virtual-address-instead-of-a-bogus-one.patch
+staging-android-binder-move-debugging-mask-into-a-macro.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:645: space before tab in indent.
+					    	     proc->pid, thread->pid, node->debug_id,
+warning: 1 line adds whitespace errors.
+staging-android-binder-remove-a-predefine.patch
+staging-android-binder-add-enum-usage-in-function-arguments.patch
+staging-android-binder-global-variable-cleanup.patch
+staging-android-binder-clean-up-for-all-the-stat-statments.patch
+staging-wlan-ng-scripts-checkpatch.pl-error-fixes.patch
+staging-et1310-fix-the-coding-style.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + 9af5fef...6742884 master     -> quilt/staging  (forced update)
