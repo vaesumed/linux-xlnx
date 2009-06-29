@@ -471,7 +471,7 @@ retry:
 			goto out_err;
 		}
 
-		ret = fsnotify_add_mark(&tmp_ientry->fsn_entry, group, inode);
+		ret = fsnotify_add_mark(&tmp_ientry->fsn_entry, group, inode, 0);
 		if (ret) {
 			inotify_remove_from_idr(group, tmp_ientry);
 			if (ret == -EEXIST)
