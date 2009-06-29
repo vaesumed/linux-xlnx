@@ -313,9 +313,10 @@ void fsnotify_init_mark(struct fsnotify_mark_entry *entry,
  * event types should be delivered to which group and for which inodes.
  */
 int fsnotify_add_mark(struct fsnotify_mark_entry *entry,
-		      struct fsnotify_group *group, struct inode *inode)
+		      struct fsnotify_group *group, struct inode *inode,
+		      int allow_dups)
 {
-	struct fsnotify_mark_entry *lentry;
+	struct fsnotify_mark_entry *lentry = NULL;
 	int ret = 0;
 
 	inode = igrab(inode);
@@ -335,7 +336,8 @@ int fsnotify_add_mark(struct fsnotify_mark_entry *entry,
 	entry->group = group;
 	entry->inode = inode;
 
-	lentry = fsnotify_find_mark_entry(group, inode);
+	if (!allow_dups)
+		lentry = fsnotify_find_mark_entry(group, inode);
 	if (!lentry) {
 		hlist_add_head(&entry->i_list, &inode->i_fsnotify_mark_entries);
 		list_add(&entry->g_list, &group->mark_entries);
