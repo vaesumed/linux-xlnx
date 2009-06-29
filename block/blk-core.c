@@ -501,6 +501,7 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 			(VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
 	q->backing_dev_info.state = 0;
 	q->backing_dev_info.capabilities = BDI_CAP_MAP_COPY;
+	q->backing_dev_info.name = "block";
 
 	err = bdi_init(&q->backing_dev_info);
 	if (err) {
@@ -594,8 +595,6 @@ blk_init_queue_node(request_fn_proc *rfn, spinlock_t *lock, int node_id)
 	blk_queue_make_request(q, __make_request);
 
 	q->sg_reserved_size = INT_MAX;
-
-	blk_set_cmd_filter_defaults(&q->cmd_filter);
 
 	/*
 	 * all done
@@ -2365,7 +2364,7 @@ int blk_rq_prep_clone(struct request *rq, struct request *rq_src,
 		__bio_clone(bio, bio_src);
 
 		if (bio_integrity(bio_src) &&
-		    bio_integrity_clone(bio, bio_src, gfp_mask))
+		    bio_integrity_clone(bio, bio_src, gfp_mask, bs))
 			goto free_and_out;
 
 		if (bio_ctr && bio_ctr(bio, bio_src, data))
