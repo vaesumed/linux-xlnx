@@ -534,6 +534,12 @@ acpi_status acpi_leave_sleep_state_prep(u8 sleep_state)
 			ACPI_EXCEPTION((AE_INFO, status, "During Method _BFS"));
 		}
 	}
+
+	/* Clear any pending events before enabling interrupts */
+
+	acpi_hw_disable_all_gpes();
+	acpi_clear_event(ACPI_EVENT_POWER_BUTTON);
+
 	return_ACPI_STATUS(status);
 }
 
@@ -578,15 +584,7 @@ acpi_status acpi_leave_sleep_state(u8 sleep_state)
 	/*
 	 * GPEs must be enabled before _WAK is called as GPEs
 	 * might get fired there
-	 *
-	 * Restore the GPEs:
-	 * 1) Disable/Clear all GPEs
-	 * 2) Enable all runtime GPEs
 	 */
-	status = acpi_hw_disable_all_gpes();
-	if (ACPI_FAILURE(status)) {
-		return_ACPI_STATUS(status);
-	}
 	status = acpi_hw_enable_all_runtime_gpes();
 	if (ACPI_FAILURE(status)) {
 		return_ACPI_STATUS(status);
@@ -610,15 +608,7 @@ acpi_status acpi_leave_sleep_state(u8 sleep_state)
 
 	/* Enable power button */
 
-	(void)
-	    acpi_write_bit_register(acpi_gbl_fixed_event_info
-			      [ACPI_EVENT_POWER_BUTTON].
-			      enable_register_id, ACPI_ENABLE_EVENT);
-
-	(void)
-	    acpi_write_bit_register(acpi_gbl_fixed_event_info
-			      [ACPI_EVENT_POWER_BUTTON].
-			      status_register_id, ACPI_CLEAR_STATUS);
+	acpi_enable_event(ACPI_EVENT_POWER_BUTTON, 0);
 
 	arg.integer.value = ACPI_SST_WORKING;
 	status = acpi_evaluate_object(NULL, METHOD_NAME__SST, &arg_list, NULL);
