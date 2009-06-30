@@ -1,0 +1,69 @@
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Unchanged quilt series kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series device-mapper
+Importing ttydev based on 52989765629e7d182b4f146050ebba0abf2cb0b7
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 52989765629e7d182b4f146050ebba0abf2cb0b7
+HEAD is now at 5298976 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-termios-leakfix
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:24: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+serial-add-irqflags-support
+tty-x86-termios-clean
+tty-usb-ftdi-ccsnew
+serial-txen-iir-fix
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+tty-cyclades-fix-const-assign
+net-slip-ttyfix
+kfifo-const
+dmi-sanity
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 6d08a65...2db8616 master     -> quilt/ttydev  (forced update)
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
+Unchanged quilt series driver-core.current
+Unchanged quilt series usb.current
+Unchanged quilt series i2c
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.31-rc1-git5
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 52989765629e7d182b4f146050ebba0abf2cb0b7
+HEAD is now at 5298976 Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/net-2.6
+$ git quiltimport --author Randy Dunlap <randy.dunlap@oracle.com> --patches ../quilt/kernel-doc
+docum-update-exception.patch
+docum-move-x86-exception.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/kernel-doc
+From ../quilt-tmp
+   6123923..de162fe  master     -> quilt/kernel-doc
+Unchanged quilt series rr
+Unchanged quilt series device-mapper
+Unchanged quilt series ttydev
+Unchanged quilt series aoe
+Unchanged quilt series driver-core
+Unchanged quilt series usb
+Unchanged quilt series staging
