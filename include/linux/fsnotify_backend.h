@@ -58,9 +58,13 @@
 				   FS_MOVED_FROM | FS_MOVED_TO | FS_CREATE |\
 				   FS_DELETE)
 
+#define FS_MOVE			(FS_MOVED_FROM | FS_MOVED_TO)
+
 /* listeners that hard code group numbers near the top */
 #define DNOTIFY_GROUP_NUM	UINT_MAX
-#define INOTIFY_GROUP_NUM	(DNOTIFY_GROUP_NUM-1)
+#define AUDIT_WATCH_GROUP_NUM	(DNOTIFY_GROUP_NUM-1)
+#define AUDIT_TREE_GROUP_NUM	(AUDIT_WATCH_GROUP_NUM-1)
+#define INOTIFY_GROUP_NUM	(AUDIT_TREE_GROUP_NUM-1)
 
 struct fsnotify_group;
 struct fsnotify_event;
@@ -280,7 +284,7 @@ static inline void __fsnotify_update_dcache_flags(struct dentry *dentry)
 	assert_spin_locked(&dentry->d_lock);
 
 	parent = dentry->d_parent;
-	if (fsnotify_inode_watches_children(parent->d_inode))
+	if (parent->d_inode && fsnotify_inode_watches_children(parent->d_inode))
 		dentry->d_flags |= DCACHE_FSNOTIFY_PARENT_WATCHED;
 	else
 		dentry->d_flags &= ~DCACHE_FSNOTIFY_PARENT_WATCHED;
@@ -339,8 +343,10 @@ extern void fsnotify_recalc_inode_mask(struct inode *inode);
 extern void fsnotify_init_mark(struct fsnotify_mark_entry *entry, void (*free_mark)(struct fsnotify_mark_entry *entry));
 /* find (and take a reference) to a mark associated with group and inode */
 extern struct fsnotify_mark_entry *fsnotify_find_mark_entry(struct fsnotify_group *group, struct inode *inode);
+/* copy the values from old into new */
+extern void fsnotify_duplicate_mark(struct fsnotify_mark_entry *new, struct fsnotify_mark_entry *old);
 /* attach the mark to both the group and the inode */
-extern int fsnotify_add_mark(struct fsnotify_mark_entry *entry, struct fsnotify_group *group, struct inode *inode);
+extern int fsnotify_add_mark(struct fsnotify_mark_entry *entry, struct fsnotify_group *group, struct inode *inode, int allow_dups);
 /* given a mark, flag it to be freed when all references are dropped */
 extern void fsnotify_destroy_mark_by_entry(struct fsnotify_mark_entry *entry);
 /* run all the marks in a group, and flag them to be freed */
