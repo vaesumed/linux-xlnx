@@ -37,26 +37,15 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
-struct sfi_table_desc {
-	struct sfi_table_header		header;	/* copy of the header info */
-	struct sfi_table_header		*pointer;
-	u64				address;
-	u32				flags;
-};
-
 /* SFI internal root SYSTem table */
 struct sfi_internal_syst {
-	struct sfi_table_desc	*tables;
-	u32			count;
-	u32			size;
+	u64			syst_addr;	/* phy addr */
+	struct sfi_table_simple	*syst;		/* virt addr */
+	u32			syst_len;
 };
 
 extern int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 			 uint flags, struct sfi_table_header **out_table);
 extern void sfi_put_table(struct sfi_table_header *table);
 
-extern int sfi_acpi_init(void);
 extern struct sfi_internal_syst sfi_tblist;
-void sfi_tb_install_table(u64 address, u32 flags);
-
-#define SFI_ACPI_TABLE	1

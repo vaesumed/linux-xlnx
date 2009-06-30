@@ -309,6 +309,12 @@ static int __init sfi_parse_ioapic(struct sfi_table_header *table)
 }
 #endif /* CONFIG_X86_IO_APIC */
 
+static int __init sfi_parse_mcfg(struct sfi_table_header *table)
+{
+	pr_info("%s() successfully get called\n", __func__);
+	return 0;
+}
+
 /*
  * sfi_platform_init(): register lapics & io-apics
  */
@@ -321,5 +327,6 @@ int __init sfi_platform_init(void)
 #ifdef CONFIG_X86_IO_APIC
 	sfi_table_parse(SFI_SIG_APIC, NULL, NULL, 0, sfi_parse_ioapic);
 #endif
+	sfi_table_parse("MCFG", NULL, NULL, SFI_ACPI_TABLE, sfi_parse_mcfg);
 	return 0;
 }

@@ -40,11 +40,6 @@
 #ifndef _LINUX_SFI_H
 #define _LINUX_SFI_H
 
-#ifdef	CONFIG_SFI
-
-#define SFI_SYST_SEARCH_BEGIN		0x000E0000
-#define SFI_SYST_SEARCH_END		0x000FFFFF
-
 /* Table signatures reserved by the SFI specification */
 #define SFI_SIG_SYST		"SYST"
 #define SFI_SIG_FREQ		"FREQ"
@@ -57,9 +52,15 @@
 #define SFI_SIG_XSDT		"XSDT"
 #define SFI_SIG_WAKE		"WAKE"
 
+#define SFI_ACPI_TABLE		(1 << 0)
+#define SFI_NORMAL_TABLE	(1 << 1)
+
 #define SFI_SIGNATURE_SIZE	4
 #define SFI_OEM_ID_SIZE		6
 #define SFI_OEM_TABLE_ID_SIZE	8
+
+#define SFI_SYST_SEARCH_BEGIN		0x000E0000
+#define SFI_SYST_SEARCH_END		0x000FFFFF
 
 #define SFI_GET_ENTRY_NUM(ptable, entry) \
 	((ptable->header.length - sizeof(struct sfi_table_header)) / \
@@ -125,12 +126,13 @@ struct sfi_rtc_table_entry {
 	u32	irq;
 } __attribute__ ((packed));
 
+typedef int (*sfi_table_handler) (struct sfi_table_header *table);
+
+#ifdef	CONFIG_SFI
 extern int __init sfi_init_memory_map(void);
 extern int __init sfi_init(void);
 extern int __init sfi_platform_init(void);
 extern void __init sfi_init_late(void);
-
-typedef int (*sfi_table_handler) (struct sfi_table_header *table);
 
 int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 			uint flag, sfi_table_handler handler);
