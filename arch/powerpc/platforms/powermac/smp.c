@@ -952,7 +952,7 @@ void __init pmac_setup_smp(void)
 		int cpu;
 
 		for (cpu = 1; cpu < 4 && cpu < NR_CPUS; ++cpu)
-			cpu_set(cpu, cpu_possible_map);
+			set_cpu_possible(cpu, true);
 		smp_ops = &psurge_smp_ops;
 	}
 #endif /* CONFIG_PPC32 */
