@@ -91,19 +91,6 @@
 #define	MCFSIM_DMA3ICR		MCFSIM_ICR9	/* DMA 3 ICR */
 
 /*
- *	Macro to set IMR register. It is 32 bits on the 5407.
- */
-#define	mcf_getimr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR))
-
-#define	mcf_setimr(imr)		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IMR)) = (imr);
-
-#define	mcf_getipr()		\
-	*((volatile unsigned long *) (MCF_MBAR + MCFSIM_IPR))
-
-
-/*
  *	Some symbol defines for the Parallel Port Pin Assignment Register
  */
 #define MCFSIM_PAR_DREQ0        0x40            /* Set to select DREQ0 input */
@@ -118,6 +105,11 @@
 #define IRQ3_LEVEL6	0x40
 #define IRQ1_LEVEL2	0x20
 
+/*
+ *	Define system peripheral IRQ usage.
+ */
+#define	MCF_IRQ_TIMER		30		/* Timer0, Level 6 */
+#define	MCF_IRQ_PROFILER	31		/* Timer1, Level 7 */
 
 /*
  *	Define the Cache register flags.
