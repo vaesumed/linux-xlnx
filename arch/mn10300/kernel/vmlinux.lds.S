@@ -118,6 +118,7 @@ SECTIONS
   /* Sections to be discarded */
   /DISCARD/ : {
 	EXIT_CALL
+	*(.discard)
 	}
 
   STABS_DEBUG
