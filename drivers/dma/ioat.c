@@ -60,6 +60,8 @@ static struct pci_device_id ioat_pci_tbl[] = {
 	{ 0, }
 };
 
+MODULE_DEVICE_TABLE(pci, ioat_pci_tbl);
+
 struct ioat_device {
 	struct pci_dev		*pdev;
 	void __iomem		*iobase;
