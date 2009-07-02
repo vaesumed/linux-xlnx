@@ -37,7 +37,7 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
-extern int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
-			 uint flags, struct sfi_table_header **out_table);
+//extern struct sfi_table_header *sfi_get_table(char *signature, char *oem_id,
+//			char *oem_table_id, uint flags);
 extern void sfi_put_table(struct sfi_table_header *table);
 extern int sfi_check_table(u64 paddr);
