@@ -56,9 +56,11 @@
 
 #include "sfi_core.h"
 
-#define on_same_page(addr1, addr2) \
+#define ON_SAME_PAGE(addr1, addr2) \
 	(((unsigned long)(addr1) & PAGE_MASK) == \
 	((unsigned long)(addr2) & PAGE_MASK))
+#define ON_SYST_PA(pa, size) (ON_SAME_PAGE(syst_pa, pa) && \
+				ON_SAME_PAGE(syst_pa, pa + size))
 
 int sfi_disabled __read_mostly;
 EXPORT_SYMBOL(sfi_disabled);
@@ -115,22 +117,6 @@ static u8 sfi_checksum_table(void *buffer, u32 length)
 	return sum;
 }
 
-/* check if the table can be covered by SYST's virtual memory map */
-static int table_need_remap(u64 addr, u32 size)
-{
-	u64 start, end;
-
-	start = syst_pa;
-	end = start + syst_va->header.length;
-
-	if (addr < start) {
-		if (on_same_page(addr, start))
-			return 0;
-	} else if (on_same_page((addr + size), end))
-		return 0;
-
-	return 1;
-}
 
 
 /* Verifies if the table checksums is zero */
@@ -153,7 +139,7 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 		unsigned int flags, struct sfi_table_header **out_table)
 {
 	struct sfi_table_header *th;
-	int offset, need_remap;
+	int offset, do_remap;
 	u64 *paddr;
 	u32 addr, length, tbl_cnt;
 	u32 i;
@@ -164,9 +150,9 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 
 	for (i = 0; i < tbl_cnt; i++) {
 		addr = *paddr++;
-		need_remap = table_need_remap(addr, sizeof(struct sfi_table_header));
+		do_remap = !ON_SYST_PA(addr, sizeof(struct sfi_table_header));
 
-		if (need_remap) {
+		if (do_remap) {
 			th = sfi_map_memory(addr, sizeof(struct sfi_table_header));
 			if (!th)
 				return -1;
@@ -176,11 +162,11 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 		}
 		length = th->length;
 
-		if (need_remap)
+		if (do_remap)
 			sfi_unmap_memory(th, sizeof(struct sfi_table_header));
 
-		need_remap = table_need_remap(addr, length);
-		if (need_remap) {
+		do_remap = !ON_SYST_PA(addr, length);
+		if (do_remap) {
 			th = sfi_map_memory(addr, length);
 			if (!th)
 				return -1;
@@ -199,7 +185,7 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 		*out_table = th;
 		return 0;
 loop_continue:
-		if (need_remap)
+		if (do_remap)
 			sfi_unmap_memory(th, length);
 	}
 
@@ -208,9 +194,9 @@ loop_continue:
 
 void sfi_put_table(struct sfi_table_header *table)
 {
-	if (!on_same_page(((void *)table + table->length),
+	if (!ON_SAME_PAGE(((void *)table + table->length),
 		(void *)syst_va + syst_va->header.length)
-		&& !on_same_page(table, syst_va))
+		&& !ON_SAME_PAGE(table, syst_va))
 		sfi_unmap_memory(table, table->length);
 }
 
@@ -243,10 +229,10 @@ int __init sfi_check_table(u64 paddr)
 {
 	struct sfi_table_header *th;
 	unsigned long addr = (unsigned long)paddr;
-	int length, need_remap, ret, offset;
+	int length, do_remap, ret, offset;
 
-	need_remap = table_need_remap(addr, sizeof(struct sfi_table_header));
-	if (need_remap) {
+	do_remap = !ON_SYST_PA(addr, sizeof(struct sfi_table_header));
+	if (do_remap) {
 		th = sfi_map_memory(addr, sizeof(struct sfi_table_header));
 		if (!th)
 			return -1;
@@ -256,11 +242,11 @@ int __init sfi_check_table(u64 paddr)
 	}
 	length = th->length;
 
-	if (need_remap)
+	if (do_remap)
 		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
 
-	need_remap = table_need_remap(addr, length);
-	if (need_remap) {
+	do_remap = !ON_SYST_PA(addr, length);
+	if (do_remap) {
 		th = sfi_map_memory(addr, length);
 		if (!th)
 			return -1;
@@ -270,7 +256,7 @@ int __init sfi_check_table(u64 paddr)
 	if (!ret)
 		sfi_print_table_header(addr, th);
 
-	if (need_remap)
+	if (do_remap)
 		sfi_unmap_memory(th, length);
 
 	return ret;
