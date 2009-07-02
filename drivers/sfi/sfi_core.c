@@ -128,34 +128,42 @@ static int sfi_verify_checksum(struct sfi_table_header *table)
 	return 0;
 }
 
+/*
+ * sfi_map_table()
+ *
+ * Return address of mapped table
+ * Check for common case that we can re-use mapping to SYST,
+ * which requires syst_pa, syst_va to be initialized.
+ */
 static struct sfi_table_header *sfi_map_table(u64 pa)
 {
 	struct sfi_table_header *th;
-	int do_remap;
 	u32 length;
 
-	do_remap = !TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header));
-
-	if (do_remap) {
+	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header))) {
 		th = sfi_map_memory(pa, sizeof(struct sfi_table_header));
 	} else {
 		th = (void *)syst_va - (syst_pa - pa);
 	}
 
+ 	 /* If table fits on same page as its header, we are done */
+	if (TABLE_ON_PAGE(th, th, th->length))
+		return th;
+
+	/* entire table does not fit on same page as SYST */
 	length = th->length;
 
-	// TBD: if table fits on same page as header, no need to unmap and map
-	if (do_remap)
+	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header))) {
 		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
-
-	if (!TABLE_ON_PAGE(syst_pa, pa, length))
-		th = sfi_map_memory(pa, length);
-
-	return th;
+	}
+	return (sfi_map_memory(pa, length));
 }
 
 /*
- * If sfi_map_table() created this table mapping, take it down
+ * sfi_unmap_table()
+ *
+ * undoes effect of sfi_map_table() by unmapping table
+ * if it did not completely fit on same page as SYST.
  */
 static void sfi_unmap_table(struct sfi_table_header *th)
 {
@@ -233,8 +241,6 @@ EXPORT_SYMBOL_GPL(sfi_table_parse);
 
 /*
  * sfi_check_table(pa)
- *
- * requires syst_pa and syst_va to be initialized
  */
 int __init sfi_check_table(u64 pa)
 {
