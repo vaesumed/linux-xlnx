@@ -107,28 +107,22 @@ static void sfi_print_table_header(unsigned long long pa,
 		header->oem_table_id);
 }
 
-static u8 sfi_checksum_table(void *buffer, u32 length)
+/*
+ * Verify table checksum  -- errors are usually fatal
+ */
+static int sfi_verify_checksum(struct sfi_table_header *table)
 {
-	u8 sum = 0;
-	u8 *puchar = buffer;
+
+	u8 checksum = 0;
+	u8 *puchar = (u8 *)table;
+	u32 length = table->length;
 
 	while (length--)
-		sum += *puchar++;
-	return sum;
-}
+		checksum += *puchar++;
 
-
-
-/* Verifies if the table checksums is zero */
-static int sfi_tb_verify_checksum(struct sfi_table_header *table)
-{
-	u8 checksum;
-
-	checksum = sfi_checksum_table(table, table->length);
 	if (checksum) {
-		pr_warning("Incorrect checksum in table [%4.4s] -  %2.2X,"
-			" should be %2.2X\n", table->signature,
-			table->checksum, (u8)(table->checksum - checksum));
+		pr_err("Checksum %2.2X should be %2.2X\n",
+			table->checksum, table->checksum - checksum);
 		return -1;
 	}
 	return 0;
@@ -250,9 +244,9 @@ int __init sfi_check_table(u64 pa)
 	th = sfi_map_table(pa);
 	if (!th)
 		return -1;
-	ret = sfi_tb_verify_checksum(th);
-	if (!ret)
-		sfi_print_table_header(pa, th);
+
+	sfi_print_table_header(pa, th);
+	ret = sfi_verify_checksum(th);
 
 	sfi_unmap_table(th);
 
@@ -262,6 +256,8 @@ int __init sfi_check_table(u64 pa)
 /*
  * sfi_parse_syst()
  * checksum all the tables in SYST and print their headers
+ *
+ * success: set syst_va, return 0
  */
 static int __init sfi_parse_syst(void)
 {
@@ -270,8 +266,6 @@ static int __init sfi_parse_syst(void)
 	syst_va = sfi_map_memory(syst_pa, sizeof(struct sfi_table_simple));
 	if (!syst_va)
 		return -1;
-
-	sfi_print_table_header(syst_pa, &syst_va->header);
 
 	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
 	for (i = 0; i < tbl_cnt; i++) {
@@ -302,20 +296,25 @@ static __init int sfi_find_syst(void)
 		return -1;
 
 	for (offset = 0; offset < len; offset += 16) {
-		struct sfi_table_header *syst;
+		struct sfi_table_header *syst_hdr;
 
-		syst = start + offset;
-		if (strncmp(syst->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
+		syst_hdr = start + offset;
+		if (strncmp(syst_hdr->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
 			continue;
 
-		if (sfi_tb_verify_checksum(syst))
+		if (syst_hdr->length > PAGE_SIZE)
+			continue;
+
+		sfi_print_table_header(SFI_SYST_SEARCH_BEGIN + offset, syst_hdr);
+
+		if (sfi_verify_checksum(syst_hdr))
 			continue;
 
 		/*
  		 * Enforce SFI spec mandate that SYST reside within a page.
  		 */
-		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst->length)) {
-			pr_debug("SYST 0x%llx + 0x%x crosses page\n", syst_pa, syst->length);
+		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst_hdr->length)) {
+			pr_debug("SYST 0x%llx + 0x%x crosses page\n", syst_pa, syst_hdr->length);
 			continue;
 		}
 
