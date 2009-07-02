@@ -130,7 +130,7 @@ typedef int (*sfi_table_handler) (struct sfi_table_header *table);
 
 #ifdef	CONFIG_SFI
 extern int __init sfi_init_memory_map(void);
-extern int __init sfi_init(void);
+extern void __init sfi_init(void);
 extern int __init sfi_platform_init(void);
 extern void __init sfi_init_late(void);
 
@@ -150,9 +150,9 @@ static inline int sfi_init_memory_map(void)
 	return -1;
 }
 
-static inline int sfi_init(void)
+static inline void sfi_init(void)
 {
-	return 0;
+	return;
 }
 
 static inline void sfi_init_late(void)

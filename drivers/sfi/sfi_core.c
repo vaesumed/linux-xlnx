@@ -65,7 +65,7 @@
 int sfi_disabled __read_mostly;
 EXPORT_SYMBOL(sfi_disabled);
 
-static unsigned long syst_pa __read_mostly;
+static u64 syst_pa __read_mostly;
 static struct sfi_table_simple *syst_va __read_mostly;
 
 /*
@@ -76,7 +76,7 @@ static struct sfi_table_simple *syst_va __read_mostly;
  */
 static u32 sfi_use_ioremap __read_mostly;
 
-static void __iomem *sfi_map_memory(unsigned long phys, u32 size)
+static void __iomem *sfi_map_memory(u64 phys, u32 size)
 {
 	if (!phys || !size)
 		return NULL;
@@ -98,12 +98,12 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 		early_iounmap(virt, size);
 }
 
-static void sfi_print_table_header(unsigned long address,
+static void sfi_print_table_header(unsigned long long pa,
 				struct sfi_table_header *header)
 {
-	pr_info("%4.4s %08x, %04X (r%d %6.6s %8.8s)\n",
-		header->signature, address,
-		(u32)header->length, header->revision, header->oem_id,
+	pr_info("%4.4s %llX, %04X (r%d %6.6s %8.8s)\n",
+		header->signature, pa,
+		header->length, header->revision, header->oem_id,
 		header->oem_table_id);
 }
 
@@ -141,7 +141,8 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 	struct sfi_table_header *th;
 	int offset, do_remap;
 	u64 *paddr;
-	u32 addr, length, tbl_cnt;
+	u32 length, tbl_cnt;
+	u64 addr;
 	u32 i;
 
 	/* walk through all SFI tables */
@@ -228,16 +229,15 @@ EXPORT_SYMBOL_GPL(sfi_table_parse);
 int __init sfi_check_table(u64 paddr)
 {
 	struct sfi_table_header *th;
-	unsigned long addr = (unsigned long)paddr;
 	int length, do_remap, ret, offset;
 
-	do_remap = !ON_SYST_PA(addr, sizeof(struct sfi_table_header));
+	do_remap = !ON_SYST_PA(paddr, sizeof(struct sfi_table_header));
 	if (do_remap) {
-		th = sfi_map_memory(addr, sizeof(struct sfi_table_header));
+		th = sfi_map_memory(paddr, sizeof(struct sfi_table_header));
 		if (!th)
 			return -1;
 	} else {
-		offset = syst_pa - addr;
+		offset = syst_pa - paddr;
 		th = (void *)syst_va - offset;
 	}
 	length = th->length;
@@ -245,16 +245,16 @@ int __init sfi_check_table(u64 paddr)
 	if (do_remap)
 		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
 
-	do_remap = !ON_SYST_PA(addr, length);
+	do_remap = !ON_SYST_PA(paddr, length);
 	if (do_remap) {
-		th = sfi_map_memory(addr, length);
+		th = sfi_map_memory(paddr, length);
 		if (!th)
 			return -1;
 	}
 
 	ret = sfi_tb_verify_checksum(th);
 	if (!ret)
-		sfi_print_table_header(addr, th);
+		sfi_print_table_header(paddr, th);
 
 	if (do_remap)
 		sfi_unmap_memory(th, length);
@@ -263,20 +263,19 @@ int __init sfi_check_table(u64 paddr)
 }
 
 /*
- * SFI 0.7 requires that the whole SYST s on a single page
- * TBD: so we need to enforce that here.
+ * sfi_parse_syst()
+ * checksum all the tables in SYST and print their headers
  */
-static int __init sfi_parse_syst(unsigned long syst_addr)
+static int __init sfi_parse_syst(void)
 {
 	u64 *paddr;
 	int tbl_cnt, i;
 
-	syst_va = sfi_map_memory(syst_addr, sizeof(struct sfi_table_simple));
+	syst_va = sfi_map_memory(syst_pa, sizeof(struct sfi_table_simple));
 	if (!syst_va)
-		return -ENOMEM;
+		return -1;
 
-	sfi_print_table_header(syst_addr, &syst_va->header);
-	syst_pa = syst_addr;
+	sfi_print_table_header(syst_pa, &syst_va->header);
 
 	/* check all the tables in SYST */
 	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
@@ -294,8 +293,11 @@ static int __init sfi_parse_syst(unsigned long syst_addr)
  * physical address 0x000E0000 and 0x000FFFFF. The OS shall search this region
  * starting at the low address and shall stop searching when the 1st valid SFI
  * System Table is found.
+ *
+ * success: set syst_pa, return 0
+ * fail: return -1
  */
-static __init unsigned long sfi_find_syst(void)
+static __init int sfi_find_syst(void)
 {
 	unsigned long offset, len;
 	void *start;
@@ -303,7 +305,7 @@ static __init unsigned long sfi_find_syst(void)
 	len = SFI_SYST_SEARCH_END - SFI_SYST_SEARCH_BEGIN;
 	start = sfi_map_memory(SFI_SYST_SEARCH_BEGIN, len);
 	if (!start)
-		return 0;
+		return -1;
 
 	for (offset = 0; offset < len; offset += 16) {
 		struct sfi_table_header *syst;
@@ -312,53 +314,40 @@ static __init unsigned long sfi_find_syst(void)
 		if (strncmp(syst->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
 			continue;
 
-		if (!sfi_tb_verify_checksum(syst)) {
-			sfi_unmap_memory(start, len);
-			return SFI_SYST_SEARCH_BEGIN + offset;
+		if (sfi_tb_verify_checksum(syst))
+			continue;
+
+		/*
+ 		 * Enforce SFI spec mandate that SYST reside within a page.
+ 		 */
+		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst->length)) {
+			pr_debug("SYST 0x%llx + 0x%x crosses page\n", syst_pa, syst->length);
+			continue;
 		}
+
+		/* success */
+		syst_pa = SFI_SYST_SEARCH_BEGIN + offset;
+		sfi_unmap_memory(start, len);
+		return 0;
 	}
 
 	sfi_unmap_memory(start, len);
-	return 0;
-}
-
-int __init sfi_table_init(void)
-{
-	unsigned long syst_pa;
-	int status;
-
-	syst_pa = sfi_find_syst();
-	if (!syst_pa) {
-		pr_warning("No system table\n");
-		goto err_exit;
-	}
-
-	status = sfi_parse_syst(syst_pa);
-	if (status)
-		goto err_exit;
-
-	return 0;
-err_exit:
-	disable_sfi();
 	return -1;
 }
 
-int __init sfi_init(void)
+void __init sfi_init(void)
 {
-	if (!acpi_disabled) {
+	if (!acpi_disabled)
 		disable_sfi();
-		return -1;
-	}
 
 	if (sfi_disabled)
-		return -1;
+		return;
 
-	pr_info("Simple Firmware Interface v0.6\n");
+	pr_info("Simple Firmware Interface v0.7 http://simplefirmware.org\n");
 
-	if (sfi_table_init())
-		return -1;
-
-	return sfi_platform_init();
+	if (sfi_find_syst() || sfi_parse_syst() || sfi_platform_init())
+		disable_sfi();
+	return;	
 }
 
 void __init sfi_init_late(void)
