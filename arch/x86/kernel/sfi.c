@@ -110,7 +110,7 @@ int __init sfi_init_memory_map(void)
 	}
 
 	/* refer copy_e820_memory() */
-	num = SFI_GET_ENTRY_NUM(mmapt, struct sfi_mem_entry);
+	num = SFI_GET_NUM_ENTRIES(mmapt, struct sfi_mem_entry);
 	mentry = (struct sfi_mem_entry *)mmapt->pentry;
 	for (i = 0; i < num; i++) {
 		start = mentry->phy_start;
@@ -193,7 +193,7 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 	int cpu_num;
 
 	sb = (struct sfi_table_simple *)table;
-	cpu_num = SFI_GET_ENTRY_NUM(sb, struct sfi_cpu_table_entry);
+	cpu_num = SFI_GET_NUM_ENTRIES(sb, struct sfi_cpu_table_entry);
 	pentry = (struct sfi_cpu_table_entry *)sb->pentry;
 
 	for (i = 0; i < cpu_num; i++) {
@@ -294,7 +294,7 @@ static int __init sfi_parse_ioapic(struct sfi_table_header *table)
 	int i, num;
 
 	sb = (struct sfi_table_simple *)table;
-	num = SFI_GET_ENTRY_NUM(sb, struct sfi_apic_table_entry);
+	num = SFI_GET_NUM_ENTRIES(sb, struct sfi_apic_table_entry);
 	pentry = (struct sfi_apic_table_entry *)sb->pentry;
 
 	for (i = 0; i < num; i++) {

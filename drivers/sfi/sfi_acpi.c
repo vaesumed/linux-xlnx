@@ -59,7 +59,7 @@
  *
  * Parse the ACPI XSDT for later access by sfi_acpi_table_parse().
  */
-static int sfi_acpi_parse_xsdt(struct sfi_table_header *table)
+static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 {
 	int tbl_cnt, i;
 	struct acpi_table_xsdt *xsdt = (struct acpi_table_xsdt *)table;
@@ -77,7 +77,7 @@ static int sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 	return 0;
 }
 
-int sfi_acpi_init()
+int __init sfi_acpi_init(void)
 {
 	sfi_table_parse(SFI_SIG_XSDT, NULL, NULL, 0, sfi_acpi_parse_xsdt);
 	return 0;

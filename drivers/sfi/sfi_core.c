@@ -63,8 +63,8 @@
 int sfi_disabled __read_mostly;
 EXPORT_SYMBOL(sfi_disabled);
 
-unsigned long syst_paddr __read_mostly;
-struct sfi_table_simple *psyst __read_mostly;
+static unsigned long syst_pa __read_mostly;
+static struct sfi_table_simple *syst_va __read_mostly;
 
 /*
  * flag for whether using ioremap() to map the sfi tables, if yes
@@ -120,8 +120,8 @@ static int table_need_remap(u64 addr, u32 size)
 {
 	u64 start, end;
 
-	start = syst_paddr;
-	end = start + psyst->header.length;
+	start = syst_pa;
+	end = start + syst_va->header.length;
 
 	if (addr < start) {
 		if (on_same_page(addr, start))
@@ -159,8 +159,8 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 	u32 i;
 
 	/* walk through all SFI tables */
-	tbl_cnt = SFI_GET_ENTRY_NUM(psyst, u64);
-	paddr = (u64 *) psyst->pentry;
+	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
+	paddr = (u64 *) syst_va->pentry;
 
 	for (i = 0; i < tbl_cnt; i++) {
 		addr = *paddr++;
@@ -171,8 +171,8 @@ int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 			if (!th)
 				return -1;
 		} else {
-			offset = syst_paddr - addr;
-			th = (void *)psyst - offset;
+			offset = syst_pa - addr;
+			th = (void *)syst_va - offset;
 		}
 		length = th->length;
 
@@ -209,8 +209,8 @@ loop_continue:
 void sfi_put_table(struct sfi_table_header *table)
 {
 	if (!on_same_page(((void *)table + table->length),
-		(void *)psyst + psyst->header.length)
-		&& !on_same_page(table, psyst))
+		(void *)syst_va + syst_va->header.length)
+		&& !on_same_page(table, syst_va))
 		sfi_unmap_memory(table, table->length);
 }
 
@@ -234,8 +234,12 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 }
 EXPORT_SYMBOL_GPL(sfi_table_parse);
 
-/* syst_paddr and psyst should be inited before this get called */
-int sfi_check_table(u64 paddr)
+/*
+ * sfi_check_table(paddr)
+ *
+ * requires syst_pa and syst_va to be initialized
+ */
+int __init sfi_check_table(u64 paddr)
 {
 	struct sfi_table_header *th;
 	unsigned long addr = (unsigned long)paddr;
@@ -247,8 +251,8 @@ int sfi_check_table(u64 paddr)
 		if (!th)
 			return -1;
 	} else {
-		offset = syst_paddr - addr;
-		th = (void *)psyst - offset;
+		offset = syst_pa - addr;
+		th = (void *)syst_va - offset;
 	}
 	length = th->length;
 
@@ -272,22 +276,25 @@ int sfi_check_table(u64 paddr)
 	return ret;
 }
 
-/* SFI spec 0.7 defines that the whole SYST should be in one page */
+/*
+ * SFI 0.7 requires that the whole SYST s on a single page
+ * TBD: so we need to enforce that here.
+ */
 static int __init sfi_parse_syst(unsigned long syst_addr)
 {
 	u64 *paddr;
 	int tbl_cnt, i;
 
-	psyst = sfi_map_memory(syst_addr, sizeof(struct sfi_table_simple));
-	if (!psyst)
+	syst_va = sfi_map_memory(syst_addr, sizeof(struct sfi_table_simple));
+	if (!syst_va)
 		return -ENOMEM;
 
-	sfi_print_table_header(syst_addr, &psyst->header);
-	syst_paddr = syst_addr;
+	sfi_print_table_header(syst_addr, &syst_va->header);
+	syst_pa = syst_addr;
 
 	/* check all the tables in SYST */
-	tbl_cnt = SFI_GET_ENTRY_NUM(psyst, u64);
-	paddr = (u64 *) psyst->pentry;
+	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
+	paddr = (u64 *) syst_va->pentry;
 	for (i = 0; i < tbl_cnt; i++) {
 		if (sfi_check_table(*paddr++))
 			return -1;
@@ -331,16 +338,16 @@ static __init unsigned long sfi_find_syst(void)
 
 int __init sfi_table_init(void)
 {
-	unsigned long syst_paddr;
+	unsigned long syst_pa;
 	int status;
 
-	syst_paddr = sfi_find_syst();
-	if (!syst_paddr) {
+	syst_pa = sfi_find_syst();
+	if (!syst_pa) {
 		pr_warning("No system table\n");
 		goto err_exit;
 	}
 
-	status = sfi_parse_syst(syst_paddr);
+	status = sfi_parse_syst(syst_pa);
 	if (status)
 		goto err_exit;
 
@@ -375,12 +382,12 @@ void __init sfi_init_late(void)
 	if (sfi_disabled)
 		return;
 
-	length = psyst->header.length;
-	sfi_unmap_memory(psyst, sizeof(struct sfi_table_simple));
+	length = syst_va->header.length;
+	sfi_unmap_memory(syst_va, sizeof(struct sfi_table_simple));
 
 	/* use ioremap now after it is ready */
 	sfi_use_ioremap = 1;
-	psyst = sfi_map_memory(syst_paddr, length);
+	syst_va = sfi_map_memory(syst_pa, length);
 }
 
 static int __init sfi_parse_cmdline(char *arg)

@@ -62,9 +62,9 @@
 #define SFI_SYST_SEARCH_BEGIN		0x000E0000
 #define SFI_SYST_SEARCH_END		0x000FFFFF
 
-#define SFI_GET_ENTRY_NUM(ptable, entry) \
+#define SFI_GET_NUM_ENTRIES(ptable, entry_type) \
 	((ptable->header.length - sizeof(struct sfi_table_header)) / \
-	(sizeof(entry)))
+	(sizeof(entry_type)))
 /*
  * Table structures must be byte-packed to match the SFI specification,
  * as they are provided by the BIOS.
