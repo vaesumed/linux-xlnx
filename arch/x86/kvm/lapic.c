@@ -34,6 +34,7 @@
 #include <asm/atomic.h>
 #include "kvm_cache_regs.h"
 #include "irq.h"
+#include "trace.h"
 
 #ifndef CONFIG_X86_64
 #define mod_64(x, y) ((x) - (y) * div64_u64(x, y))
@@ -165,22 +166,34 @@ static int find_highest_vector(void *bitmap)
 
 static inline int apic_test_and_set_irr(int vec, struct kvm_lapic *apic)
 {
+	apic->irr_pending = true;
 	return apic_test_and_set_vector(vec, apic->regs + APIC_IRR);
 }
 
-static inline void apic_clear_irr(int vec, struct kvm_lapic *apic)
+static inline int apic_search_irr(struct kvm_lapic *apic)
 {
-	apic_clear_vector(vec, apic->regs + APIC_IRR);
+	return find_highest_vector(apic->regs + APIC_IRR);
 }
 
 static inline int apic_find_highest_irr(struct kvm_lapic *apic)
 {
 	int result;
 
-	result = find_highest_vector(apic->regs + APIC_IRR);
+	if (!apic->irr_pending)
+		return -1;
+
+	result = apic_search_irr(apic);
 	ASSERT(result == -1 || result >= 16);
 
 	return result;
+}
+
+static inline void apic_clear_irr(int vec, struct kvm_lapic *apic)
+{
+	apic->irr_pending = false;
+	apic_clear_vector(vec, apic->regs + APIC_IRR);
+	if (apic_search_irr(apic) != -1)
+		apic->irr_pending = true;
 }
 
 int kvm_lapic_find_highest_irr(struct kvm_vcpu *vcpu)
@@ -188,13 +201,17 @@ int kvm_lapic_find_highest_irr(struct kvm_vcpu *vcpu)
 	struct kvm_lapic *apic = vcpu->arch.apic;
 	int highest_irr;
 
+	/* This may race with setting of irr in __apic_accept_irq() and
+	 * value returned may be wrong, but kvm_vcpu_kick() in __apic_accept_irq
+	 * will cause vmexit immediately and the value will be recalculated
+	 * on the next vmentry.
+	 */
 	if (!apic)
 		return 0;
 	highest_irr = apic_find_highest_irr(apic);
 
 	return highest_irr;
 }
-EXPORT_SYMBOL_GPL(kvm_lapic_find_highest_irr);
 
 static int __apic_accept_irq(struct kvm_lapic *apic, int delivery_mode,
 			     int vector, int level, int trig_mode);
@@ -425,7 +442,9 @@ static void apic_set_eoi(struct kvm_lapic *apic)
 		trigger_mode = IOAPIC_LEVEL_TRIG;
 	else
 		trigger_mode = IOAPIC_EDGE_TRIG;
+	mutex_lock(&apic->vcpu->kvm->irq_lock);
 	kvm_ioapic_update_eoi(apic->vcpu->kvm, vector, trigger_mode);
+	mutex_unlock(&apic->vcpu->kvm->irq_lock);
 }
 
 static void apic_send_ipi(struct kvm_lapic *apic)
@@ -449,7 +468,9 @@ static void apic_send_ipi(struct kvm_lapic *apic)
 		   irq.trig_mode, irq.level, irq.dest_mode, irq.delivery_mode,
 		   irq.vector);
 
+	mutex_lock(&apic->vcpu->kvm->irq_lock);
 	kvm_irq_delivery_to_apic(apic->vcpu->kvm, apic, &irq);
+	mutex_unlock(&apic->vcpu->kvm->irq_lock);
 }
 
 static u32 apic_get_tmcct(struct kvm_lapic *apic)
@@ -495,8 +516,6 @@ static u32 __apic_read(struct kvm_lapic *apic, unsigned int offset)
 {
 	u32 val = 0;
 
-	KVMTRACE_1D(APIC_ACCESS, apic->vcpu, (u32)offset, handler);
-
 	if (offset >= LAPIC_MMIO_LENGTH)
 		return 0;
 
@@ -522,20 +541,36 @@ static u32 __apic_read(struct kvm_lapic *apic, unsigned int offset)
 	return val;
 }
 
-static void apic_mmio_read(struct kvm_io_device *this,
-			   gpa_t address, int len, void *data)
+static inline struct kvm_lapic *to_lapic(struct kvm_io_device *dev)
 {
-	struct kvm_lapic *apic = (struct kvm_lapic *)this->private;
+	return container_of(dev, struct kvm_lapic, dev);
+}
+
+static int apic_mmio_in_range(struct kvm_lapic *apic, gpa_t addr)
+{
+	return apic_hw_enabled(apic) &&
+	    addr >= apic->base_address &&
+	    addr < apic->base_address + LAPIC_MMIO_LENGTH;
+}
+
+static int apic_mmio_read(struct kvm_io_device *this,
+			  gpa_t address, int len, void *data)
+{
+	struct kvm_lapic *apic = to_lapic(this);
 	unsigned int offset = address - apic->base_address;
 	unsigned char alignment = offset & 0xf;
 	u32 result;
+	if (!apic_mmio_in_range(apic, address))
+		return -EOPNOTSUPP;
 
 	if ((alignment + len) > 4) {
 		printk(KERN_ERR "KVM_APIC_READ: alignment error %lx %d",
 		       (unsigned long)address, len);
-		return;
+		return 0;
 	}
 	result = __apic_read(apic, offset & ~0xf);
+
+	trace_kvm_apic_read(offset, result);
 
 	switch (len) {
 	case 1:
@@ -548,6 +583,7 @@ static void apic_mmio_read(struct kvm_io_device *this,
 		       "should be 1,2, or 4 instead\n", len);
 		break;
 	}
+	return 0;
 }
 
 static void update_divide_count(struct kvm_lapic *apic)
@@ -603,13 +639,15 @@ static void apic_manage_nmi_watchdog(struct kvm_lapic *apic, u32 lvt0_val)
 		apic->vcpu->kvm->arch.vapics_in_nmi_mode--;
 }
 
-static void apic_mmio_write(struct kvm_io_device *this,
-			    gpa_t address, int len, const void *data)
+static int apic_mmio_write(struct kvm_io_device *this,
+			   gpa_t address, int len, const void *data)
 {
-	struct kvm_lapic *apic = (struct kvm_lapic *)this->private;
+	struct kvm_lapic *apic = to_lapic(this);
 	unsigned int offset = address - apic->base_address;
 	unsigned char alignment = offset & 0xf;
 	u32 val;
+	if (!apic_mmio_in_range(apic, address))
+		return -EOPNOTSUPP;
 
 	/*
 	 * APIC register must be aligned on 128-bits boundary.
@@ -620,7 +658,7 @@ static void apic_mmio_write(struct kvm_io_device *this,
 		/* Don't shout loud, $infamous_os would cause only noise. */
 		apic_debug("apic write: bad size=%d %lx\n",
 			   len, (long)address);
-		return;
+		return 0;
 	}
 
 	val = *(u32 *) data;
@@ -632,7 +670,7 @@ static void apic_mmio_write(struct kvm_io_device *this,
 
 	offset &= 0xff0;
 
-	KVMTRACE_1D(APIC_ACCESS, apic->vcpu, (u32)offset, handler);
+	trace_kvm_apic_write(offset, val);
 
 	switch (offset) {
 	case APIC_ID:		/* Local APIC ID */
@@ -703,7 +741,7 @@ static void apic_mmio_write(struct kvm_io_device *this,
 		hrtimer_cancel(&apic->lapic_timer.timer);
 		apic_set_reg(apic, APIC_TMICT, val);
 		start_apic_timer(apic);
-		return;
+		return 0;
 
 	case APIC_TDCR:
 		if (val & 4)
@@ -717,22 +755,7 @@ static void apic_mmio_write(struct kvm_io_device *this,
 			   offset);
 		break;
 	}
-
-}
-
-static int apic_mmio_range(struct kvm_io_device *this, gpa_t addr,
-			   int len, int size)
-{
-	struct kvm_lapic *apic = (struct kvm_lapic *)this->private;
-	int ret = 0;
-
-
-	if (apic_hw_enabled(apic) &&
-	    (addr >= apic->base_address) &&
-	    (addr < (apic->base_address + LAPIC_MMIO_LENGTH)))
-		ret = 1;
-
-	return ret;
+	return 0;
 }
 
 void kvm_free_lapic(struct kvm_vcpu *vcpu)
@@ -763,7 +786,6 @@ void kvm_lapic_set_tpr(struct kvm_vcpu *vcpu, unsigned long cr8)
 	apic_set_tpr(apic, ((cr8 & 0x0f) << 4)
 		     | (apic_get_reg(apic, APIC_TASKPRI) & 4));
 }
-EXPORT_SYMBOL_GPL(kvm_lapic_set_tpr);
 
 u64 kvm_lapic_get_cr8(struct kvm_vcpu *vcpu)
 {
@@ -776,7 +798,6 @@ u64 kvm_lapic_get_cr8(struct kvm_vcpu *vcpu)
 
 	return (tpr & 0xf0) >> 4;
 }
-EXPORT_SYMBOL_GPL(kvm_lapic_get_cr8);
 
 void kvm_lapic_set_base(struct kvm_vcpu *vcpu, u64 value)
 {
@@ -787,7 +808,8 @@ void kvm_lapic_set_base(struct kvm_vcpu *vcpu, u64 value)
 		vcpu->arch.apic_base = value;
 		return;
 	}
-	if (apic->vcpu->vcpu_id)
+
+	if (!kvm_vcpu_is_bsp(apic->vcpu))
 		value &= ~MSR_IA32_APICBASE_BSP;
 
 	vcpu->arch.apic_base = value;
@@ -799,12 +821,6 @@ void kvm_lapic_set_base(struct kvm_vcpu *vcpu, u64 value)
 		   "0x%lx.\n", apic->vcpu->arch.apic_base, apic->base_address);
 
 }
-
-u64 kvm_lapic_get_base(struct kvm_vcpu *vcpu)
-{
-	return vcpu->arch.apic_base;
-}
-EXPORT_SYMBOL_GPL(kvm_lapic_get_base);
 
 void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 {
@@ -842,9 +858,10 @@ void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 		apic_set_reg(apic, APIC_ISR + 0x10 * i, 0);
 		apic_set_reg(apic, APIC_TMR + 0x10 * i, 0);
 	}
+	apic->irr_pending = false;
 	update_divide_count(apic);
 	atomic_set(&apic->lapic_timer.pending, 0);
-	if (vcpu->vcpu_id == 0)
+	if (kvm_vcpu_is_bsp(vcpu))
 		vcpu->arch.apic_base |= MSR_IA32_APICBASE_BSP;
 	apic_update_ppr(apic);
 
@@ -855,7 +872,6 @@ void kvm_lapic_reset(struct kvm_vcpu *vcpu)
 		   vcpu, kvm_apic_id(apic),
 		   vcpu->arch.apic_base, apic->base_address);
 }
-EXPORT_SYMBOL_GPL(kvm_lapic_reset);
 
 bool kvm_apic_present(struct kvm_vcpu *vcpu)
 {
@@ -866,7 +882,6 @@ int kvm_lapic_enabled(struct kvm_vcpu *vcpu)
 {
 	return kvm_apic_present(vcpu) && apic_sw_enabled(vcpu->arch.apic);
 }
-EXPORT_SYMBOL_GPL(kvm_lapic_enabled);
 
 /*
  *----------------------------------------------------------------------
@@ -917,6 +932,11 @@ static struct kvm_timer_ops lapic_timer_ops = {
 	.is_periodic = lapic_is_periodic,
 };
 
+static const struct kvm_io_device_ops apic_mmio_ops = {
+	.read     = apic_mmio_read,
+	.write    = apic_mmio_write,
+};
+
 int kvm_create_lapic(struct kvm_vcpu *vcpu)
 {
 	struct kvm_lapic *apic;
@@ -945,16 +965,13 @@ int kvm_create_lapic(struct kvm_vcpu *vcpu)
 	apic->lapic_timer.timer.function = kvm_timer_fn;
 	apic->lapic_timer.t_ops = &lapic_timer_ops;
 	apic->lapic_timer.kvm = vcpu->kvm;
-	apic->lapic_timer.vcpu_id = vcpu->vcpu_id;
+	apic->lapic_timer.vcpu = vcpu;
 
 	apic->base_address = APIC_DEFAULT_PHYS_BASE;
 	vcpu->arch.apic_base = APIC_DEFAULT_PHYS_BASE;
 
 	kvm_lapic_reset(vcpu);
-	apic->dev.read = apic_mmio_read;
-	apic->dev.write = apic_mmio_write;
-	apic->dev.in_range = apic_mmio_range;
-	apic->dev.private = apic;
+	kvm_iodevice_init(&apic->dev, &apic_mmio_ops);
 
 	return 0;
 nomem_free_apic:
@@ -962,7 +979,6 @@ nomem_free_apic:
 nomem:
 	return -ENOMEM;
 }
-EXPORT_SYMBOL_GPL(kvm_create_lapic);
 
 int kvm_apic_has_interrupt(struct kvm_vcpu *vcpu)
 {
@@ -985,7 +1001,7 @@ int kvm_apic_accept_pic_intr(struct kvm_vcpu *vcpu)
 	u32 lvt0 = apic_get_reg(vcpu->arch.apic, APIC_LVT0);
 	int r = 0;
 
-	if (vcpu->vcpu_id == 0) {
+	if (kvm_vcpu_is_bsp(vcpu)) {
 		if (!apic_hw_enabled(vcpu->arch.apic))
 			r = 1;
 		if ((lvt0 & APIC_LVT_MASKED) == 0 &&
