@@ -57,14 +57,14 @@
 #include "sfi_core.h"
 
 #define on_same_page(addr1, addr2) \
-	((unsigned long)(addr1) & PAGE_MASK) == \
-	((unsigned long)(addr2) & PAGE_MASK)
+	(((unsigned long)(addr1) & PAGE_MASK) == \
+	((unsigned long)(addr2) & PAGE_MASK))
 
 int sfi_disabled __read_mostly;
 EXPORT_SYMBOL(sfi_disabled);
 
-#define SFI_MAX_TABLES		64
-struct sfi_internal_syst sfi_tblist;
+unsigned long syst_paddr __read_mostly;
+struct sfi_table_simple *psyst __read_mostly;
 
 /*
  * flag for whether using ioremap() to map the sfi tables, if yes
@@ -72,17 +72,17 @@ struct sfi_internal_syst sfi_tblist;
  * early_ioremap  and early_iounmap should be used each time a
  * table is visited
  */
-static u32 sfi_tbl_permanent_mapped __read_mostly;
+static u32 sfi_use_ioremap __read_mostly;
 
-static void __iomem *sfi_map_memory(u32 phys, u32 size)
+static void __iomem *sfi_map_memory(unsigned long phys, u32 size)
 {
 	if (!phys || !size)
 		return NULL;
 
-	if (sfi_tbl_permanent_mapped)
-		return ioremap((unsigned long)phys, size);
+	if (sfi_use_ioremap)
+		return ioremap(phys, size);
 	else
-		return early_ioremap((unsigned long)phys, size);
+		return early_ioremap(phys, size);
 }
 
 static void sfi_unmap_memory(void __iomem *virt, u32 size)
@@ -90,17 +90,18 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 	if (!virt || !size)
 		return;
 
-	if (sfi_tbl_permanent_mapped)
+	if (sfi_use_ioremap)
 		iounmap(virt);
 	else
 		early_iounmap(virt, size);
 }
 
-static void sfi_print_table_header(u32 address, struct sfi_table_header *header)
+static void sfi_print_table_header(unsigned long address,
+				struct sfi_table_header *header)
 {
-	pr_info("%4.4s %08X, %04X (r%d %6.6s %8.8s)\n",
+	pr_info("%4.4s %08x, %04X (r%d %6.6s %8.8s)\n",
 		header->signature, address,
-		header->length, header->revision, header->oem_id,
+		(u32)header->length, header->revision, header->oem_id,
 		header->oem_table_id);
 }
 
@@ -119,8 +120,8 @@ static int table_need_remap(u64 addr, u32 size)
 {
 	u64 start, end;
 
-	start = sfi_tblist.syst_addr;
-	end = start + sfi_tblist.syst_len;
+	start = syst_paddr;
+	end = start + psyst->header.length;
 
 	if (addr < start) {
 		if (on_same_page(addr, start))
@@ -133,11 +134,11 @@ static int table_need_remap(u64 addr, u32 size)
 
 
 /* Verifies if the table checksums is zero */
-static int sfi_tb_verify_checksum(struct sfi_table_header *table, u32 length)
+static int sfi_tb_verify_checksum(struct sfi_table_header *table)
 {
 	u8 checksum;
 
-	checksum = sfi_checksum_table(table, length);
+	checksum = sfi_checksum_table(table, table->length);
 	if (checksum) {
 		pr_warning("Incorrect checksum in table [%4.4s] -  %2.2X,"
 			" should be %2.2X\n", table->signature,
@@ -151,21 +152,16 @@ static int sfi_tb_verify_checksum(struct sfi_table_header *table, u32 length)
 int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 		unsigned int flags, struct sfi_table_header **out_table)
 {
-	struct sfi_table_simple *syst;
-	struct acpi_table_xsdt *xsdt;
 	struct sfi_table_header *th;
 	int offset, need_remap;
 	u64 *paddr;
 	u32 addr, length, tbl_cnt;
 	u32 i;
 
-	/* walk through SYST tables */
-	syst = sfi_tblist.syst;
-	tbl_cnt = (syst->header.length - sizeof(struct sfi_table_header))
-			/ sizeof(u64);
-	paddr = (u64 *) syst->pentry;
+	/* walk through all SFI tables */
+	tbl_cnt = SFI_GET_ENTRY_NUM(psyst, u64);
+	paddr = (u64 *) psyst->pentry;
 
-walk_tables:
 	for (i = 0; i < tbl_cnt; i++) {
 		addr = *paddr++;
 		need_remap = table_need_remap(addr, sizeof(struct sfi_table_header));
@@ -175,8 +171,8 @@ walk_tables:
 			if (!th)
 				return -1;
 		} else {
-			offset = sfi_tblist.syst_addr - addr;
-			th = (void *)((unsigned long)sfi_tblist.syst - offset);
+			offset = syst_paddr - addr;
+			th = (void *)psyst - offset;
 		}
 		length = th->length;
 
@@ -190,31 +186,21 @@ walk_tables:
 				return -1;
 		}
 
-		if (sfi_tb_verify_checksum(th, length))
-			continue;
-
-		if ((flags & SFI_ACPI_TABLE) &&
-			(!strncmp(th->signature, SFI_SIG_XSDT, SFI_SIGNATURE_SIZE))) {
-			xsdt = (struct acpi_table_xsdt *)th;
-			tbl_cnt = (xsdt->header.length - sizeof(struct acpi_table_header))
-						/ sizeof(u64);
-			paddr = (u64 *)xsdt->table_offset_entry;
-			goto walk_tables;
-		}
-
 		if (strncmp(th->signature, signature, SFI_SIGNATURE_SIZE))
-			continue;
+			goto loop_continue;
 
 		if (oem_id && strncmp(th->oem_id, oem_id, SFI_OEM_ID_SIZE))
-			continue;
+			goto loop_continue;
 
 		if (oem_table_id && strncmp(th->oem_table_id, oem_table_id,
 						SFI_OEM_TABLE_ID_SIZE))
-			continue;
+			goto loop_continue;
 
 		*out_table = th;
-		sfi_print_table_header(*paddr, th);
 		return 0;
+loop_continue:
+		if (need_remap)
+			sfi_unmap_memory(th, length);
 	}
 
 	return -1;
@@ -222,13 +208,9 @@ walk_tables:
 
 void sfi_put_table(struct sfi_table_header *table)
 {
-	int nounmap;
-
-	nounmap = on_same_page(table, sfi_tblist.syst) ||
-		on_same_page(((unsigned long)table + table->length),
-			(unsigned long)sfi_tblist.syst + sfi_tblist.syst_len);
-
-	if (!nounmap)
+	if (!on_same_page(((void *)table + table->length),
+		(void *)psyst + psyst->header.length)
+		&& !on_same_page(table, psyst))
 		sfi_unmap_memory(table, table->length);
 }
 
@@ -239,7 +221,7 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 	int ret = 0;
 	struct sfi_table_header *table = NULL;
 
-	if (!handler || !signature)
+	if (sfi_disabled || !handler || !signature)
 		return -EINVAL;
 
 	sfi_get_table(signature, oem_id, oem_table_id, flags, &table);
@@ -252,36 +234,65 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 }
 EXPORT_SYMBOL_GPL(sfi_table_parse);
 
-static int __init sfi_parse_syst(unsigned long syst_addr)
+/* syst_paddr and psyst should be inited before this get called */
+int sfi_check_table(u64 paddr)
 {
-	struct sfi_table_simple *syst;
-	u32 length;
-	int need_remap;
+	struct sfi_table_header *th;
+	unsigned long addr = (unsigned long)paddr;
+	int length, need_remap, ret, offset;
 
-	/* map the header only and get total length of SYST */
-	syst = sfi_map_memory(syst_addr, sizeof(struct sfi_table_simple));
-	if (!syst)
-		return -ENOMEM;
-
-	length = syst->header.length;
-	sfi_print_table_header(syst_addr, (struct sfi_table_header *)syst);
-
-	/*
-	 * remap the table only when the last byte of table header and
-	 * table itself are not on same page
-	 */
-	need_remap = !on_same_page((syst_addr + length),
-				(syst_addr + sizeof(struct sfi_table_simple)));
+	need_remap = table_need_remap(addr, sizeof(struct sfi_table_header));
 	if (need_remap) {
-		sfi_unmap_memory(syst, sizeof(struct sfi_table_simple));
-		syst = sfi_map_memory(syst_addr, length);
-		if (!syst)
-			return -ENOMEM;
+		th = sfi_map_memory(addr, sizeof(struct sfi_table_header));
+		if (!th)
+			return -1;
+	} else {
+		offset = syst_paddr - addr;
+		th = (void *)psyst - offset;
+	}
+	length = th->length;
+
+	if (need_remap)
+		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
+
+	need_remap = table_need_remap(addr, length);
+	if (need_remap) {
+		th = sfi_map_memory(addr, length);
+		if (!th)
+			return -1;
 	}
 
-	sfi_tblist.syst = syst;
-	sfi_tblist.syst_addr = syst_addr;
-	sfi_tblist.syst_len = length;
+	ret = sfi_tb_verify_checksum(th);
+	if (!ret)
+		sfi_print_table_header(addr, th);
+
+	if (need_remap)
+		sfi_unmap_memory(th, length);
+
+	return ret;
+}
+
+/* SFI spec 0.7 defines that the whole SYST should be in one page */
+static int __init sfi_parse_syst(unsigned long syst_addr)
+{
+	u64 *paddr;
+	int tbl_cnt, i;
+
+	psyst = sfi_map_memory(syst_addr, sizeof(struct sfi_table_simple));
+	if (!psyst)
+		return -ENOMEM;
+
+	sfi_print_table_header(syst_addr, &psyst->header);
+	syst_paddr = syst_addr;
+
+	/* check all the tables in SYST */
+	tbl_cnt = SFI_GET_ENTRY_NUM(psyst, u64);
+	paddr = (u64 *) psyst->pentry;
+	for (i = 0; i < tbl_cnt; i++) {
+		if (sfi_check_table(*paddr++))
+			return -1;
+	}
+
 	return 0;
 }
 
@@ -308,7 +319,7 @@ static __init unsigned long sfi_find_syst(void)
 		if (strncmp(syst->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
 			continue;
 
-		if (!sfi_tb_verify_checksum(syst, syst->length)) {
+		if (!sfi_tb_verify_checksum(syst)) {
 			sfi_unmap_memory(start, len);
 			return SFI_SYST_SEARCH_BEGIN + offset;
 		}
@@ -359,15 +370,17 @@ int __init sfi_init(void)
 
 void __init sfi_init_late(void)
 {
+	int length;
+
 	if (sfi_disabled)
 		return;
 
-	sfi_unmap_memory(sfi_tblist.syst, sfi_tblist.syst_len);
+	length = psyst->header.length;
+	sfi_unmap_memory(psyst, sizeof(struct sfi_table_simple));
 
 	/* use ioremap now after it is ready */
-	sfi_tbl_permanent_mapped = 1;
-	sfi_tblist.syst = sfi_map_memory(sfi_tblist.syst_addr,
-					sfi_tblist.syst_len);
+	sfi_use_ioremap = 1;
+	psyst = sfi_map_memory(syst_paddr, length);
 }
 
 static int __init sfi_parse_cmdline(char *arg)

@@ -55,11 +55,36 @@
  */
 
 /*
- * sfi_acpi_table_parse()
+ * sfi_acpi_parse_xsdt()
+ *
+ * Parse the ACPI XSDT for later access by sfi_acpi_table_parse().
  */
+static int sfi_acpi_parse_xsdt(struct sfi_table_header *table)
+{
+	int tbl_cnt, i;
+	struct acpi_table_xsdt *xsdt = (struct acpi_table_xsdt *)table;
+
+	tbl_cnt = (xsdt->header.length - sizeof(struct acpi_table_header))
+			/ sizeof(u64);
+
+	for (i = 0; i < tbl_cnt; i++) {
+		if (sfi_check_table(xsdt->table_offset_entry[i])) {
+			disable_sfi();
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int sfi_acpi_init()
+{
+	sfi_table_parse(SFI_SIG_XSDT, NULL, NULL, 0, sfi_acpi_parse_xsdt);
+	return 0;
+}
+
 int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 			 unsigned int flags, acpi_table_handler handler)
 {
-	return sfi_table_parse(signature, oem_id, oem_table_id, SFI_ACPI_TABLE,
-				(sfi_table_handler) handler);
+	return 0;
 }

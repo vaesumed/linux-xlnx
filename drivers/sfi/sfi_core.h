@@ -37,15 +37,7 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
-/* SFI internal root SYSTem table */
-struct sfi_internal_syst {
-	u64			syst_addr;	/* phy addr */
-	struct sfi_table_simple	*syst;		/* virt addr */
-	u32			syst_len;
-};
-
 extern int sfi_get_table(char *signature, char *oem_id, char *oem_table_id,
 			 uint flags, struct sfi_table_header **out_table);
 extern void sfi_put_table(struct sfi_table_header *table);
-
-extern struct sfi_internal_syst sfi_tblist;
+extern int sfi_check_table(u64 paddr);
