@@ -445,7 +445,7 @@ find_entry:
 			goto out_err;
 		}
 
-		ret = fsnotify_add_mark(&ientry->fsn_entry, group, inode);
+		ret = fsnotify_add_mark(&ientry->fsn_entry, group, inode, 0);
 		if (ret == -EEXIST)
 			goto find_entry;
 		else if (ret)
