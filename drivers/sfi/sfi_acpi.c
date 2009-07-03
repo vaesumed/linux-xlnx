@@ -57,8 +57,9 @@
 static struct acpi_table_xsdt *xsdt_va;
 
 #define XSDT_GET_NUM_ENTRIES(ptable, entry_type) \
-        ((ptable->header.length - sizeof(struct acpi_table_header)) / \
-        (sizeof(entry_type)))
+	((ptable->header.length - sizeof(struct acpi_table_header)) / \
+	(sizeof(entry_type)))
+
 /*
  * sfi_acpi_parse_xsdt()
  *
@@ -87,8 +88,8 @@ int __init sfi_acpi_init(void)
 	return 0;
 }
 
-static struct acpi_table_header *sfi_acpi_get_table(char *signature, char *oem_id,
-		char *oem_table_id, unsigned int flags)
+static struct acpi_table_header *sfi_acpi_get_table(char *signature,
+			char *oem_id, char *oem_table_id, unsigned int flags)
 {
 	struct acpi_table_header *th;
 	u32 tbl_cnt, i;
@@ -144,9 +145,7 @@ int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 	if (!table)
 		return -EINVAL;
 
-	if (table) {
-		ret = handler(table);
-		sfi_acpi_put_table(table);
-	}
+	ret = handler(table);
+	sfi_acpi_put_table(table);
 	return ret;
 }

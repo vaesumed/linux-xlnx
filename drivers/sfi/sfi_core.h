@@ -37,6 +37,7 @@
  * POSSIBILITY OF SUCH DAMAGES.
  */
 
+extern int __init sfi_acpi_init(void);
 extern int sfi_check_table(u64 paddr);
 extern void sfi_put_table(struct sfi_table_header *table);
 extern struct sfi_table_header *sfi_map_table(u64 pa);

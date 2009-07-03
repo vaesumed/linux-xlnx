@@ -69,10 +69,10 @@ static u64 syst_pa __read_mostly;
 static struct sfi_table_simple *syst_va __read_mostly;
 
 /*
- * flag for whether using ioremap() to map the sfi tables, if yes
- * each table only need be mapped once, otherwise each arch's
- * early_ioremap  and early_iounmap should be used each time a
- * table is visited
+ * FW creates and saves the SFI tables in memory. When these tables get
+ * used, they may need to be mapped to virtual address space, and the mapping
+ * can happen before or after the ioremap() is ready, so a flag is needed
+ * to indicating this
  */
 static u32 sfi_use_ioremap __read_mostly;
 
@@ -140,23 +140,21 @@ struct sfi_table_header *sfi_map_table(u64 pa)
 	struct sfi_table_header *th;
 	u32 length;
 
-	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header))) {
+	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header)))
 		th = sfi_map_memory(pa, sizeof(struct sfi_table_header));
-	} else {
+	else
 		th = (void *)syst_va - (syst_pa - pa);
-	}
 
- 	 /* If table fits on same page as its header, we are done */
+	 /* If table fits on same page as its header, we are done */
 	if (TABLE_ON_PAGE(th, th, th->length))
 		return th;
 
 	/* entire table does not fit on same page as SYST */
 	length = th->length;
-
-	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header))) {
+	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header)))
 		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
-	}
-	return (sfi_map_memory(pa, length));
+
+	return sfi_map_memory(pa, length);
 }
 
 /*
@@ -168,7 +166,8 @@ struct sfi_table_header *sfi_map_table(u64 pa)
 void sfi_unmap_table(struct sfi_table_header *th)
 {
 	if (!TABLE_ON_PAGE(syst_va, th, th->length))
-		sfi_unmap_memory(th, th->length);
+		sfi_unmap_memory(th, TABLE_ON_PAGE(th, th, th->length) ?
+					sizeof(*th) : th->length);
 }
 
 /*
@@ -182,14 +181,11 @@ static struct sfi_table_header *sfi_get_table(char *signature, char *oem_id,
 {
 	struct sfi_table_header *th;
 	u32 tbl_cnt, i;
-	u64 pa;
 
 	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
 
 	for (i = 0; i < tbl_cnt; i++) {
-		pa = syst_va->pentry[i];
-
-		th = sfi_map_table(pa);
+		th = sfi_map_table(syst_va->pentry[i]);
 		if (!th)
 			return NULL;
 
@@ -305,22 +301,25 @@ static __init int sfi_find_syst(void)
 		struct sfi_table_header *syst_hdr;
 
 		syst_hdr = start + offset;
-		if (strncmp(syst_hdr->signature, SFI_SIG_SYST, SFI_SIGNATURE_SIZE))
+		if (strncmp(syst_hdr->signature, SFI_SIG_SYST,
+				SFI_SIGNATURE_SIZE))
 			continue;
 
 		if (syst_hdr->length > PAGE_SIZE)
 			continue;
 
-		sfi_print_table_header(SFI_SYST_SEARCH_BEGIN + offset, syst_hdr);
+		sfi_print_table_header(SFI_SYST_SEARCH_BEGIN + offset,
+					syst_hdr);
 
 		if (sfi_verify_checksum(syst_hdr))
 			continue;
 
 		/*
- 		 * Enforce SFI spec mandate that SYST reside within a page.
- 		 */
+		 * Enforce SFI spec mandate that SYST reside within a page.
+		 */
 		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst_hdr->length)) {
-			pr_debug("SYST 0x%llx + 0x%x crosses page\n", syst_pa, syst_hdr->length);
+			pr_debug("SYST 0x%llx + 0x%x crosses page\n",
+					syst_pa, syst_hdr->length);
 			continue;
 		}
 
@@ -346,7 +345,8 @@ void __init sfi_init(void)
 
 	if (sfi_find_syst() || sfi_parse_syst() || sfi_platform_init())
 		disable_sfi();
-	return;	
+
+	return;
 }
 
 void __init sfi_init_late(void)
@@ -362,6 +362,9 @@ void __init sfi_init_late(void)
 	/* use ioremap now after it is ready */
 	sfi_use_ioremap = 1;
 	syst_va = sfi_map_memory(syst_pa, length);
+
+	/* put it here to keep the xsdt_va consistent */
+	sfi_acpi_init();
 }
 
 static int __init sfi_parse_cmdline(char *arg)

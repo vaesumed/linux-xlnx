@@ -31,8 +31,8 @@
 #include <linux/acpi.h>
 #include <linux/init.h>
 #include <linux/efi.h>
-#include <linux/sfi.h>
 #include <linux/irq.h>
+#include <linux/sfi.h>
 #include <linux/io.h>
 
 #include <asm/io_apic.h>
