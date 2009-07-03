@@ -75,6 +75,8 @@ source "drivers/staging/rt2870/Kconfig"
 
 source "drivers/staging/rt3070/Kconfig"
 
+source "drivers/staging/rt3090/Kconfig"
+
 source "drivers/staging/comedi/Kconfig"
 
 source "drivers/staging/asus_oled/Kconfig"
@@ -122,6 +124,8 @@ source "drivers/staging/octeon/Kconfig"
 source "drivers/staging/serqt_usb2/Kconfig"
 
 source "drivers/staging/vt6655/Kconfig"
+
+source "drivers/staging/vt6656/Kconfig"
 
 source "drivers/staging/cpc-usb/Kconfig"
 
