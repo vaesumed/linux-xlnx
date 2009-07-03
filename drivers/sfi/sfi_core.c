@@ -101,7 +101,7 @@ static void sfi_unmap_memory(void __iomem *virt, u32 size)
 static void sfi_print_table_header(unsigned long long pa,
 				struct sfi_table_header *header)
 {
-	pr_info("%4.4s %llX, %04X (r%d %6.6s %8.8s)\n",
+	pr_info("%4.4s %llX, %04X (v%d %6.6s %8.8s)\n",
 		header->signature, pa,
 		header->length, header->revision, header->oem_id,
 		header->oem_table_id);

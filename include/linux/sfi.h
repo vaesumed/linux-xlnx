@@ -51,6 +51,9 @@
 #define SFI_SIG_APIC		"APIC"
 #define SFI_SIG_XSDT		"XSDT"
 #define SFI_SIG_WAKE		"WAKE"
+#define SFI_SIG_SPIB		"SPIB"
+#define SFI_SIG_I2CB		"I2CB"
+#define SFI_SIG_GPEM		"GPEM"
 
 #define SFI_ACPI_TABLE		(1 << 0)
 #define SFI_NORMAL_TABLE	(1 << 1)
@@ -76,12 +79,12 @@ struct sfi_table_header {
 	u8	checksum;
 	char	oem_id[SFI_OEM_ID_SIZE];
 	char	oem_table_id[SFI_OEM_TABLE_ID_SIZE];
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_table_simple {
 	struct sfi_table_header		header;
 	u64				pentry[1];
-} __attribute__ ((packed));
+} __packed;
 
 /* comply with UEFI spec 2.1 */
 struct sfi_mem_entry {
@@ -90,41 +93,63 @@ struct sfi_mem_entry {
 	u64	vir_start;
 	u64	pages;
 	u64	attrib;
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_cpu_table_entry {
 	u32	apicid;
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_cstate_table_entry {
 	u32	hint;		/* MWAIT hint */
 	u32	latency;	/* latency in ms */
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_apic_table_entry {
 	u64	phy_addr;	/* phy base addr for APIC reg */
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_freq_table_entry {
 	u32	freq;
 	u32	latency;	/* transition latency in ms */
 	u32	ctrl_val;	/* value to write to PERF_CTL */
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_wake_table_entry {
-	u64	phy_addr;
-} __attribute__ ((packed));
+	u64 phy_addr;	/* pointer to where the wake vector locates */
+} __packed;
 
 struct sfi_timer_table_entry {
 	u64	phy_addr;	/* phy base addr for the timer */
 	u32	freq;		/* in HZ */
 	u32	irq;
-} __attribute__ ((packed));
+} __packed;
 
 struct sfi_rtc_table_entry {
 	u64	phy_addr;	/* phy base addr for the RTC */
 	u32	irq;
-} __attribute__ ((packed));
+} __packed;
+
+struct sfi_spi_table_entry {
+	u16	host_num;	/* attached to host 0, 1...*/
+	u16	cs;		/* chip select */
+	u16	irq_info;
+	char	name[16];
+	u8	dev_info[10];
+} __packed;
+
+struct sfi_i2c_table_entry {
+	u16	host_num;
+	u16	addr;		/* slave addr */
+	u16	irq_info;
+	char	name[16];
+	u8	dev_info[10];
+} __packed;
+
+struct sfi_gpe_table_entry {
+	u16	logical_id;	/* logical id */
+	u16	phy_id;		/* physical GPE id */
+} __packed;
+
 
 typedef int (*sfi_table_handler) (struct sfi_table_header *table);
 
