@@ -58,9 +58,16 @@ static char		*parent_pattern = default_parent_pattern;
 static regex_t		parent_regex;
 
 static int		exclude_other = 1;
+
+static char		callchain_default_opt[] = "fractal,0.5";
+
 static int		callchain;
-static enum chain_mode	callchain_mode;
-static double		callchain_min_percent = 0.0;
+
+static
+struct callchain_param	callchain_param = {
+	.mode	= CHAIN_GRAPH_ABS,
+	.min_percent = 0.5
+};
 
 static u64		sample_type;
 
@@ -844,8 +851,14 @@ callchain__fprintf_graph(FILE *fp, struct callchain_node *self,
 	struct callchain_node *child;
 	struct callchain_list *chain;
 	int new_depth_mask = depth_mask;
+	u64 new_total;
 	size_t ret = 0;
 	int i;
+
+	if (callchain_param.mode == CHAIN_GRAPH_REL)
+		new_total = self->cumul_hit;
+	else
+		new_total = total_samples;
 
 	node = rb_first(&self->rb_root);
 	while (node) {
@@ -871,10 +884,10 @@ callchain__fprintf_graph(FILE *fp, struct callchain_node *self,
 				continue;
 			ret += ipchain__fprintf_graph(fp, chain, depth,
 						      new_depth_mask, i++,
-						      total_samples,
+						      new_total,
 						      child->cumul_hit);
 		}
-		ret += callchain__fprintf_graph(fp, child, total_samples,
+		ret += callchain__fprintf_graph(fp, child, new_total,
 						depth + 1,
 						new_depth_mask | (1 << depth));
 		node = next;
@@ -923,13 +936,18 @@ hist_entry_callchain__fprintf(FILE *fp, struct hist_entry *self,
 
 		chain = rb_entry(rb_node, struct callchain_node, rb_node);
 		percent = chain->hit * 100.0 / total_samples;
-		if (callchain_mode == FLAT) {
+		switch (callchain_param.mode) {
+		case CHAIN_FLAT:
 			ret += percent_color_fprintf(fp, "           %6.2f%%\n",
 						     percent);
 			ret += callchain__fprintf_flat(fp, chain, total_samples);
-		} else if (callchain_mode == GRAPH) {
+			break;
+		case CHAIN_GRAPH_ABS: /* Falldown */
+		case CHAIN_GRAPH_REL:
 			ret += callchain__fprintf_graph(fp, chain,
 							total_samples, 1, 1);
+		default:
+			break;
 		}
 		ret += fprintf(fp, "\n");
 		rb_node = rb_next(rb_node);
@@ -1217,14 +1235,9 @@ static void output__insert_entry(struct hist_entry *he, u64 min_callchain_hits)
 	struct rb_node *parent = NULL;
 	struct hist_entry *iter;
 
-	if (callchain) {
-		if (callchain_mode == FLAT)
-			sort_chain_flat(&he->sorted_chain, &he->callchain,
-					min_callchain_hits);
-		else if (callchain_mode == GRAPH)
-			sort_chain_graph(&he->sorted_chain, &he->callchain,
-					 min_callchain_hits);
-	}
+	if (callchain)
+		callchain_param.sort(&he->sorted_chain, &he->callchain,
+				      min_callchain_hits, &callchain_param);
 
 	while (*p != NULL) {
 		parent = *p;
@@ -1247,7 +1260,7 @@ static void output__resort(u64 total_samples)
 	struct rb_root *tree = &hist;
 	u64 min_callchain_hits;
 
-	min_callchain_hits = total_samples * (callchain_min_percent / 100);
+	min_callchain_hits = total_samples * (callchain_param.min_percent / 100);
 
 	if (sort__need_collapse)
 		tree = &collapse_hists;
@@ -1684,9 +1697,19 @@ static int __cmd_report(void)
 
 	sample_type = perf_header__sample_type();
 
-	if (sort__has_parent && !(sample_type & PERF_SAMPLE_CALLCHAIN)) {
-		fprintf(stderr, "selected --sort parent, but no callchain data\n");
-		exit(-1);
+	if (!(sample_type & PERF_SAMPLE_CALLCHAIN)) {
+		if (sort__has_parent) {
+			fprintf(stderr, "selected --sort parent, but no"
+					" callchain data. Did you call"
+					" perf record without -g?\n");
+			exit(-1);
+		}
+		if (callchain) {
+			fprintf(stderr, "selected -c but no callchain data."
+					" Did you call perf record without"
+					" -g?\n");
+			exit(-1);
+		}
 	}
 
 	if (load_kernel() < 0) {
@@ -1817,22 +1840,31 @@ parse_callchain_opt(const struct option *opt __used, const char *arg,
 
 	/* get the output mode */
 	if (!strncmp(tok, "graph", strlen(arg)))
-		callchain_mode = GRAPH;
+		callchain_param.mode = CHAIN_GRAPH_ABS;
 
 	else if (!strncmp(tok, "flat", strlen(arg)))
-		callchain_mode = FLAT;
+		callchain_param.mode = CHAIN_FLAT;
+
+	else if (!strncmp(tok, "fractal", strlen(arg)))
+		callchain_param.mode = CHAIN_GRAPH_REL;
+
 	else
 		return -1;
 
 	/* get the min percentage */
 	tok = strtok(NULL, ",");
 	if (!tok)
-		return 0;
+		goto setup;
 
-	callchain_min_percent = strtod(tok, &endptr);
+	callchain_param.min_percent = strtod(tok, &endptr);
 	if (tok == endptr)
 		return -1;
 
+setup:
+	if (register_callchain_param(&callchain_param) < 0) {
+		fprintf(stderr, "Can't register callchain params\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -1861,7 +1893,7 @@ static const struct option options[] = {
 		    "Only display entries with parent-match"),
 	OPT_CALLBACK_DEFAULT('c', "callchain", NULL, "output_type,min_percent",
 		     "Display callchains using output_type and min percent threshold. "
-		     "Default: flat,0", &parse_callchain_opt, "flat,100"),
+		     "Default: flat,0", &parse_callchain_opt, callchain_default_opt),
 	OPT_STRING('d', "dsos", &dso_list_str, "dso[,dso...]",
 		   "only consider symbols in these dsos"),
 	OPT_STRING('C', "comms", &comm_list_str, "comm[,comm...]",
