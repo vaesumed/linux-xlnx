@@ -288,6 +288,10 @@ struct cx23885_tsport {
 	/* Allow a single tsport to have multiple frontends */
 	u32                        num_frontends;
 	void                       *port_priv;
+
+	/* FIXME: temporary hack */
+	int (*set_frontend_save) (struct dvb_frontend *,
+				  struct dvb_frontend_parameters *);
 };
 
 struct cx23885_dev {
@@ -391,7 +395,7 @@ struct sram_channel {
 	u32  cmds_start;
 	u32  ctrl_start;
 	u32  cdt;
-	u32  fifo_start;;
+	u32  fifo_start;
 	u32  fifo_size;
 	u32  ptr1_reg;
 	u32  ptr2_reg;
