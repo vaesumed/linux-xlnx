@@ -1,0 +1,240 @@
+Importing driver-core.current based on 2.6.31-rc1
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 28d0325ce6e0a52f53d8af687e6427fee59004d3
+HEAD is now at 28d0325 Linux 2.6.31-rc1
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+devres-warn-and-return-don-t-crash-on-device_del-of-uninitialized-device.patch
+partitions-fix-broken-uevent_suppress-conversion.patch
+sparc-remove-driver-core-bus_id_size.patch
+driver-core-remove-bus_id_size.patch
+firmware-firmware_class-fix-lock-imbalance.patch
+sound-remove-direct-access-of-driver_data.patch
+omap-video-remove-direct-access-of-driver_data.patch
+wm97xx_batery-replace-driver_data-with-dev_get_drvdata.patch
+driver-core-move-dev_get-set_drvdata-to-drivers-base-dd.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+ + 28adde2...59f1057 master     -> quilt/driver-core.current  (forced update)
+Importing usb.current based on quilt/driver-core.current
+$ cd ../quilt-tmp
+$ git reset --hard 59f105798a05ca8c13caadfa1f397c7a8a0c63d2
+HEAD is now at 59f1057 Driver core: move dev_get/set_drvdata to drivers/base/dd.c
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb.current
+usb-pl2303-new-vendor-and-product-id-for-the-prolific-driver.patch
+usb-gadget-fix-imx_udc-entry-in-kconfig.patch
+usb-ftdi_sio-product-id-s-for-ccs-pic-programmers.patch
+usb-fhci-mutually-exclusive-port_status.patch
+usb-ehci-update-toggle-state-for-linked-qhs.patch
+usb-isp1760-use-__devexit_p-for-remove-function.patch
+usb-option.c-add-qualcomm-option-icon-210-modem.patch
+usb-option.c-to-support-qisda-h21-h20-usb-modem.patch
+revert-usb-add-intel-langwell-usb-otg-transceiver-drive.patch
+usb-gadget-audio-provide-correct-device-id.patch
+usb-ti_usb_3410_5052-fix-duplicate-device-ids.patch
+usb-buildfix-ppc-randconfig.patch
+usb-fix-memory-leak-in-usbtmc.patch
+usb-gadget-rndis-conformance-tweak.patch
+usb-musb-davinci-dm355-updates.patch
+usb-musb-davinci-dm6446evm-gpio-renumbering.patch
+usb-gadget-pxa25x-uses-gpio_is_valid.patch
+usb-gadget-pxa25x-compiler-warning-fix.patch
+usb-musb-silence-suspend-as-a_wait_vrise-is_active-msgs.patch
+usb-cdc-acm-work-around-some-broken-devices.patch
+usb-option-add-novatel-ovation-mc760.patch
+usb-fix-uninitialised-variable-in-ti_do_download.patch
+usb-fix-the-clear_tt_buffer-interface.patch
+usb-ehci-use-the-new-clear_tt_buffer-interface.patch
+usb-ehci-check-for-stall-before-other-errors.patch
+usb-fix-memleak-in-usbfs.patch
+usb-add-missing-class-descriptions-used-in-usb-devices-file.patch
+usb-console-fix-regression-in-usb-console-on-kernel-boot.patch
+usb-serial-regression-fix-to-move-sysrq-from-hot-path.patch
+usb-serial-optimize-sysrq-function-calls.patch
+usb-serial-ftdi-with-product-code-fb80-and-vendor-id-0403.patch
+usb-rndis-gadget-fix-issues-talking-from-pxa.patch
+usb-usb.h-fix-kernel-doc-notation.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb.current
+From ../quilt-tmp
+ + 341fdad...3a2215f master     -> quilt/usb.current  (forced update)
+Importing i2c based on 2.6.31-rc1-git3
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.31-rc1-git3
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.31-rc1-git5
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.31-rc1-47-g987fed3
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper 9bcca7bd6d87499c55f502f03c91e8af003f3e5f
+Importing ttydev based on 5a4f13fad1ab5bd08dea78fc55321e429d83cddf
+$ cd ../quilt-tmp
+$ git reset --hard 5a4f13fad1ab5bd08dea78fc55321e429d83cddf
+HEAD is now at 5a4f13f Merge git://git.kernel.org/pub/scm/linux/kernel/git/davem/ide-2.6
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+serial-add-irqflags-support
+tty-x86-termios-clean
+tty-usb-ftdi-ccsnew
+serial-txen-iir-fix
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+tty-cyclades-fix-const-assign
+net-slip-ttyfix
+kfifo-const
+dmi-sanity
+vt-events
+vt-pm-extract
+vt-incfix
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 2db8616...0f80c5f master     -> quilt/ttydev  (forced update)
+Importing aoe based on v2.6.29-rc2
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard 3a2215fb3047adc53d209345926001ed1168bd50
+HEAD is now at 3a2215f USB: usb.h: fix kernel-doc notation
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+driver-core-devtmpfs-driver-core-maintained-dev-tmpfs.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + 3ffd107...0c00af4 master     -> quilt/driver-core  (forced update)
+Importing usb based on quilt/driver-core
+$ cd ../quilt-tmp
+$ git reset --hard 0c00af4ca3314eda4c4de4d5243104855880426a
+HEAD is now at 0c00af4 Driver Core: devtmpfs - kernel-maintained tmpfs-based /dev
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/usb
+usb-ehci-dbg.c-no-need-for-checking-it-before-call-vfree.patch
+usb-sisusbvga-drop-usb_buffer_alloc.patch
+usb-usbmon-drop-kconfig-defaults.patch
+usb-usbmon-touch-up-the-documentation.patch
+usb-usbmon-end-ugly-tricks-with-dma-peeking.patch
+usb-let-usb_sg_init-to-set-transfer_buffer-more-often.patch
+usb-move-endpoint-sync-type-definitions-from-usb-audio.h-to-usb-ch9.h.patch
+usb-move-vendor-subclass-definition-from-usb-audio.h-to-usb-ch9.h.patch
+usb-audio-gadget-prefix-all-macro-definitions-with-uac_-in-linux-usb-audio.h.patch
+usb-audio-gadget-un-inline-generic_et_cmd.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/usb
+From ../quilt-tmp
+ + 93f7d00...9867405 master     -> quilt/usb  (forced update)
+Importing staging based on quilt/usb
+$ cd ../quilt-tmp
+$ git reset --hard 98674059c45b680f69a35c837cb88c51123599a2
+HEAD is now at 9867405 USB audio gadget: Un-inline generic_[gs]et_cmd
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/staging
+staging-rt2870-add-usb-id-for-sitecom-wl-608.patch
+staging-vt6655-compile-fix.patch
+staging-rspiusb-use-null-virtual-address-instead-of-a-bogus-one.patch
+staging-meilhaus-add-email-address-to-todo.patch
+staging-comedi-jr3_pci.c-add-required-includes.patch
+staging-serqt_usb2-fix-qt_close-parameters-in-serqt_usb2.patch
+staging-serqt_usb2-declare-qt_open-static-in-serqt_usb2.patch
+staging-android-binder-move-debugging-mask-into-a-macro.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:645: space before tab in indent.
+					    	     proc->pid, thread->pid, node->debug_id,
+warning: 1 line adds whitespace errors.
+staging-android-binder-remove-a-predefine.patch
+staging-android-binder-add-enum-usage-in-function-arguments.patch
+staging-android-binder-global-variable-cleanup.patch
+staging-android-binder-clean-up-for-all-the-stat-statments.patch
+staging-android-lowmemorykiller.c-fix-it-for-oom-move-oom_adj-value-from-task_struct-to-mm_struct.patch
+staging-wlan-ng-scripts-checkpatch.pl-error-fixes.patch
+staging-et1310-fix-the-coding-style.patch
+staging-rt280-remove-unused-md4.h.patch
+staging-rtl8187se-ieee80211-remove-unused-files.patch
+staging-rtl8192su-convert-to-net_device_ops.patch
+staging-rtl8192su-ieee80211-remove-unused-files.patch
+staging-rtl8187se-remove-duplicate-dot11d.h-and-ieee80211.h-includes.patch
+staging-rtl8192su-remove-duplicate-dot11d.h-and-ieee80211.h-includes.patch
+staging-rtl8187se-remove-unused-ieee80211_crypt.h.patch
+staging-rtl8192su-remove-unused-ieee80211_crypt.h.patch
+staging-rtl8187se-remove-kernel-version-compatibility-wrappers.patch
+staging-rtl8187se-remove-support-for-older-wireless-extensions.patch
+staging-rtl8187se-ieee80211-remove-dead-_rtl8187_ext_patch_-code.patch
+staging-rtl8187se-ieee80211-remove-superfluous-ieee80211_-defines.patch
+staging-rtl8187se-ieee80211-remove-unused-dump_chnl_map.patch
+staging-rtl8187se-ieee80211-remove-superfluous-john_-ifdefs.patch
+staging-rtl8192su-remove-kernel-version-compatibility-wrappers.patch
+staging-rtl8192su-remove-support-for-older-wireless-extensions.patch
+staging-rtl8192su-ieee80211-remove-unused-_reasoncode-enums.patch
+staging-rtl8192su-ieee80211-switch-to-use-linux-ieee80211.h.patch
+staging-rtl8192su-add-todo.patch
+staging-rtl8187se-add-todo.patch
+staging-rtl8187se-remove-enable_dot11d-ifdefs.patch
+staging-rtl8187se-remove-config_rtl8180_pm-ifdefs.patch
+staging-rtl8187se-remove-thomas_turbo-ifdefs.patch
+staging-rtl8187se-remove-config_rtl818x_s-ifdefs.patch
+staging-rtl8187se-remove-config_rtl8185b-ifdefs.patch
+staging-rtl8187se-remove-config_rtl8180_io_map-ifdefs.patch
+staging-rtl8187se-remove-dead-code.patch
+staging-rtl8187se-remove-unused-radio-frontends.patch
+staging-rtl8187se-remove-debugging-code-from-r8180_core.c.patch
+staging-rtl8187se-remove-unused-rtl8225_rf_-functions.patch
+staging-rtl8187se-cleanup-r8180_rtl8225.c.patch
+staging-rtl8187se-merge-r8180_rtl8225.c-with-r8180_rtl8225z2.c.patch
+staging-rtl8187se-cleanup-r8180_pm.c.patch
+staging-rtl8187se-merge-r8180_pm.c-with-r8180_core.c.patch
+staging-rtl8187se-remove-unused-definitions-from-r8180_hw.h.patch
+staging-rtl8187se-remove-unused-definitions-from-r8180.h.patch
+staging-rtl8187se-cleanup-r8180_rtl8225z2.c.patch
+staging-rtl8187se-cleanup-r8180_core.c.patch
+staging-add-rt3090-wireless-driver.patch
+staging-add-pristine-upstream-vt6656-driver-sources-to-drivers-staging-vt6656.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:3887: space before tab in indent.
+ 	     (pDevice->abyEEPROM[EEP_OFS_ZONETYPE]!=0x01)){   //for Japan
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:3893: space before tab in indent.
+ 	     (pDevice->abyEEPROM[EEP_OFS_ZONETYPE]!=0x02)){   //for Europe
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:5919: space before tab in indent.
+		 	      ((PWLAN_IE_SSID)pBSSList->abySSID)->abySSID,
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:5920: space before tab in indent.
+		 	      ((PWLAN_IE_SSID)pBSSList->abySSID)->len) != 0) {
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:6020: space before tab in indent.
+      	    while ((skb = skb_dequeue(&pMgmt->sNodeDBTable[*puNodeIndex].sTxPSQueue)) != NULL)
+warning: squelched 183 whitespace errors
+warning: 188 lines add whitespace errors.
+staging-vt6656-add-includes-to-drivers-staging-vt6656.patch
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:732: space before tab in indent.
+        	u8 bssid[6];
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:735: space before tab in indent.
+        	u8 *wpa_ie;
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:736: space before tab in indent.
+        	u16 wpa_ie_len;
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:737: space before tab in indent.
+        	int pairwise_suite;
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:738: space before tab in indent.
+        	int group_suite;
+warning: squelched 3 whitespace errors
+warning: 8 lines add whitespace errors.
+staging-vt6656-build-vt6656.ko-not-vntwusb.ko.patch
+staging-vt6656-main_usb.c-drop-obsolete-fsuid-fsgid-accesses.patch
+staging-vt6656-replace-net_device-priv-accesses-with-netdev_priv-calls.patch
+staging-vt6656-use-net_device_ops-for-management-functions.patch
+staging-vt6656-replace-call-to-info-with-printk-call.patch
+staging-vt6656-integrate-vt6656-into-build-system.patch
+staging-vt6655-fix-build-when-config_wireless_ext.patch
+staging-vt6655-remove-dependency-on-wireless_ext-version.patch
+staging-stlc45xx-convert-config_interface-to-bss_info_changed.patch
+staging-otus-fix-warnings-in-staging-otus-ioctl.c.patch
+staging-comedi-lindent-changes-to-comdi-driver-in-staging-tree.patch
+staging-cpc-usb-remove-unused-include-linux-version.h.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/staging
+From ../quilt-tmp
+ + c38a2b6...722ef74 master     -> quilt/staging  (forced update)
