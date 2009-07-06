@@ -48,10 +48,8 @@ static unsigned long sfi_lapic_addr __initdata = APIC_DEFAULT_PHYS_BASE;
 
 #ifdef CONFIG_X86_IO_APIC
 static struct mp_ioapic_routing {
-	int	apic_id;
 	int	gsi_base;
 	int	gsi_end;
-	u32	pin_programmed[4];
 } mp_ioapic_routing[MAX_IO_APICS];
 #endif
 
@@ -159,30 +157,19 @@ void __init mp_sfi_register_lapic_address(unsigned long address)
 /* All CPUs enumerated by SFI must be present and enabled */
 void __cpuinit mp_sfi_register_lapic(u8 id)
 {
-	struct mpc_cpu cpu;
 	int boot_cpu = 0;
 
 	if (MAX_APICS - id <= 0) {
-		printk(KERN_WARNING "Processor #%d invalid (max %d)\n",
+		pr_warning("Processor #%d invalid (max %d)\n",
 			id, MAX_APICS);
 		return;
 	}
 
 	if (id == boot_cpu_physical_apicid)
 		boot_cpu = 1;
+	pr_info("registering lapic[%d]\n", id);
 
-	cpu.type = MP_PROCESSOR;
-	cpu.apicid = id;
-	cpu.apicver = GET_APIC_VERSION(apic_read(APIC_LVR));
-	cpu.cpuflag = CPU_ENABLED;
-	cpu.cpuflag |= (boot_cpu ? CPU_BOOTPROCESSOR : 0);
-	cpu.cpufeature = (boot_cpu_data.x86 << 8) |
-		(boot_cpu_data.x86_model << 4) | boot_cpu_data.x86_mask;
-	cpu.featureflag = boot_cpu_data.x86_capability[0];
-	cpu.reserved[0] = 0;
-	cpu.reserved[1] = 0;
-
-	generic_processor_info(id, cpu.apicver);
+	generic_processor_info(id, GET_APIC_VERSION(apic_read(APIC_LVR)));
 }
 
 static int __init sfi_parse_cpus(struct sfi_table_header *table)
@@ -238,12 +225,12 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	static u32 gsi_base;
 
 	if (nr_ioapics >= MAX_IO_APICS) {
-		printk(KERN_ERR "ERROR: Max # of I/O APICs (%d) exceeded "
+		pr_err("ERROR: Max # of I/O APICs (%d) exceeded "
 			"(found %d)\n", MAX_IO_APICS, nr_ioapics);
 		panic("Recompile kernel with bigger MAX_IO_APICS!\n");
 	}
 	if (!paddr) {
-		printk(KERN_ERR "WARNING: Bogus (zero) I/O APIC address"
+		pr_warning("WARNING: Bogus (zero) I/O APIC address"
 			" found in MADT table, skipping!\n");
 		return;
 	}
@@ -266,21 +253,19 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	mp_ioapics[idx].apicver = 0;
 #endif
 
-	pr_info("IOAPIC[%d]: apic_id %d, version %d, address 0x%x\n",
-		idx, mp_ioapics[idx].apicid,
-		mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr);
 	/*
 	 * Build basic GSI lookup table to facilitate gsi->io_apic lookups
 	 * and to prevent reprogramming of IOAPIC pins (PCI GSIs).
 	 */
-	mp_ioapic_routing[idx].apic_id = mp_ioapics[idx].apicid;
 	mp_ioapic_routing[idx].gsi_base = gsi_base;
 	mp_ioapic_routing[idx].gsi_end = gsi_base +
 		io_apic_get_redir_entries(idx);
 	gsi_base = mp_ioapic_routing[idx].gsi_end + 1;
+
 	pr_info("IOAPIC[%d]: apic_id %d, version %d, address 0x%x, "
-		"GSI %d-%d\n", idx, mp_ioapics[idx].apicid,
-		mp_ioapics[idx].apicver, (u32) mp_ioapics[idx].apicaddr,
+		"GSI %d-%d\n",
+		idx, mp_ioapics[idx].apicid,
+		mp_ioapics[idx].apicver, (u32)mp_ioapics[idx].apicaddr,
 		mp_ioapic_routing[idx].gsi_base,
 		mp_ioapic_routing[idx].gsi_end);
 
