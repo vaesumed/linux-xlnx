@@ -164,17 +164,17 @@ static unsigned long *__bm_map_paddr(struct drbd_bitmap *b, unsigned long offset
 	return (unsigned long *) kmap_atomic(page, km);
 }
 
-unsigned long * bm_map_paddr(struct drbd_bitmap *b, unsigned long offset)
+static unsigned long * bm_map_paddr(struct drbd_bitmap *b, unsigned long offset)
 {
 	return __bm_map_paddr(b, offset, KM_IRQ1);
 }
 
-void __bm_unmap(unsigned long *p_addr, const enum km_type km)
+static void __bm_unmap(unsigned long *p_addr, const enum km_type km)
 {
 	kunmap_atomic(p_addr, km);
 };
 
-void bm_unmap(unsigned long *p_addr)
+static void bm_unmap(unsigned long *p_addr)
 {
 	return __bm_unmap(p_addr, KM_IRQ1);
 }
@@ -367,7 +367,7 @@ static void bm_set_surplus(struct drbd_bitmap *b)
 	bm_unmap(p_addr);
 }
 
-static unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endian)
+static unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endian, const enum km_type km)
 {
 	unsigned long *p_addr, *bm, offset = 0;
 	unsigned long bits = 0;
@@ -375,7 +375,7 @@ static unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endia
 
 	while (offset < b->bm_words) {
 		i = do_now = min_t(size_t, b->bm_words-offset, LWPP);
-		p_addr = bm_map_paddr(b, offset);
+		p_addr = __bm_map_paddr(b, offset, km);
 		bm = p_addr + MLPP(offset);
 		while (i--) {
 #ifndef __LITTLE_ENDIAN
@@ -384,7 +384,7 @@ static unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endia
 #endif
 			bits += hweight_long(*bm++);
 		}
-		bm_unmap(p_addr);
+		__bm_unmap(p_addr, km);
 		offset += do_now;
 	}
 
@@ -393,12 +393,12 @@ static unsigned long __bm_count_bits(struct drbd_bitmap *b, const int swap_endia
 
 static unsigned long bm_count_bits(struct drbd_bitmap *b)
 {
-	return __bm_count_bits(b, 0);
+	return __bm_count_bits(b, 0, KM_IRQ1);
 }
 
 static unsigned long bm_count_bits_swap_endian(struct drbd_bitmap *b)
 {
-	return __bm_count_bits(b, 1);
+	return __bm_count_bits(b, 1, KM_USER0);
 }
 
 void _drbd_bm_recount_bits(struct drbd_conf *mdev, char *file, int line)
