@@ -126,11 +126,9 @@ int __init sfi_init_memory_map(void)
 		case EFI_CONVENTIONAL_MEMORY:
 			type = E820_RAM;
 			break;
-		case EFI_MEMORY_MAPPED_IO:
 		case EFI_UNUSABLE_MEMORY:
-		case EFI_RUNTIME_SERVICES_DATA:
-			mentry++;
-			continue;
+			type = E820_UNUSABLE;
+			break;
 		default:
 			type = E820_RESERVED;
 		}
