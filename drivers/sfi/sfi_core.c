@@ -108,14 +108,24 @@ static void sfi_print_table_header(unsigned long long pa,
 }
 
 /*
- * Verify table checksum  -- errors are usually fatal
+ * Verify table's length and checksum  -- errors are usually fatal
  */
-static int sfi_verify_checksum(struct sfi_table_header *table)
+static int sfi_verify_table(struct sfi_table_header *table)
 {
 
 	u8 checksum = 0;
 	u8 *puchar = (u8 *)table;
 	u32 length = table->length;
+
+	/*
+	 * to prevent a broken FW provided table from harming the kernel,
+	 * set 1 MBytes as the upper limit for table length, 1 MB table
+	 * has about 30,000 entries for biggest SFI table entry
+	 */
+	if (length > 0x100000) {
+		pr_err("Met a too big SFI table ( > 1MB)\n");
+		return -1;
+	}
 
 	while (length--)
 		checksum += *puchar++;
@@ -248,7 +258,7 @@ int __init sfi_check_table(u64 pa)
 		return -1;
 
 	sfi_print_table_header(pa, th);
-	ret = sfi_verify_checksum(th);
+	ret = sfi_verify_table(th);
 
 	sfi_unmap_table(th);
 
@@ -311,7 +321,7 @@ static __init int sfi_find_syst(void)
 		sfi_print_table_header(SFI_SYST_SEARCH_BEGIN + offset,
 					syst_hdr);
 
-		if (sfi_verify_checksum(syst_hdr))
+		if (sfi_verify_table(syst_hdr))
 			continue;
 
 		/*
