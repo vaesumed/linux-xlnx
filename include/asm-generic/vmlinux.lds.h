@@ -629,6 +629,14 @@
 #define INIT_RAM_FS
 #endif
 
+#define DISCARDS							\
+	/DISCARD/ : {							\
+	EXIT_TEXT							\
+	EXIT_DATA							\
+	*(.exitcall.exit)						\
+	*(.discard)							\
+	}
+
 /**
  * PERCPU_VADDR - define output section for percpu area
  * @vaddr: explicit base address (optional)
