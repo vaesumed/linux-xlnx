@@ -41,15 +41,16 @@
 #define _LINUX_SFI_ACPI_H
 
 #ifdef	CONFIG_SFI
-#include <linux/acpi.h>		/* acpi_table_handler */
+#include <acpi/acpi.h>		/* struct acpi_table_header */
 
 int sfi_acpi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-	uint flag, acpi_table_handler handler);
+	uint flag, int (*handler)(struct acpi_table_header *));
 
 #else /* !CONFIG_SFI */
 
 static inline int sfi_acpi_table_parse(char *signature, char *oem_id,
-	char* oem_table_id, unsigned int flags, acpi_table_handler handler)
+	char* oem_table_id, unsigned int flags,
+	int (*handler)(struct acpi_table_header *))
 {
 	return -1;
 }

@@ -41,7 +41,7 @@
 #define pr_fmt(fmt) KMSG_COMPONENT ": " fmt
 
 #include <linux/kernel.h>
-#include <linux/acpi.h>
+#include <acpi/acpi.h>
 #include <linux/sfi.h>
 
 #include "sfi_core.h"
@@ -133,7 +133,7 @@ static void sfi_acpi_put_table(struct acpi_table_header *table)
  * find specified table in XSDT, run handler on it and return its return value
  */
 int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
-			 unsigned int flags, acpi_table_handler handler)
+		 unsigned int flags, int(* handler)(struct acpi_table_header *))
 {
 	int ret = 0;
 	struct acpi_table_header *table = NULL;
