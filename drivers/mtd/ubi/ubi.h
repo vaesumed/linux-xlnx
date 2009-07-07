@@ -301,6 +301,7 @@ struct ubi_wl_entry;
  *                @vol->readers, @vol->writers, @vol->exclusive,
  *                @vol->ref_count, @vol->mapping and @vol->eba_tbl.
  * @ref_count: count of references on the UBI device
+ * @image_seq: image sequence number recorded on EC headers
  *
  * @rsvd_pebs: count of reserved physical eraseblocks
  * @avail_pebs: count of available physical eraseblocks
@@ -390,6 +391,7 @@ struct ubi_device {
 	struct ubi_volume *volumes[UBI_MAX_VOLUMES+UBI_INT_VOL_COUNT];
 	spinlock_t volumes_lock;
 	int ref_count;
+	int image_seq;
 
 	int rsvd_pebs;
 	int avail_pebs;
