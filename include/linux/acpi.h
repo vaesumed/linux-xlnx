@@ -27,6 +27,7 @@
 
 #include <linux/ioport.h>	/* for struct resource */
 
+#ifdef	CONFIG_ACPI
 
 #ifndef _LINUX
 #define _LINUX
@@ -39,12 +40,9 @@
 #include <acpi/acpi_bus.h>
 #include <acpi/acpi_drivers.h>
 #include <acpi/acpi_numa.h>
+#include <asm/acpi.h>
 #include <linux/dmi.h>
 
-typedef int (*acpi_table_handler) (struct acpi_table_header *table);
-
-#ifdef	CONFIG_ACPI
-#include <asm/acpi.h>
 
 enum acpi_irq_model_id {
 	ACPI_IRQ_MODEL_PIC = 0,
@@ -76,6 +74,7 @@ enum acpi_address_range_id {
 
 /* Table Handlers */
 
+typedef int (*acpi_table_handler) (struct acpi_table_header *table);
 
 typedef int (*acpi_table_entry_handler) (struct acpi_subtable_header *header, const unsigned long end);
 
