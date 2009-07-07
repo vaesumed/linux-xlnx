@@ -1,0 +1,24 @@
+Importing driver-core.current based on 2.6.31-rc1
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.31-rc1-git3
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.31-rc1-git3
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.31-rc1-git5
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.31-rc1-47-g987fed3
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+Unchanged quilt series device-mapper
+Importing ttydev based on 5a4f13fad1ab5bd08dea78fc55321e429d83cddf
+Unchanged quilt series ttydev
+Importing aoe based on v2.6.29-rc2
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+Unchanged quilt series driver-core
+Importing usb based on quilt/driver-core
+Unchanged quilt series usb
+Importing staging based on quilt/usb
+Unchanged quilt series staging
