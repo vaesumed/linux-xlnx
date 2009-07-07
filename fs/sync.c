@@ -118,6 +118,7 @@ restart:
  */
 SYSCALL_DEFINE0(sync)
 {
+	wakeup_flusher_threads(0);
 	wakeup_pdflush(0);
 	sync_filesystems(0);
 	sync_filesystems(1);
