@@ -50,7 +50,9 @@
 #include <net/bluetooth/hci_core.h>
 #include <net/bluetooth/l2cap.h>
 
-#define VERSION "2.13"
+#define VERSION "2.14"
+
+static int enable_ertm = 0;
 
 static u32 l2cap_feat_mask = L2CAP_FEAT_FIXED_CHAN;
 static u8 l2cap_fixed_chan[8] = { 0x02, };
@@ -715,12 +717,16 @@ static void l2cap_sock_init(struct sock *sk, struct sock *parent)
 
 		pi->imtu = l2cap_pi(parent)->imtu;
 		pi->omtu = l2cap_pi(parent)->omtu;
+		pi->mode = l2cap_pi(parent)->mode;
+		pi->fcs  = l2cap_pi(parent)->fcs;
 		pi->sec_level = l2cap_pi(parent)->sec_level;
 		pi->role_switch = l2cap_pi(parent)->role_switch;
 		pi->force_reliable = l2cap_pi(parent)->force_reliable;
 	} else {
 		pi->imtu = L2CAP_DEFAULT_MTU;
 		pi->omtu = 0;
+		pi->mode = L2CAP_MODE_BASIC;
+		pi->fcs  = L2CAP_FCS_CRC16;
 		pi->sec_level = BT_SECURITY_LOW;
 		pi->role_switch = 0;
 		pi->force_reliable = 0;
@@ -956,6 +962,18 @@ static int l2cap_sock_connect(struct socket *sock, struct sockaddr *addr, int al
 		goto done;
 	}
 
+	switch (l2cap_pi(sk)->mode) {
+	case L2CAP_MODE_BASIC:
+		break;
+	case L2CAP_MODE_ERTM:
+		if (enable_ertm)
+			break;
+		/* fall through */
+	default:
+		err = -ENOTSUPP;
+		goto done;
+	}
+
 	switch (sk->sk_state) {
 	case BT_CONNECT:
 	case BT_CONNECT2:
@@ -1004,6 +1022,18 @@ static int l2cap_sock_listen(struct socket *sock, int backlog)
 
 	if (sk->sk_state != BT_BOUND || sock->type != SOCK_SEQPACKET) {
 		err = -EBADFD;
+		goto done;
+	}
+
+	switch (l2cap_pi(sk)->mode) {
+	case L2CAP_MODE_BASIC:
+		break;
+	case L2CAP_MODE_ERTM:
+		if (enable_ertm)
+			break;
+		/* fall through */
+	default:
+		err = -ENOTSUPP;
 		goto done;
 	}
 
@@ -1257,7 +1287,7 @@ static int l2cap_sock_setsockopt_old(struct socket *sock, int optname, char __us
 		opts.imtu     = l2cap_pi(sk)->imtu;
 		opts.omtu     = l2cap_pi(sk)->omtu;
 		opts.flush_to = l2cap_pi(sk)->flush_to;
-		opts.mode     = L2CAP_MODE_BASIC;
+		opts.mode     = l2cap_pi(sk)->mode;
 
 		len = min_t(unsigned int, sizeof(opts), optlen);
 		if (copy_from_user((char *) &opts, optval, len)) {
@@ -1265,8 +1295,9 @@ static int l2cap_sock_setsockopt_old(struct socket *sock, int optname, char __us
 			break;
 		}
 
-		l2cap_pi(sk)->imtu  = opts.imtu;
-		l2cap_pi(sk)->omtu  = opts.omtu;
+		l2cap_pi(sk)->imtu = opts.imtu;
+		l2cap_pi(sk)->omtu = opts.omtu;
+		l2cap_pi(sk)->mode = opts.mode;
 		break;
 
 	case L2CAP_LM:
@@ -1379,7 +1410,7 @@ static int l2cap_sock_getsockopt_old(struct socket *sock, int optname, char __us
 		opts.imtu     = l2cap_pi(sk)->imtu;
 		opts.omtu     = l2cap_pi(sk)->omtu;
 		opts.flush_to = l2cap_pi(sk)->flush_to;
-		opts.mode     = L2CAP_MODE_BASIC;
+		opts.mode     = l2cap_pi(sk)->mode;
 
 		len = min_t(unsigned int, len, sizeof(opts));
 		if (copy_to_user(optval, (char *) &opts, len))
@@ -1712,12 +1743,29 @@ static int l2cap_build_conf_req(struct sock *sk, void *data)
 {
 	struct l2cap_pinfo *pi = l2cap_pi(sk);
 	struct l2cap_conf_req *req = data;
+	struct l2cap_conf_rfc rfc = { .mode = L2CAP_MODE_BASIC };
 	void *ptr = req->data;
 
 	BT_DBG("sk %p", sk);
 
-	if (pi->imtu != L2CAP_DEFAULT_MTU)
-		l2cap_add_conf_opt(&ptr, L2CAP_CONF_MTU, 2, pi->imtu);
+	switch (pi->mode) {
+	case L2CAP_MODE_BASIC:
+		if (pi->imtu != L2CAP_DEFAULT_MTU)
+			l2cap_add_conf_opt(&ptr, L2CAP_CONF_MTU, 2, pi->imtu);
+		break;
+
+	case L2CAP_MODE_ERTM:
+		rfc.mode            = L2CAP_MODE_ERTM;
+		rfc.txwin_size      = L2CAP_DEFAULT_RX_WINDOW;
+		rfc.max_transmit    = L2CAP_DEFAULT_MAX_RECEIVE;
+		rfc.retrans_timeout = cpu_to_le16(L2CAP_DEFAULT_RETRANS_TO);
+		rfc.monitor_timeout = cpu_to_le16(L2CAP_DEFAULT_MONITOR_TO);
+		rfc.max_pdu_size    = cpu_to_le16(L2CAP_DEFAULT_MAX_RX_APDU);
+
+		l2cap_add_conf_opt(&ptr, L2CAP_CONF_RFC,
+					sizeof(rfc), (unsigned long) &rfc);
+		break;
+	}
 
 	/* FIXME: Need actual value of the flush timeout */
 	//if (flush_to != L2CAP_DEFAULT_FLUSH_TO)
@@ -1797,7 +1845,7 @@ static int l2cap_parse_conf_req(struct sock *sk, void *data)
 			rfc.mode = L2CAP_MODE_BASIC;
 
 			l2cap_add_conf_opt(&ptr, L2CAP_CONF_RFC,
-						sizeof(rfc), (unsigned long) &rfc);
+					sizeof(rfc), (unsigned long) &rfc);
 		}
 	}
 
@@ -2205,10 +2253,13 @@ static inline int l2cap_information_req(struct l2cap_conn *conn, struct l2cap_cm
 
 	if (type == L2CAP_IT_FEAT_MASK) {
 		u8 buf[8];
+		u32 feat_mask = l2cap_feat_mask;
 		struct l2cap_info_rsp *rsp = (struct l2cap_info_rsp *) buf;
 		rsp->type   = cpu_to_le16(L2CAP_IT_FEAT_MASK);
 		rsp->result = cpu_to_le16(L2CAP_IR_SUCCESS);
-		put_unaligned(cpu_to_le32(l2cap_feat_mask), (__le32 *) rsp->data);
+		if (enable_ertm)
+			feat_mask |= L2CAP_FEAT_ERTM;
+		put_unaligned(cpu_to_le32(feat_mask), (__le32 *) rsp->data);
 		l2cap_send_cmd(conn, cmd->ident,
 					L2CAP_INFO_RSP, sizeof(buf), buf);
 	} else if (type == L2CAP_IT_FIXED_CHAN) {
@@ -2827,6 +2878,9 @@ EXPORT_SYMBOL(l2cap_load);
 
 module_init(l2cap_init);
 module_exit(l2cap_exit);
+
+module_param(enable_ertm, bool, 0644);
+MODULE_PARM_DESC(enable_ertm, "Enable enhanced retransmission mode");
 
 MODULE_AUTHOR("Marcel Holtmann <marcel@holtmann.org>");
 MODULE_DESCRIPTION("Bluetooth L2CAP ver " VERSION);
