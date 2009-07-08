@@ -27,27 +27,17 @@
 #include <linux/kernel.h>   /* ARRAY_SIZE */
 #include <linux/version.h>
 #include <linux/module.h>
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #include <linux/jiffies.h>
-#else
-#include <linux/jffs.h>
-#include <linux/tqueue.h>
-#endif
 #include <linux/timer.h>
 #include <linux/sched.h>
 
 #include <linux/delay.h>
 #include <linux/wireless.h>
+#include <linux/ieee80211.h>
 
 #include "rtl819x_HT.h"
 #include "rtl819x_BA.h"
 #include "rtl819x_TS.h"
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20))
-#ifndef bool
-typedef enum{false = 0, true} bool;
-#endif
-#endif
 
 #ifndef IW_MODE_MONITOR
 #define IW_MODE_MONITOR 6
@@ -55,25 +45,6 @@ typedef enum{false = 0, true} bool;
 
 #ifndef IWEVCUSTOM
 #define IWEVCUSTOM 0x8c02
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#ifndef __bitwise
-#define __bitwise __attribute__((bitwise))
-#endif
-typedef __u16  __le16;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,27))
-struct iw_spy_data{
-	/* --- Standard spy support --- */
-	int 			spy_number;
-	u_char 			spy_address[IW_MAX_SPY][ETH_ALEN];
-	struct iw_quality	spy_stat[IW_MAX_SPY];
-	/* --- Enhanced spy support (event) */
-	struct iw_quality	spy_thr_low; /* Low threshold */
-	struct iw_quality	spy_thr_high; /* High threshold */
-	u_char			spy_thr_under[IW_MAX_SPY];
-};
-#endif
 #endif
 
 #ifndef container_of
@@ -244,55 +215,6 @@ typedef struct cb_desc {
 #define	MGN_MCS14_SG		0x9e
 #define	MGN_MCS15_SG		0x9f
 
-
-//----------------------------------------------------------------------------
-//		802.11 Management frame Reason Code field
-//----------------------------------------------------------------------------
-enum	_ReasonCode{
-	unspec_reason	= 0x1,
-	auth_not_valid	= 0x2,
-	deauth_lv_ss	= 0x3,
-	inactivity		= 0x4,
-	ap_overload 	= 0x5,
-	class2_err		= 0x6,
-	class3_err		= 0x7,
-	disas_lv_ss 	= 0x8,
-	asoc_not_auth	= 0x9,
-
-	//----MIC_CHECK
-	mic_failure 	= 0xe,
-	//----END MIC_CHECK
-
-	// Reason code defined in 802.11i D10.0 p.28.
-	invalid_IE		= 0x0d,
-	four_way_tmout	= 0x0f,
-	two_way_tmout	= 0x10,
-	IE_dismatch 	= 0x11,
-	invalid_Gcipher = 0x12,
-	invalid_Pcipher = 0x13,
-	invalid_AKMP	= 0x14,
-	unsup_RSNIEver = 0x15,
-	invalid_RSNIE	= 0x16,
-	auth_802_1x_fail= 0x17,
-	ciper_reject		= 0x18,
-
-	// Reason code defined in 7.3.1.7, 802.1e D13.0, p.42. Added by Annie, 2005-11-15.
-	QoS_unspec		= 0x20, // 32
-	QAP_bandwidth	= 0x21, // 33
-	poor_condition	= 0x22, // 34
-	no_facility 	= 0x23, // 35
-							// Where is 36???
-	req_declined	= 0x25, // 37
-	invalid_param	= 0x26, // 38
-	req_not_honored= 0x27,	// 39
-	TS_not_created	= 0x2F, // 47
-	DL_not_allowed	= 0x30, // 48
-	dest_not_exist	= 0x31, // 49
-	dest_not_QSTA	= 0x32, // 50
-};
-
-
-
 #define aSifsTime	 (((priv->ieee80211->current_network.mode == IEEE_A)||(priv->ieee80211->current_network.mode == IEEE_N_24G)||(priv->ieee80211->current_network.mode == IEEE_N_5G))? 16 : 10)
 
 #define MGMT_QUEUE_NUM 5
@@ -409,13 +331,11 @@ enum	_ReasonCode{
 #define ieee80211_wx_get_scan		ieee80211_wx_get_scan_rsl
 #define ieee80211_wx_set_encode		ieee80211_wx_set_encode_rsl
 #define ieee80211_wx_get_encode		ieee80211_wx_get_encode_rsl
-#if WIRELESS_EXT >= 18
+
 #define ieee80211_wx_set_mlme		ieee80211_wx_set_mlme_rsl
 #define ieee80211_wx_set_auth		ieee80211_wx_set_auth_rsl
 #define ieee80211_wx_set_encode_ext	ieee80211_wx_set_encode_ext_rsl
 #define ieee80211_wx_get_encode_ext	ieee80211_wx_get_encode_ext_rsl
-#endif
-
 
 typedef struct ieee_param {
 	u32 cmd;
@@ -446,56 +366,8 @@ typedef struct ieee_param {
 	} u;
 }ieee_param;
 
-
-#if WIRELESS_EXT < 17
-#define IW_QUAL_QUAL_INVALID   0x10
-#define IW_QUAL_LEVEL_INVALID  0x20
-#define IW_QUAL_NOISE_INVALID  0x40
-#define IW_QUAL_QUAL_UPDATED   0x1
-#define IW_QUAL_LEVEL_UPDATED  0x2
-#define IW_QUAL_NOISE_UPDATED  0x4
-#endif
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static inline void tq_init(struct tq_struct * task, void(*func)(void *), void *data)
-{
-	task->routine = func;
-	task->data 	= data;
-	//task->next = NULL;
-	INIT_LIST_HEAD(&task->list);
-	task->sync = 0;
-}
-#endif
-
-// linux under 2.6.9 release may not support it, so modify it for common use
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9))
-//#define MSECS(t)	(1000 * ((t) / HZ) + 1000 * ((t) % HZ) / HZ)
-#define MSECS(t)	(HZ * ((t) / 1000) + (HZ * ((t) % 1000)) / 1000)
-static inline unsigned long msleep_interruptible_rsl(unsigned int msecs)
-{
-         unsigned long timeout = MSECS(msecs) + 1;
-
-         while (timeout) {
-                 set_current_state(TASK_INTERRUPTIBLE);
-                 timeout = schedule_timeout(timeout);
-         }
-         return timeout;
-}
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,31))
-static inline void msleep(unsigned int msecs)
-{
-         unsigned long timeout = MSECS(msecs) + 1;
-
-         while (timeout) {
-                 set_current_state(TASK_UNINTERRUPTIBLE);
-                 timeout = schedule_timeout(timeout);
-         }
-}
-#endif
-#else
 #define MSECS(t) msecs_to_jiffies(t)
 #define msleep_interruptible_rsl  msleep_interruptible
-#endif
 
 #define IEEE80211_DATA_LEN		2304
 /* Maximum size for the MA-UNITDATA primitive, 802.11 standard section
@@ -521,61 +393,18 @@ static inline void msleep(unsigned int msecs)
 
 
 /* Frame control field constants */
-#define IEEE80211_FCTL_VERS		0x0003
-#define IEEE80211_FCTL_FTYPE		0x000c
-#define IEEE80211_FCTL_STYPE		0x00f0
 #define IEEE80211_FCTL_FRAMETYPE	0x00fc
-#define IEEE80211_FCTL_TODS		0x0100
-#define IEEE80211_FCTL_FROMDS		0x0200
 #define IEEE80211_FCTL_DSTODS		0x0300 //added by david
-#define IEEE80211_FCTL_MOREFRAGS	0x0400
-#define IEEE80211_FCTL_RETRY		0x0800
-#define IEEE80211_FCTL_PM		0x1000
-#define IEEE80211_FCTL_MOREDATA		0x2000
 #define IEEE80211_FCTL_WEP		0x4000
-#define IEEE80211_FCTL_ORDER		0x8000
-
-#define IEEE80211_FTYPE_MGMT		0x0000
-#define IEEE80211_FTYPE_CTL		0x0004
-#define IEEE80211_FTYPE_DATA		0x0008
 
 /* management */
-#define IEEE80211_STYPE_ASSOC_REQ	0x0000
-#define IEEE80211_STYPE_ASSOC_RESP 	0x0010
-#define IEEE80211_STYPE_REASSOC_REQ	0x0020
-#define IEEE80211_STYPE_REASSOC_RESP	0x0030
-#define IEEE80211_STYPE_PROBE_REQ	0x0040
-#define IEEE80211_STYPE_PROBE_RESP	0x0050
-#define IEEE80211_STYPE_BEACON		0x0080
-#define IEEE80211_STYPE_ATIM		0x0090
-#define IEEE80211_STYPE_DISASSOC	0x00A0
-#define IEEE80211_STYPE_AUTH		0x00B0
-#define IEEE80211_STYPE_DEAUTH		0x00C0
 #define IEEE80211_STYPE_MANAGE_ACT	0x00D0
 
 /* control */
-#define IEEE80211_STYPE_PSPOLL		0x00A0
-#define IEEE80211_STYPE_RTS		0x00B0
-#define IEEE80211_STYPE_CTS		0x00C0
-#define IEEE80211_STYPE_ACK		0x00D0
-#define IEEE80211_STYPE_CFEND		0x00E0
-#define IEEE80211_STYPE_CFENDACK	0x00F0
 #define IEEE80211_STYPE_BLOCKACK   0x0094
 
 /* data */
-#define IEEE80211_STYPE_DATA		0x0000
-#define IEEE80211_STYPE_DATA_CFACK	0x0010
-#define IEEE80211_STYPE_DATA_CFPOLL	0x0020
-#define IEEE80211_STYPE_DATA_CFACKPOLL	0x0030
-#define IEEE80211_STYPE_NULLFUNC	0x0040
-#define IEEE80211_STYPE_CFACK		0x0050
-#define IEEE80211_STYPE_CFPOLL		0x0060
-#define IEEE80211_STYPE_CFACKPOLL	0x0070
-#define IEEE80211_STYPE_QOS_DATA	0x0080 //added for WMM 2006/8/2
 #define IEEE80211_STYPE_QOS_NULL	0x00C0
-
-#define IEEE80211_SCTL_FRAG		0x000F
-#define IEEE80211_SCTL_SEQ		0xFFF0
 
 /* QOS control */
 #define IEEE80211_QCTL_TID              0x000F
@@ -796,93 +625,12 @@ struct ieee80211_snap_hdr {
 #define WLAN_GET_SEQ_FRAG(seq) ((seq) & IEEE80211_SCTL_FRAG)
 #define WLAN_GET_SEQ_SEQ(seq)  (((seq) & IEEE80211_SCTL_SEQ) >> 4)
 
-/* Authentication algorithms */
-#define WLAN_AUTH_OPEN 0
-#define WLAN_AUTH_SHARED_KEY 1
-#define WLAN_AUTH_LEAP 2
+#define RTL_WLAN_AUTH_LEAP 2
 
 #define WLAN_AUTH_CHALLENGE_LEN 128
 
 #define WLAN_CAPABILITY_BSS (1<<0)
-#define WLAN_CAPABILITY_IBSS (1<<1)
-#define WLAN_CAPABILITY_CF_POLLABLE (1<<2)
-#define WLAN_CAPABILITY_CF_POLL_REQUEST (1<<3)
-#define WLAN_CAPABILITY_PRIVACY (1<<4)
-#define WLAN_CAPABILITY_SHORT_PREAMBLE (1<<5)
-#define WLAN_CAPABILITY_PBCC (1<<6)
-#define WLAN_CAPABILITY_CHANNEL_AGILITY (1<<7)
-#define WLAN_CAPABILITY_SPECTRUM_MGMT (1<<8)
-#define WLAN_CAPABILITY_QOS (1<<9)
 #define WLAN_CAPABILITY_SHORT_SLOT (1<<10)
-#define WLAN_CAPABILITY_DSSS_OFDM (1<<13)
-
-/* 802.11g ERP information element */
-#define WLAN_ERP_NON_ERP_PRESENT (1<<0)
-#define WLAN_ERP_USE_PROTECTION (1<<1)
-#define WLAN_ERP_BARKER_PREAMBLE (1<<2)
-
-/* Status codes */
-enum ieee80211_statuscode {
-        WLAN_STATUS_SUCCESS = 0,
-        WLAN_STATUS_UNSPECIFIED_FAILURE = 1,
-        WLAN_STATUS_CAPS_UNSUPPORTED = 10,
-        WLAN_STATUS_REASSOC_NO_ASSOC = 11,
-        WLAN_STATUS_ASSOC_DENIED_UNSPEC = 12,
-        WLAN_STATUS_NOT_SUPPORTED_AUTH_ALG = 13,
-        WLAN_STATUS_UNKNOWN_AUTH_TRANSACTION = 14,
-        WLAN_STATUS_CHALLENGE_FAIL = 15,
-        WLAN_STATUS_AUTH_TIMEOUT = 16,
-        WLAN_STATUS_AP_UNABLE_TO_HANDLE_NEW_STA = 17,
-        WLAN_STATUS_ASSOC_DENIED_RATES = 18,
-        /* 802.11b */
-        WLAN_STATUS_ASSOC_DENIED_NOSHORTPREAMBLE = 19,
-        WLAN_STATUS_ASSOC_DENIED_NOPBCC = 20,
-        WLAN_STATUS_ASSOC_DENIED_NOAGILITY = 21,
-        /* 802.11h */
-        WLAN_STATUS_ASSOC_DENIED_NOSPECTRUM = 22,
-        WLAN_STATUS_ASSOC_REJECTED_BAD_POWER = 23,
-        WLAN_STATUS_ASSOC_REJECTED_BAD_SUPP_CHAN = 24,
-        /* 802.11g */
-        WLAN_STATUS_ASSOC_DENIED_NOSHORTTIME = 25,
-        WLAN_STATUS_ASSOC_DENIED_NODSSSOFDM = 26,
-        /* 802.11i */
-        WLAN_STATUS_INVALID_IE = 40,
-        WLAN_STATUS_INVALID_GROUP_CIPHER = 41,
-        WLAN_STATUS_INVALID_PAIRWISE_CIPHER = 42,
-        WLAN_STATUS_INVALID_AKMP = 43,
-        WLAN_STATUS_UNSUPP_RSN_VERSION = 44,
-        WLAN_STATUS_INVALID_RSN_IE_CAP = 45,
-        WLAN_STATUS_CIPHER_SUITE_REJECTED = 46,
-};
-
-/* Reason codes */
-enum ieee80211_reasoncode {
-        WLAN_REASON_UNSPECIFIED = 1,
-        WLAN_REASON_PREV_AUTH_NOT_VALID = 2,
-        WLAN_REASON_DEAUTH_LEAVING = 3,
-        WLAN_REASON_DISASSOC_DUE_TO_INACTIVITY = 4,
-        WLAN_REASON_DISASSOC_AP_BUSY = 5,
-        WLAN_REASON_CLASS2_FRAME_FROM_NONAUTH_STA = 6,
-        WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA = 7,
-        WLAN_REASON_DISASSOC_STA_HAS_LEFT = 8,
-        WLAN_REASON_STA_REQ_ASSOC_WITHOUT_AUTH = 9,
-        /* 802.11h */
-        WLAN_REASON_DISASSOC_BAD_POWER = 10,
-        WLAN_REASON_DISASSOC_BAD_SUPP_CHAN = 11,
-        /* 802.11i */
-        WLAN_REASON_INVALID_IE = 13,
-        WLAN_REASON_MIC_FAILURE = 14,
-        WLAN_REASON_4WAY_HANDSHAKE_TIMEOUT = 15,
-        WLAN_REASON_GROUP_KEY_HANDSHAKE_TIMEOUT = 16,
-        WLAN_REASON_IE_DIFFERENT = 17,
-        WLAN_REASON_INVALID_GROUP_CIPHER = 18,
-        WLAN_REASON_INVALID_PAIRWISE_CIPHER = 19,
-        WLAN_REASON_INVALID_AKMP = 20,
-        WLAN_REASON_UNSUPP_RSN_VERSION = 21,
-        WLAN_REASON_INVALID_RSN_IE_CAP = 22,
-        WLAN_REASON_IEEE8021X_FAILED = 23,
-        WLAN_REASON_CIPHER_SUITE_REJECTED = 24,
-};
 
 #define IEEE80211_STATMASK_SIGNAL (1<<0)
 #define IEEE80211_STATMASK_RSSI (1<<1)
@@ -1173,7 +921,7 @@ enum ieee80211_mfie {
 /* Minimal header; can be used for passing 802.11 frames with sufficient
  * information to determine what type of underlying data type is actually
  * stored in the data. */
-struct ieee80211_hdr {
+struct rtl_ieee80211_hdr {
         __le16 frame_ctl;
         __le16 duration_id;
         u8 payload[0];
@@ -1787,21 +1535,6 @@ enum ieee80211_state {
 #define IEEE80211_52GHZ_CHANNELS (IEEE80211_52GHZ_MAX_CHANNEL - \
                                   IEEE80211_52GHZ_MIN_CHANNEL + 1)
 
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,11))
-extern inline int is_multicast_ether_addr(const u8 *addr)
-{
-        return ((addr[0] != 0xff) && (0x01 & addr[0]));
-}
-#endif
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,13))
-extern inline int is_broadcast_ether_addr(const u8 *addr)
-{
-	return ((addr[0] == 0xff) && (addr[1] == 0xff) && (addr[2] == 0xff) &&   \
-		(addr[3] == 0xff) && (addr[4] == 0xff) && (addr[5] == 0xff));
-}
-#endif
-
 typedef struct tx_pending_t{
 	int frag;
 	struct ieee80211_txb *txb;
@@ -1879,11 +1612,7 @@ typedef struct _RT_POWER_SAVE_CONTROL
 	bool				bHaltAdapterClkRQ;
 	bool				bSwRfProcessing;
 	RT_RF_POWER_STATE	eInactivePowerState;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 	struct work_struct 	InactivePsWorkItem;
-#else
-	struct tq_struct	InactivePsWorkItem;
-#endif
 	struct timer_list	InactivePsTimer;
 
 	// Return point for join action
@@ -2290,41 +2019,17 @@ struct ieee80211_device {
 
 	/* used if IEEE_SOFTMAC_BEACONS is set */
 	struct timer_list beacon_timer;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
         struct work_struct associate_complete_wq;
         struct work_struct associate_procedure_wq;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
         struct delayed_work softmac_scan_wq;
         struct delayed_work associate_retry_wq;
 	 struct delayed_work start_ibss_wq;
 	 struct delayed_work hw_wakeup_wq;
 	struct delayed_work hw_sleep_wq;
 	struct delayed_work link_change_wq;
-#else
-        struct work_struct softmac_scan_wq;
-        struct work_struct associate_retry_wq;
-	struct work_struct start_ibss_wq;
-	struct work_struct hw_wakeup_wq;
-	struct work_struct hw_sleep_wq;
-	struct work_struct link_change_wq;
-#endif
         struct work_struct wx_sync_scan_wq;
         struct workqueue_struct *wq;
-#else
-	/* used for periodly scan */
-	struct timer_list scan_timer;
 
-	struct tq_struct associate_complete_wq;
-	struct tq_struct associate_retry_wq;
-	struct tq_struct start_ibss_wq;
-	struct tq_struct associate_procedure_wq;
-	struct tq_struct softmac_scan_wq;
-	struct tq_struct wx_sync_scan_wq;
-	struct tq_struct hw_wakeup_wq;
-	struct tq_struct hw_sleep_wq;
-	struct tq_struct link_change_wq;
-
-#endif
         // Qos related. Added by Annie, 2005-11-01.
         //STA_QOS  StaQos;
 
@@ -2512,11 +2217,7 @@ struct ieee80211_device {
 
 static inline void *ieee80211_priv(struct net_device *dev)
 {
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 	return ((struct ieee80211_device *)netdev_priv(dev))->priv;
-#else
-	return ((struct ieee80211_device *)dev->priv)->priv;
-#endif
 }
 
 extern inline int ieee80211_is_empty_essid(const char *essid, int essid_len)
@@ -2588,7 +2289,7 @@ extern inline int ieee80211_get_hdrlen(u16 fc)
 	return hdrlen;
 }
 
-static inline u8 *ieee80211_get_payload(struct ieee80211_hdr *hdr)
+static inline u8 *ieee80211_get_payload(struct rtl_ieee80211_hdr *hdr)
 {
         switch (ieee80211_get_hdrlen(le16_to_cpu(hdr->frame_ctl))) {
         case IEEE80211_1ADDR_LEN:
@@ -2667,7 +2368,6 @@ extern int ieee80211_wx_set_encode(struct ieee80211_device *ieee,
 extern int ieee80211_wx_get_encode(struct ieee80211_device *ieee,
 				   struct iw_request_info *info,
 				   union iwreq_data *wrqu, char *key);
-#if WIRELESS_EXT >= 18
 extern int ieee80211_wx_get_encode_ext(struct ieee80211_device *ieee,
                             struct iw_request_info *info,
                             union iwreq_data* wrqu, char *extra);
@@ -2680,7 +2380,6 @@ extern int ieee80211_wx_set_auth(struct ieee80211_device *ieee,
 extern int ieee80211_wx_set_mlme(struct ieee80211_device *ieee,
                                struct iw_request_info *info,
                                union iwreq_data *wrqu, char *extra);
-#endif
 extern int ieee80211_wx_set_gen_ie(struct ieee80211_device *ieee, u8 *ie, size_t len);
 
 /* ieee80211_softmac.c */
@@ -2769,12 +2468,7 @@ extern int ieee80211_wx_get_freq(struct ieee80211_device *ieee, struct iw_reques
 			     union iwreq_data *wrqu, char *b);
 
 //extern void ieee80211_wx_sync_scan_wq(struct ieee80211_device *ieee);
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20))
 extern void ieee80211_wx_sync_scan_wq(struct work_struct *work);
-#else
- extern void ieee80211_wx_sync_scan_wq(struct ieee80211_device *ieee);
-#endif
-
 
 extern int ieee80211_wx_set_rawtx(struct ieee80211_device *ieee,
 			       struct iw_request_info *info,
