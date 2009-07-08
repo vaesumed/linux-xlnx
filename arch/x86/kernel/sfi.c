@@ -96,8 +96,9 @@ int __init sfi_init_memory_map(void)
 	/* walk through the syst to search the mmap table */
 	mmapt = NULL;
 	for (i = 0; i < tbl_cnt; i++) {
-		if (!strncmp(SFI_SIG_MMAP, (char *)(u32)*pentry, 4)) {
-			mmapt = (struct sfi_table_simple *)(u32)*pentry;
+		if (!strncmp(SFI_SIG_MMAP, (char *)(unsigned long)*pentry, 4)) {
+			mmapt = (struct sfi_table_simple *)
+					(unsigned long)*pentry;
 			break;
 		}
 		pentry++;
