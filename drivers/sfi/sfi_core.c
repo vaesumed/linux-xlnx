@@ -369,6 +369,8 @@ void __init sfi_init_late(void)
 	/* use ioremap now after it is ready */
 	sfi_use_ioremap = 1;
 	syst_va = sfi_map_memory(syst_pa, length);
+
+	sfi_acpi_init();
 }
 
 static int __init sfi_parse_cmdline(char *arg)
