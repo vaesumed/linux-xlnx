@@ -13,6 +13,7 @@
 #include <linux/pci.h>
 #include <linux/init.h>
 #include <linux/acpi.h>
+#include <linux/sfi_acpi.h>
 #include <linux/bitmap.h>
 #include <linux/sort.h>
 #include <asm/e820.h>
@@ -606,7 +607,9 @@ static void __init __pci_mmcfg_init(int early)
 	}
 
 	if (!known_bridge)
-		acpi_table_parse(ACPI_SIG_MCFG, pci_parse_mcfg);
+		if (acpi_table_parse(ACPI_SIG_MCFG, pci_parse_mcfg))
+			sfi_acpi_table_parse(ACPI_SIG_MCFG, NULL, NULL, 0,
+				pci_parse_mcfg);
 
 	pci_mmcfg_reject_broken(early);
 
