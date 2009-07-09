@@ -317,10 +317,6 @@ extern int usb_serial_generic_register(int debug);
 extern void usb_serial_generic_deregister(void);
 extern void usb_serial_generic_resubmit_read_urb(struct usb_serial_port *port,
 						 gfp_t mem_flags);
-extern int usb_serial_handle_sysrq_char(struct usb_serial_port *port,
-					unsigned int ch);
-extern int usb_serial_handle_break(struct usb_serial_port *port);
-
 
 extern int usb_serial_bus_register(struct usb_serial_driver *device);
 extern void usb_serial_bus_deregister(struct usb_serial_driver *device);
@@ -328,6 +324,34 @@ extern void usb_serial_bus_deregister(struct usb_serial_driver *device);
 extern struct usb_serial_driver usb_serial_generic_device;
 extern struct bus_type usb_serial_bus_type;
 extern struct tty_driver *usb_serial_tty_driver;
+
+static inline int usb_serial_handle_sysrq_char(struct usb_serial_port *port,
+					       unsigned int ch)
+{
+#ifdef CONFIG_MAGIC_SYSRQ
+	if (port->sysrq && port->console) {
+		if (ch && time_before(jiffies, port->sysrq)) {
+			handle_sysrq(ch, tty_port_tty_get(&port->port));
+			port->sysrq = 0;
+			return 1;
+		}
+		port->sysrq = 0;
+	}
+#endif /* CONFIG_MAGIC_SYSRQ */
+	return 0;
+}
+
+static inline int usb_serial_handle_break(struct usb_serial_port *port)
+{
+#ifdef CONFIG_MAGIC_SYSRQ
+	if (!port->sysrq) {
+		port->sysrq = jiffies + HZ*5;
+		return 1;
+	}
+	port->sysrq = 0;
+#endif /* CONFIG_MAGIC_SYSRQ */
+	return 0;
+}
 
 static inline void usb_serial_debug_data(int debug,
 					 struct device *dev,

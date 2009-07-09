@@ -506,6 +506,7 @@
  *
  * Armin Laeuger originally sent the PID for the UM 100 module.
  */
+#define FTDI_R2000KU_TRUE_RNG	0xFB80  /* R2000KU TRUE RNG */
 #define FTDI_ELV_UR100_PID	0xFB58	/* USB-RS232-Umsetzer (UR 100) */
 #define FTDI_ELV_UM100_PID	0xFB5A	/* USB-Modul UM 100 */
 #define FTDI_ELV_UO100_PID	0xFB5B	/* USB-Modul UO 100 */
@@ -614,6 +615,9 @@
 #define FTDI_CCSICDU20_0_PID    0xF9D0
 #define FTDI_CCSICDU40_1_PID    0xF9D1
 #define FTDI_CCSMACHX_2_PID     0xF9D2
+#define FTDI_CCSLOAD_N_GO_3_PID 0xF9D3
+#define FTDI_CCSICDU64_4_PID    0xF9D4
+#define FTDI_CCSPRIME8_5_PID    0xF9D5
 
 /* Inside Accesso contactless reader (http://www.insidefr.com) */
 #define INSIDE_ACCESSO		0xFAD0
