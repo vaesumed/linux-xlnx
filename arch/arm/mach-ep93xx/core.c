@@ -16,40 +16,23 @@
 
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/spinlock.h>
-#include <linux/sched.h>
+#include <linux/platform_device.h>
 #include <linux/interrupt.h>
-#include <linux/serial.h>
-#include <linux/tty.h>
-#include <linux/bitops.h>
-#include <linux/serial_8250.h>
-#include <linux/serial_core.h>
-#include <linux/device.h>
-#include <linux/mm.h>
 #include <linux/dma-mapping.h>
-#include <linux/time.h>
 #include <linux/timex.h>
-#include <linux/delay.h>
+#include <linux/io.h>
+#include <linux/gpio.h>
 #include <linux/termios.h>
 #include <linux/amba/bus.h>
 #include <linux/amba/serial.h>
-#include <linux/io.h>
 #include <linux/i2c.h>
 #include <linux/i2c-gpio.h>
 
-#include <asm/types.h>
-#include <asm/setup.h>
-#include <asm/memory.h>
 #include <mach/hardware.h>
-#include <asm/irq.h>
-#include <asm/system.h>
-#include <asm/tlbflush.h>
-#include <asm/pgtable.h>
 
 #include <asm/mach/map.h>
 #include <asm/mach/time.h>
 #include <asm/mach/irq.h>
-#include <mach/gpio.h>
 
 #include <asm/hardware/vic.h>
 
@@ -385,6 +368,47 @@ void __init ep93xx_init_irq(void)
 
 
 /*************************************************************************
+ * EP93xx System Controller Software Locked register handling
+ *************************************************************************/
+
+/*
+ * syscon_swlock prevents anything else from writing to the syscon
+ * block while a software locked register is being written.
+ */
+static DEFINE_SPINLOCK(syscon_swlock);
+
+void ep93xx_syscon_swlocked_write(unsigned int val, unsigned int reg)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&syscon_swlock, flags);
+
+	__raw_writel(0xaa, EP93XX_SYSCON_SWLOCK);
+	__raw_writel(val, reg);
+
+	spin_unlock_irqrestore(&syscon_swlock, flags);
+}
+EXPORT_SYMBOL(ep93xx_syscon_swlocked_write);
+
+void ep93xx_devcfg_set_clear(unsigned int set_bits, unsigned int clear_bits)
+{
+	unsigned long flags;
+	unsigned int val;
+
+	spin_lock_irqsave(&syscon_swlock, flags);
+
+	val = __raw_readl(EP93XX_SYSCON_DEVCFG);
+	val |= set_bits;
+	val &= ~clear_bits;
+	__raw_writel(0xaa, EP93XX_SYSCON_SWLOCK);
+	__raw_writel(val, EP93XX_SYSCON_DEVCFG);
+
+	spin_unlock_irqrestore(&syscon_swlock, flags);
+}
+EXPORT_SYMBOL(ep93xx_devcfg_set_clear);
+
+
+/*************************************************************************
  * EP93xx peripheral handling
  *************************************************************************/
 #define EP93XX_UART_MCR_OFFSET		(0x0100)
@@ -550,15 +574,8 @@ extern void ep93xx_gpio_init(void);
 
 void __init ep93xx_init_devices(void)
 {
-	unsigned int v;
-
-	/*
-	 * Disallow access to MaverickCrunch initially.
-	 */
-	v = __raw_readl(EP93XX_SYSCON_DEVICE_CONFIG);
-	v &= ~EP93XX_SYSCON_DEVICE_CONFIG_CRUNCH_ENABLE;
-	__raw_writel(0xaa, EP93XX_SYSCON_SWLOCK);
-	__raw_writel(v, EP93XX_SYSCON_DEVICE_CONFIG);
+	/* Disallow access to MaverickCrunch initially */
+	ep93xx_devcfg_clear_bits(EP93XX_SYSCON_DEVCFG_CPENA);
 
 	ep93xx_gpio_init();
 
