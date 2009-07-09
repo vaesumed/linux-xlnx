@@ -1077,7 +1077,7 @@ static int skfp_send_pkt(struct sk_buff *skb, struct net_device *dev)
 		// dequeue packets from xmt queue and send them
 		netif_start_queue(dev);
 		dev_kfree_skb(skb);
-		return (0);	/* return "success" */
+		return NETDEV_TX_OK;	/* return "success" */
 	}
 	if (bp->QueueSkb == 0) {	// return with tbusy set: queue full
 
@@ -1091,7 +1091,7 @@ static int skfp_send_pkt(struct sk_buff *skb, struct net_device *dev)
 		netif_stop_queue(dev);
 	}
 	dev->trans_start = jiffies;
-	return 0;
+	return NETDEV_TX_OK;
 
 }				// skfp_send_pkt
 
