@@ -1264,53 +1264,32 @@ static int get_lsr_info(struct tty_struct *tty,
 	return 0;
 }
 
-static int set_modem_info(struct moschip_port *mos7720_port, unsigned int cmd,
-			  unsigned int __user *value)
+static int mos7720_tiocmset(struct tty_struct *tty, struct file *file,
+					unsigned int set, unsigned int clear)
 {
-	unsigned int mcr ;
-	unsigned int arg;
+	struct usb_serial_port *port = tty->driver_data;
+	struct moschip_port *mos7720_port;
+	unsigned int mcr;
 	unsigned char data;
 
-	struct usb_serial_port *port;
-
+	mos7720_port = usb_get_serial_port_data(port);
 	if (mos7720_port == NULL)
 		return -1;
 
-	port = (struct usb_serial_port *)mos7720_port->port;
 	mcr = mos7720_port->shadowMCR;
 
-	if (copy_from_user(&arg, value, sizeof(int)))
-		return -EFAULT;
-
-	switch (cmd) {
-	case TIOCMBIS:
-		if (arg & TIOCM_RTS)
-			mcr |= UART_MCR_RTS;
-		if (arg & TIOCM_DTR)
-			mcr |= UART_MCR_RTS;
-		if (arg & TIOCM_LOOP)
-			mcr |= UART_MCR_LOOP;
-		break;
-
-	case TIOCMBIC:
-		if (arg & TIOCM_RTS)
-			mcr &= ~UART_MCR_RTS;
-		if (arg & TIOCM_DTR)
-			mcr &= ~UART_MCR_RTS;
-		if (arg & TIOCM_LOOP)
-			mcr &= ~UART_MCR_LOOP;
-		break;
-
-	case TIOCMSET:
-		/* turn off the RTS and DTR and LOOPBACK
-		 * and then only turn on what was asked to */
-		mcr &=  ~(UART_MCR_RTS | UART_MCR_DTR | UART_MCR_LOOP);
-		mcr |= ((arg & TIOCM_RTS) ? UART_MCR_RTS : 0);
-		mcr |= ((arg & TIOCM_DTR) ? UART_MCR_DTR : 0);
-		mcr |= ((arg & TIOCM_LOOP) ? UART_MCR_LOOP : 0);
-		break;
-	}
-
+	if (clear & TIOCM_RTS)
+		mcr &= ~UART_MCR_RTS;
+	if (clear & TIOCM_DTR)
+		mcr &= ~UART_MCR_RTS;
+	if (clear & TIOCM_LOOP)
+		mcr &= ~UART_MCR_LOOP;
+	if (set & TIOCM_RTS)
+		mcr |= UART_MCR_RTS;
+	if (set & TIOCM_DTR)
+		mcr |= UART_MCR_RTS;
+	if (set & TIOCM_LOOP)
+		mcr |= UART_MCR_LOOP;
 	mos7720_port->shadowMCR = mcr;
 
 	data = mos7720_port->shadowMCR;
@@ -1320,12 +1299,18 @@ static int set_modem_info(struct moschip_port *mos7720_port, unsigned int cmd,
 	return 0;
 }
 
-static int get_modem_info(struct moschip_port *mos7720_port,
-			  unsigned int __user *value)
+static int mos7720_tiocmget(struct tty_struct *tty, struct file *file)
 {
-	unsigned int result = 0;
-	unsigned int msr = mos7720_port->shadowMSR;
-	unsigned int mcr = mos7720_port->shadowMCR;
+	struct usb_serial_port *port = tty->driver_data;
+	struct moschip_port *mos7720_port;
+	unsigned int result = 0, mcr, msr;
+
+	mos7720_port = usb_get_serial_port_data(port);
+	if (mos7720_port == NULL)
+		return -ENODEV;
+	
+	msr = mos7720_port->shadowMSR;
+	mcr = mos7720_port->shadowMCR;
 
 	result = ((mcr & UART_MCR_DTR)	? TIOCM_DTR: 0)	  /* 0x002 */
 		  | ((mcr & UART_MCR_RTS)	? TIOCM_RTS: 0)   /* 0x004 */
@@ -1336,10 +1321,7 @@ static int get_modem_info(struct moschip_port *mos7720_port,
 
 
 	dbg("%s -- %x", __func__, result);
-
-	if (copy_to_user(value, &result, sizeof(int)))
-		return -EFAULT;
-	return 0;
+	return result;
 }
 
 static int get_serial_info(struct moschip_port *mos7720_port,
@@ -1388,20 +1370,6 @@ static int mos7720_ioctl(struct tty_struct *tty, struct file *file,
 		return get_lsr_info(tty, mos7720_port,
 					(unsigned int __user *)arg);
 		return 0;
-
-	/* FIXME: These should be using the mode methods */
-	case TIOCMBIS:
-	case TIOCMBIC:
-	case TIOCMSET:
-		dbg("%s (%d) TIOCMSET/TIOCMBIC/TIOCMSET",
-					__func__, port->number);
-		return set_modem_info(mos7720_port, cmd,
-				      (unsigned int __user *)arg);
-
-	case TIOCMGET:
-		dbg("%s (%d) TIOCMGET", __func__,  port->number);
-		return get_modem_info(mos7720_port,
-				      (unsigned int __user *)arg);
 
 	case TIOCGSERIAL:
 		dbg("%s (%d) TIOCGSERIAL", __func__,  port->number);
@@ -1562,6 +1530,8 @@ static struct usb_serial_driver moschip7720_2port_driver = {
 	.write_room		= mos7720_write_room,
 	.chars_in_buffer	= mos7720_chars_in_buffer,
 	.break_ctl		= mos7720_break,
+	.tiocmget		= mos7720_tiocmget,
+	.tiocmset		= mos7720_tiocmset,
 	.read_bulk_callback	= mos7720_bulk_in_callback,
 	.read_int_callback	= mos7720_interrupt_callback,
 };

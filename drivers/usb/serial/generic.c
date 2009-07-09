@@ -424,20 +424,19 @@ static void flush_and_resubmit_read_urb(struct usb_serial_port *port)
 	if (!tty)
 		goto done;
 
-	/* Push data to tty */
-	if (unlikely(port->console)) {
+	/* The per character mucking around with sysrq path it too slow for
+	   stuff like 3G modems, so shortcircuit it in the 99.9999999% of cases
+	   where the USB serial is not a console anyway */	
+	if (!port->console || !port->sysrq)
+		tty_insert_flip_string(tty, ch, urb->actual_length);
+	else {	
+		/* Push data to tty */
 		for (i = 0; i < urb->actual_length; i++, ch++) {
-			if (!usb_serial_handle_sysrq_char(port, *ch))
+			if (!usb_serial_handle_sysrq_char(tty, port, *ch))
 				tty_insert_flip_char(tty, *ch, TTY_NORMAL);
 		}
-		tty_flip_buffer_push(tty);
-	} else if (urb->actual_length) {
-		i = tty_buffer_request_room(tty, urb->actual_length);
-		if (i) {
-			tty_insert_flip_string(tty, urb->transfer_buffer, i);
-			tty_flip_buffer_push(tty);
-		}
 	}
+	tty_flip_buffer_push(tty);
 	tty_kref_put(tty);
 done:
 	usb_serial_generic_resubmit_read_urb(port, GFP_ATOMIC);
