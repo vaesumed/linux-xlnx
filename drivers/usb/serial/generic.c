@@ -425,11 +425,19 @@ static void flush_and_resubmit_read_urb(struct usb_serial_port *port)
 		goto done;
 
 	/* Push data to tty */
-	for (i = 0; i < urb->actual_length; i++, ch++) {
-		if (!usb_serial_handle_sysrq_char(port, *ch))
-			tty_insert_flip_char(tty, *ch, TTY_NORMAL);
+	if (unlikely(port->console)) {
+		for (i = 0; i < urb->actual_length; i++, ch++) {
+			if (!usb_serial_handle_sysrq_char(port, *ch))
+				tty_insert_flip_char(tty, *ch, TTY_NORMAL);
+		}
+		tty_flip_buffer_push(tty);
+	} else if (urb->actual_length) {
+		i = tty_buffer_request_room(tty, urb->actual_length);
+		if (i) {
+			tty_insert_flip_string(tty, urb->transfer_buffer, i);
+			tty_flip_buffer_push(tty);
+		}
 	}
-	tty_flip_buffer_push(tty);
 	tty_kref_put(tty);
 done:
 	usb_serial_generic_resubmit_read_urb(port, GFP_ATOMIC);
@@ -526,31 +534,6 @@ void usb_serial_generic_unthrottle(struct tty_struct *tty)
 		usb_serial_generic_resubmit_read_urb(port, GFP_KERNEL);
 	}
 }
-
-int usb_serial_handle_sysrq_char(struct usb_serial_port *port, unsigned int ch)
-{
-	if (port->sysrq && port->console) {
-		if (ch && time_before(jiffies, port->sysrq)) {
-			handle_sysrq(ch, tty_port_tty_get(&port->port));
-			port->sysrq = 0;
-			return 1;
-		}
-		port->sysrq = 0;
-	}
-	return 0;
-}
-EXPORT_SYMBOL_GPL(usb_serial_handle_sysrq_char);
-
-int usb_serial_handle_break(struct usb_serial_port *port)
-{
-	if (!port->sysrq) {
-		port->sysrq = jiffies + HZ*5;
-		return 1;
-	}
-	port->sysrq = 0;
-	return 0;
-}
-EXPORT_SYMBOL_GPL(usb_serial_handle_break);
 
 void usb_serial_generic_disconnect(struct usb_serial *serial)
 {
