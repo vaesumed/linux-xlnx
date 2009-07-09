@@ -1,0 +1,83 @@
+Importing driver-core.current based on 2.6.31-rc1
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.31-rc1-git3
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.31-rc1-git3
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.31-rc1-git5
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.31-rc1-47-g987fed3
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper 1517813e9c34333ae25965f0f869eaf88cf4639a
+Importing ttydev based on faf80d62e44dc627efb741f48db50c1858d1667c
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard faf80d62e44dc627efb741f48db50c1858d1667c
+HEAD is now at faf80d6 Merge branch 'x86-fixes-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/tip/linux-2.6-tip
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+pty-rework
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:81: trailing whitespace.
+	
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:92: trailing whitespace.
+	
+warning: 2 lines add whitespace errors.
+tty-fix-maintainers
+tty-usb-fix-perf-regression
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:21: trailing whitespace.
+	   where the USB serial is not a console anyway */	
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:24: trailing whitespace.
+	else {	
+warning: 2 lines add whitespace errors.
+tty-usb-fix-kref-leak
+tty-usb-pl2303-fastpath
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:31: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-usb-ftdi-ccsnew
+kfifo-const
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+tty-cyclades-fix-const-assign
+tty-usb-mos7840-modem
+tty-usb-mos7720-modem
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:101: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-usb-cp210x-arkham
+vt-events
+vt-pm-extract
+vt-incfix
+vt-lockactive
+net-slip-ttyfix
+serial-add-irqflags-support
+serial-8250-amstrad-e3
+serial-8250-minbaud
+tty-bfin-remove-memset
+dmi-sanity
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 0f80c5f...b34bfd5 master     -> quilt/ttydev  (forced update)
+Importing aoe based on v2.6.29-rc2
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+Unchanged quilt series driver-core
+Importing usb based on quilt/driver-core
+Unchanged quilt series usb
+Importing staging based on quilt/usb
+Unchanged quilt series staging
