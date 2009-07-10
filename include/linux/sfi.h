@@ -153,7 +153,7 @@ struct sfi_gpe_table_entry {
 
 typedef int (*sfi_table_handler) (struct sfi_table_header *table);
 
-#ifdef	CONFIG_SFI
+#ifdef CONFIG_SFI
 extern int __init sfi_init_memory_map(void);
 extern void __init sfi_init(void);
 extern int __init sfi_platform_init(void);

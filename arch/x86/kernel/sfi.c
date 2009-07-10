@@ -84,16 +84,15 @@ int __init sfi_init_memory_map(void)
 	if (sfi_disabled)
 		return -1;
 
-	/* first search the syst table */
+	/* first search the SYST table */
 	syst = sfi_early_find_syst();
 	if (!syst)
 		return -1;
 
-	tbl_cnt = (syst->header.length - sizeof(struct sfi_table_header)) /
-			sizeof(u64);
+	tbl_cnt = SFI_GET_NUM_ENTRIES(syst, u64);
 	pentry = syst->pentry;
 
-	/* walk through the syst to search the mmap table */
+	/* walk through the SYST to search the mmap table */
 	mmapt = NULL;
 	for (i = 0; i < tbl_cnt; i++) {
 		if (!strncmp(SFI_SIG_MMAP, (char *)(unsigned long)*pentry, 4)) {
@@ -217,7 +216,7 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 	mp_ioapics[idx].apicaddr = paddr;
 
 	set_fixmap_nocache(FIX_IO_APIC_BASE_0 + idx, paddr);
-	tmpid = uniq_ioapic_id(id);
+	tmpid = unique_ioapic_id(id);
 	if (tmpid == -1)
 		return;
 

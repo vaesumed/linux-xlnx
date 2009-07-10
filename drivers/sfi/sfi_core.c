@@ -226,18 +226,19 @@ void sfi_put_table(struct sfi_table_header *table)
 int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 			unsigned int flags, sfi_table_handler handler)
 {
-	int ret = 0;
 	struct sfi_table_header *table = NULL;
+	int ret = -EINVAL;
 
 	if (sfi_disabled || !handler || !signature)
-		return -EINVAL;
+		goto exit;
 
 	table = sfi_get_table(signature, oem_id, oem_table_id, flags);
 	if (!table)
-		return -EINVAL;
+		goto exit;
 
 	ret = handler(table);
 	sfi_put_table(table);
+exit:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(sfi_table_parse);
