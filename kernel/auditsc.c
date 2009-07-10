@@ -549,9 +549,8 @@ static int audit_filter_rules(struct task_struct *tsk,
 			}
 			break;
 		case AUDIT_WATCH:
-			if (name && audit_watch_inode(rule->watch) != (unsigned long)-1)
-				result = (name->dev == audit_watch_dev(rule->watch) &&
-					  name->ino == audit_watch_inode(rule->watch));
+			if (name)
+				result = audit_watch_compare(rule->watch, name->ino, name->dev);
 			break;
 		case AUDIT_DIR:
 			if (ctx)
@@ -1726,7 +1725,7 @@ static inline void handle_one(const struct inode *inode)
 	struct audit_tree_refs *p;
 	struct audit_chunk *chunk;
 	int count;
-	if (likely(list_empty(&inode->inotify_watches)))
+	if (likely(hlist_empty(&inode->i_fsnotify_mark_entries)))
 		return;
 	context = current->audit_context;
 	p = context->trees;
@@ -1769,7 +1768,7 @@ retry:
 	seq = read_seqbegin(&rename_lock);
 	for(;;) {
 		struct inode *inode = d->d_inode;
-		if (inode && unlikely(!list_empty(&inode->inotify_watches))) {
+		if (inode && unlikely(!hlist_empty(&inode->i_fsnotify_mark_entries))) {
 			struct audit_chunk *chunk;
 			chunk = audit_tree_lookup(inode);
 			if (chunk) {
