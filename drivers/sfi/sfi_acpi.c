@@ -54,7 +54,7 @@
  * and is expected to be present many SFI-only systems.
  */
 
-static struct acpi_table_xsdt *xsdt_va;
+static struct acpi_table_xsdt *xsdt_va __read_mostly;
 
 #define XSDT_GET_NUM_ENTRIES(ptable, entry_type) \
 	((ptable->header.length - sizeof(struct acpi_table_header)) / \
