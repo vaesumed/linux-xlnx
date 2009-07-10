@@ -1854,12 +1854,12 @@ static inline u32 open_file_to_av(struct file *file)
 
 /* Hook functions begin here. */
 
-static int selinux_ptrace_may_access(struct task_struct *child,
+static int selinux_ptrace_access_check(struct task_struct *child,
 				     unsigned int mode)
 {
 	int rc;
 
-	rc = cap_ptrace_may_access(child, mode);
+	rc = cap_ptrace_access_check(child, mode);
 	if (rc)
 		return rc;
 
@@ -2938,11 +2938,6 @@ static int selinux_revalidate_file_permission(struct file *file, int mask)
 	const struct cred *cred = current_cred();
 	struct inode *inode = file->f_path.dentry->d_inode;
 
-	if (!mask) {
-		/* No permission to check.  Existence test. */
-		return 0;
-	}
-
 	/* file_mask_to_av won't add FILE__WRITE if MAY_APPEND is set */
 	if ((file->f_flags & O_APPEND) && (mask & MAY_WRITE))
 		mask |= MAY_APPEND;
@@ -2953,8 +2948,18 @@ static int selinux_revalidate_file_permission(struct file *file, int mask)
 
 static int selinux_file_permission(struct file *file, int mask)
 {
+	struct inode *inode = file->f_path.dentry->d_inode;
+	struct file_security_struct *fsec = file->f_security;
+	struct inode_security_struct *isec = inode->i_security;
+	u32 sid = current_sid();
+
 	if (!mask)
 		/* No permission to check.  Existence test. */
+		return 0;
+
+	if (sid == fsec->sid && fsec->isid == isec->sid &&
+	    fsec->pseqno == avc_policy_seqno())
+		/* No change since dentry_open check. */
 		return 0;
 
 	return selinux_revalidate_file_permission(file, mask);
@@ -5310,7 +5315,7 @@ static int selinux_key_getsecurity(struct key *key, char **_buffer)
 static struct security_operations selinux_ops = {
 	.name =				"selinux",
 
-	.ptrace_may_access =		selinux_ptrace_may_access,
+	.ptrace_access_check =		selinux_ptrace_access_check,
 	.ptrace_traceme =		selinux_ptrace_traceme,
 	.capget =			selinux_capget,
 	.capset =			selinux_capset,
@@ -5677,6 +5682,9 @@ int selinux_disable(void)
 
 	selinux_disabled = 1;
 	selinux_enabled = 0;
+
+	/* Try to destroy the avc node cache */
+	avc_disable();
 
 	/* Reset security_ops to the secondary module, dummy or capability. */
 	security_ops = secondary_ops;
