@@ -277,6 +277,9 @@ int __init acpi_table_parse(char *id, acpi_table_handler handler)
 	struct acpi_table_header *table = NULL;
 	acpi_size tbl_size;
 
+	if (acpi_disabled)
+		return 1;
+
 	if (!handler)
 		return -EINVAL;
 
