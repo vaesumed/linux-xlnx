@@ -488,20 +488,38 @@ int crypto_init_spawn(struct crypto_spawn *spawn, struct crypto_alg *alg,
 }
 EXPORT_SYMBOL_GPL(crypto_init_spawn);
 
+int crypto_init_spawn2(struct crypto_spawn *spawn, struct crypto_alg *alg,
+		       struct crypto_instance *inst,
+		       const struct crypto_type *frontend)
+{
+	int err = -EINVAL;
+
+	if (frontend && (alg->cra_flags ^ frontend->type) & frontend->maskset)
+		goto out;
+
+	spawn->frontend = frontend;
+	err = crypto_init_spawn(spawn, alg, inst, frontend->maskset);
+
+out:
+	return err;
+}
+EXPORT_SYMBOL_GPL(crypto_init_spawn2);
+
 void crypto_drop_spawn(struct crypto_spawn *spawn)
 {
+	if (!spawn->alg)
+		return;
+
 	down_write(&crypto_alg_sem);
 	list_del(&spawn->list);
 	up_write(&crypto_alg_sem);
 }
 EXPORT_SYMBOL_GPL(crypto_drop_spawn);
 
-struct crypto_tfm *crypto_spawn_tfm(struct crypto_spawn *spawn, u32 type,
-				    u32 mask)
+static struct crypto_alg *crypto_spawn_alg(struct crypto_spawn *spawn)
 {
 	struct crypto_alg *alg;
 	struct crypto_alg *alg2;
-	struct crypto_tfm *tfm;
 
 	down_read(&crypto_alg_sem);
 	alg = spawn->alg;
@@ -515,6 +533,19 @@ struct crypto_tfm *crypto_spawn_tfm(struct crypto_spawn *spawn, u32 type,
 			crypto_shoot_alg(alg);
 		return ERR_PTR(-EAGAIN);
 	}
+
+	return alg;
+}
+
+struct crypto_tfm *crypto_spawn_tfm(struct crypto_spawn *spawn, u32 type,
+				    u32 mask)
+{
+	struct crypto_alg *alg;
+	struct crypto_tfm *tfm;
+
+	alg = crypto_spawn_alg(spawn);
+	if (IS_ERR(alg))
+		return ERR_CAST(alg);
 
 	tfm = ERR_PTR(-EINVAL);
 	if (unlikely((alg->cra_flags ^ type) & mask))
@@ -531,6 +562,27 @@ out_put_alg:
 	return tfm;
 }
 EXPORT_SYMBOL_GPL(crypto_spawn_tfm);
+
+void *crypto_spawn_tfm2(struct crypto_spawn *spawn)
+{
+	struct crypto_alg *alg;
+	struct crypto_tfm *tfm;
+
+	alg = crypto_spawn_alg(spawn);
+	if (IS_ERR(alg))
+		return ERR_CAST(alg);
+
+	tfm = crypto_create_tfm(alg, spawn->frontend);
+	if (IS_ERR(tfm))
+		goto out_put_alg;
+
+	return tfm;
+
+out_put_alg:
+	crypto_mod_put(alg);
+	return tfm;
+}
+EXPORT_SYMBOL_GPL(crypto_spawn_tfm2);
 
 int crypto_register_notifier(struct notifier_block *nb)
 {
@@ -595,7 +647,9 @@ const char *crypto_attr_alg_name(struct rtattr *rta)
 }
 EXPORT_SYMBOL_GPL(crypto_attr_alg_name);
 
-struct crypto_alg *crypto_attr_alg(struct rtattr *rta, u32 type, u32 mask)
+struct crypto_alg *crypto_attr_alg2(struct rtattr *rta,
+				    const struct crypto_type *frontend,
+				    u32 type, u32 mask)
 {
 	const char *name;
 	int err;
@@ -605,9 +659,9 @@ struct crypto_alg *crypto_attr_alg(struct rtattr *rta, u32 type, u32 mask)
 	if (IS_ERR(name))
 		return ERR_PTR(err);
 
-	return crypto_alg_mod_lookup(name, type, mask);
+	return crypto_find_alg(name, frontend, type, mask);
 }
-EXPORT_SYMBOL_GPL(crypto_attr_alg);
+EXPORT_SYMBOL_GPL(crypto_attr_alg2);
 
 int crypto_attr_u32(struct rtattr *rta, u32 *num)
 {
@@ -627,16 +681,19 @@ int crypto_attr_u32(struct rtattr *rta, u32 *num)
 }
 EXPORT_SYMBOL_GPL(crypto_attr_u32);
 
-struct crypto_instance *crypto_alloc_instance(const char *name,
-					      struct crypto_alg *alg)
+void *crypto_alloc_instance2(const char *name, struct crypto_alg *alg,
+			     unsigned int head)
 {
 	struct crypto_instance *inst;
-	struct crypto_spawn *spawn;
+	char *p;
 	int err;
 
-	inst = kzalloc(sizeof(*inst) + sizeof(*spawn), GFP_KERNEL);
-	if (!inst)
+	p = kzalloc(head + sizeof(*inst) + sizeof(struct crypto_spawn),
+		    GFP_KERNEL);
+	if (!p)
 		return ERR_PTR(-ENOMEM);
+
+	inst = (void *)(p + head);
 
 	err = -ENAMETOOLONG;
 	if (snprintf(inst->alg.cra_name, CRYPTO_MAX_ALG_NAME, "%s(%s)", name,
@@ -646,6 +703,25 @@ struct crypto_instance *crypto_alloc_instance(const char *name,
 	if (snprintf(inst->alg.cra_driver_name, CRYPTO_MAX_ALG_NAME, "%s(%s)",
 		     name, alg->cra_driver_name) >= CRYPTO_MAX_ALG_NAME)
 		goto err_free_inst;
+
+	return p;
+
+err_free_inst:
+	kfree(p);
+	return ERR_PTR(err);
+}
+EXPORT_SYMBOL_GPL(crypto_alloc_instance2);
+
+struct crypto_instance *crypto_alloc_instance(const char *name,
+					      struct crypto_alg *alg)
+{
+	struct crypto_instance *inst;
+	struct crypto_spawn *spawn;
+	int err;
+
+	inst = crypto_alloc_instance2(name, alg, 0);
+	if (IS_ERR(inst))
+		goto out;
 
 	spawn = crypto_instance_ctx(inst);
 	err = crypto_init_spawn(spawn, alg, inst,
@@ -658,7 +734,10 @@ struct crypto_instance *crypto_alloc_instance(const char *name,
 
 err_free_inst:
 	kfree(inst);
-	return ERR_PTR(err);
+	inst = ERR_PTR(err);
+
+out:
+	return inst;
 }
 EXPORT_SYMBOL_GPL(crypto_alloc_instance);
 
