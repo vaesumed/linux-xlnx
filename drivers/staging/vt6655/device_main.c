@@ -344,7 +344,7 @@ static CHIP_INFO chip_info_table[]= {
 };
 
 static struct pci_device_id device_id_table[] __devinitdata = {
-{ 0x1106, 0x3253, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (int)&chip_info_table[0]},
+{ 0x1106, 0x3253, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (long)&chip_info_table[0]},
 { 0, }
 };
 #endif
@@ -369,7 +369,7 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 
 #ifdef CONFIG_PM
 static int device_notify_reboot(struct notifier_block *, unsigned long event, void *ptr);
-static int viawget_suspend(struct pci_dev *pcid, u32 state);
+static int viawget_suspend(struct pci_dev *pcid, pm_message_t state);
 static int viawget_resume(struct pci_dev *pcid);
 struct notifier_block device_notifier = {
         notifier_call:  device_notify_reboot,
@@ -1146,14 +1146,9 @@ device_found1(struct pci_dev *pcid, const struct pci_device_id *ent)
     dev->irq                = pcid->irq;
     dev->netdev_ops         = &device_netdev_ops;
 
-#ifdef WIRELESS_EXT
-//Einsn Modify for ubuntu-7.04
-//	dev->wireless_handlers->get_wireless_stats = iwctl_get_wireless_stats;
-#if WIRELESS_EXT > 12
+#ifdef CONFIG_WIRELESS_EXT
 	dev->wireless_handlers = (struct iw_handler_def *)&iwctl_handler_def;
-//	netdev->wireless_handlers = NULL;
-#endif /* WIRELESS_EXT > 12 */
-#endif /* WIRELESS_EXT */
+#endif
 
     rc = register_netdev(dev);
     if (rc)
@@ -3417,7 +3412,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
     switch(cmd) {
 
 #ifdef WIRELESS_EXT
-//#if WIRELESS_EXT < 13
 
 	case SIOCGIWNAME:
 		rc = iwctl_giwname(dev, NULL, (char *)&(wrq->u.name), NULL);
@@ -3593,7 +3587,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		}
 		break;
 
-#if WIRELESS_EXT > 9
 		// Get the current Tx-Power
 	case SIOCGIWTXPOW:
         DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWTXPOW \n");
@@ -3605,9 +3598,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
         rc = -EOPNOTSUPP;
 		break;
 
-#endif // WIRELESS_EXT > 9
-
-#if WIRELESS_EXT > 10
 	case SIOCSIWRETRY:
 
 		rc = iwctl_siwretry(dev, NULL, &(wrq->u.retry), NULL);
@@ -3617,8 +3607,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 
 		rc = iwctl_giwretry(dev, NULL, &(wrq->u.retry), NULL);
 		break;
-
-#endif // WIRELESS_EXT > 10
 
 		// Get range of parameters
 	case SIOCGIWRANGE:
@@ -3706,7 +3694,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		break;
 
 
-//#endif // WIRELESS_EXT < 13
 //2008-0409-07, <Add> by Einsn Liu
 #ifdef  WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 	case SIOCSIWAUTH:
@@ -3804,20 +3791,12 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
     case IOCTL_CMD_HOSTAPD:
 
 
-#if WIRELESS_EXT > 8
-		rc = hostap_ioctl(pDevice, &wrq->u.data);
-#else // WIRELESS_EXT > 8
-		rc = hostap_ioctl(pDevice, (struct iw_point *) &wrq->u.data);
-#endif // WIRELESS_EXT > 8
+	rc = hostap_ioctl(pDevice, &wrq->u.data);
         break;
 
     case IOCTL_CMD_WPA:
 
-#if WIRELESS_EXT > 8
-		rc = wpa_ioctl(pDevice, &wrq->u.data);
-#else // WIRELESS_EXT > 8
-		rc = wpa_ioctl(pDevice, (struct iw_point *) &wrq->u.data);
-#endif // WIRELESS_EXT > 8
+	rc = wpa_ioctl(pDevice, &wrq->u.data);
         break;
 
 	case SIOCETHTOOL:
@@ -3941,7 +3920,7 @@ device_notify_reboot(struct notifier_block *nb, unsigned long event, void *p)
         while ((pdev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, pdev)) != NULL) {
             if(pci_dev_driver(pdev) == &device_driver) {
                 if (pci_get_drvdata(pdev))
-                    viawget_suspend(pdev, 3);
+                    viawget_suspend(pdev, PMSG_HIBERNATE);
             }
         }
     }
@@ -3949,7 +3928,7 @@ device_notify_reboot(struct notifier_block *nb, unsigned long event, void *p)
 }
 
 static int
-viawget_suspend(struct pci_dev *pcid, u32 state)
+viawget_suspend(struct pci_dev *pcid, pm_message_t state)
 {
     int power_status;   // to silence the compiler
 
@@ -3971,7 +3950,7 @@ viawget_suspend(struct pci_dev *pcid, u32 state)
     memset(pMgmt->abyCurrBSSID, 0, 6);
     pMgmt->eCurrState = WMAC_STATE_IDLE;
     pci_disable_device(pcid);
-    power_status = pci_set_power_state(pcid, state);
+    power_status = pci_set_power_state(pcid, pci_choose_state(pcid, state));
     spin_unlock_irq(&pDevice->lock);
     return 0;
 }

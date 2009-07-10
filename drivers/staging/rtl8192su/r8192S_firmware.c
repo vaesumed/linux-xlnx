@@ -11,7 +11,6 @@
  *        NDIS_STATUS_FAILURE - the following initialization process should be terminated
  *        NDIS_STATUS_SUCCESS - if firmware initialization process success
 **************************************************************************************************/
-//#include "ieee80211.h"
 #if defined(RTL8192SE)||defined(RTL8192SU)
 #include "r8192U.h"
 #include "r8192S_firmware.h"
@@ -26,9 +25,7 @@
 #include "r8192xU_firmware_img.h"
 #endif
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 #include <linux/firmware.h>
-#endif
 
 #define   byte(x,n)  ( (x >> (8 * n)) & 0xff  )
 
@@ -406,16 +403,11 @@ bool FirmwareDownload92S(struct net_device *dev)
 	//3 //<1> Open Image file, and map file to contineous memory if open file success.
 	//3  //        or read image file from array. Default load from BIN file
 	//3//
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	priv->firmware_source = FW_SOURCE_HEADER_FILE;
-#else
 	priv->firmware_source = FW_SOURCE_IMG_FILE;// We should decided by Reg.
-#endif
 
 	switch( priv->firmware_source )
 	{
 		case FW_SOURCE_IMG_FILE:
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 			if(pFirmware->szFwTmpBufferLen == 0)
 			{
 
@@ -474,7 +466,6 @@ bool FirmwareDownload92S(struct net_device *dev)
 
 
 			}
-#endif
 			break;
 
 		case FW_SOURCE_HEADER_FILE:
@@ -871,11 +862,8 @@ bool init_firmware(struct net_device *dev)
 	 * Download boot, main, and data image for System reset.
 	 * Download data image for firmware reseta
 	 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	priv->firmware_source = FW_SOURCE_HEADER_FILE;
-#else
 	priv->firmware_source = FW_SOURCE_IMG_FILE;
-#endif
+
 	for(init_step = starting_state; init_step <= FW_INIT_STEP2_DATA; init_step++) {
 		/*
 		 * Open Image file, and map file to contineous memory if open file success.
@@ -884,7 +872,6 @@ bool init_firmware(struct net_device *dev)
 		if(rst_opt == OPT_SYSTEM_RESET) {
 			switch(priv->firmware_source) {
 				case FW_SOURCE_IMG_FILE:
-				#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 					rc = request_firmware(&fw_entry, fw_name[init_step],&priv->udev->dev);
 					if(rc < 0 ) {
 						RT_TRACE(COMP_ERR, "request firmware fail!\n");
@@ -913,7 +900,6 @@ bool init_firmware(struct net_device *dev)
 					#endif
 					}
 					pfirmware->firmware_buf_size = file_length;
-					#endif
 					break;
 
 				case FW_SOURCE_HEADER_FILE:
@@ -944,11 +930,10 @@ bool init_firmware(struct net_device *dev)
 		 *   and Tx descriptor info
 		 * */
 		rt_status = fw_download_code(dev,mapped_file,file_length);
-		#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
+
 		if(rst_opt == OPT_SYSTEM_RESET) {
 			release_firmware(fw_entry);
 		}
-		#endif
 
 		if(rt_status != TRUE) {
 			goto download_firmware_fail;
