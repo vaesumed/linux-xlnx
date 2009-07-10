@@ -43,14 +43,15 @@
 #ifdef CONFIG_SFI
 #include <acpi/acpi.h>		/* struct acpi_table_header */
 
-int sfi_acpi_table_parse(char *signature, char *oem_id, char* oem_table_id,
-	uint flag, int (*handler)(struct acpi_table_header *));
+extern int sfi_acpi_table_parse(char *signature, char *oem_id,
+				char *oem_table_id,
+				int (*handler)(struct acpi_table_header *));
 
 #else /* !CONFIG_SFI */
 
 static inline int sfi_acpi_table_parse(char *signature, char *oem_id,
-	char *oem_table_id, unsigned int flags,
-	int (*handler)(struct acpi_table_header *))
+				char *oem_table_id,
+				int (*handler)(struct acpi_table_header *))
 {
 	return -1;
 }

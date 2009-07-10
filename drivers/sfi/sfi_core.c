@@ -49,8 +49,8 @@
 #include <linux/acpi.h>
 #include <linux/init.h>
 #include <linux/irq.h>
-#include <linux/smp.h>
 #include <linux/sfi.h>
+#include <linux/smp.h>
 
 #include <asm/pgtable.h>
 
@@ -109,7 +109,7 @@ static void sfi_print_table_header(unsigned long long pa,
 
 /*
  * sfi_verify_table()
- * sanity check table lengh, calculate checksum
+ * Sanity check table lengh, calculate checksum
  */
 static __init int sfi_verify_table(struct sfi_table_header *table)
 {
@@ -150,13 +150,13 @@ struct sfi_table_header *sfi_map_table(u64 pa)
 	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header)))
 		th = sfi_map_memory(pa, sizeof(struct sfi_table_header));
 	else
-		th = (void *)syst_va - (syst_pa - pa);
+		th = (void *)syst_va + (pa - syst_pa);
 
 	 /* If table fits on same page as its header, we are done */
 	if (TABLE_ON_PAGE(th, th, th->length))
 		return th;
 
-	/* entire table does not fit on same page as SYST */
+	/* Entire table does not fit on same page as SYST */
 	length = th->length;
 	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header)))
 		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
@@ -167,7 +167,7 @@ struct sfi_table_header *sfi_map_table(u64 pa)
 /*
  * sfi_unmap_table()
  *
- * undoes effect of sfi_map_table() by unmapping table
+ * Undoes effect of sfi_map_table() by unmapping table
  * if it did not completely fit on same page as SYST.
  */
 void sfi_unmap_table(struct sfi_table_header *th)
@@ -180,11 +180,10 @@ void sfi_unmap_table(struct sfi_table_header *th)
 /*
  * sfi_get_table()
  *
- * Search SYST for the specified table.
- * return the mapped table
+ * Search SYST for the specified table, and return the mapped table
  */
 static struct sfi_table_header *sfi_get_table(char *signature, char *oem_id,
-		char *oem_table_id, unsigned int flags)
+		char *oem_table_id)
 {
 	struct sfi_table_header *th;
 	u32 tbl_cnt, i;
@@ -222,9 +221,9 @@ void sfi_put_table(struct sfi_table_header *table)
 		sfi_unmap_memory(table, table->length);
 }
 
-/* find table with signature, run handler on it */
+/* Find table with signature, run handler on it */
 int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
-			unsigned int flags, sfi_table_handler handler)
+			sfi_table_handler handler)
 {
 	struct sfi_table_header *table = NULL;
 	int ret = -EINVAL;
@@ -232,7 +231,7 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 	if (sfi_disabled || !handler || !signature)
 		goto exit;
 
-	table = sfi_get_table(signature, oem_id, oem_table_id, flags);
+	table = sfi_get_table(signature, oem_id, oem_table_id);
 	if (!table)
 		goto exit;
 
@@ -265,7 +264,7 @@ int __init sfi_check_table(u64 pa)
 
 /*
  * sfi_parse_syst()
- * checksum all the tables in SYST and print their headers
+ * Checksum all the tables in SYST and print their headers
  *
  * success: set syst_va, return 0
  */
@@ -367,7 +366,7 @@ void __init sfi_init_late(void)
 	length = syst_va->header.length;
 	sfi_unmap_memory(syst_va, sizeof(struct sfi_table_simple));
 
-	/* use ioremap now after it is ready */
+	/* Use ioremap now after it is ready */
 	sfi_use_ioremap = 1;
 	syst_va = sfi_map_memory(syst_pa, length);
 

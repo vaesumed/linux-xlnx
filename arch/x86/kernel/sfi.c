@@ -51,6 +51,8 @@ static struct mp_ioapic_routing {
 	int	gsi_base;
 	int	gsi_end;
 } mp_ioapic_routing[MAX_IO_APICS];
+
+static u32 gsi_base;
 #endif
 
 static __init struct sfi_table_simple *sfi_early_find_syst(void)
@@ -118,9 +120,6 @@ int __init sfi_init_memory_map(void)
 		if (start > end)
 			return -1;
 
-		pr_debug("start = 0x%08x end = 0x%08x type = %d\n",
-			(u32)start, (u32)end, mentry->type);
-
 		/* translate SFI mmap type to E820 map type */
 		switch (mentry->type) {
 		case EFI_CONVENTIONAL_MEMORY:
@@ -144,12 +143,12 @@ int __init sfi_init_memory_map(void)
 void __init mp_sfi_register_lapic_address(unsigned long address)
 {
 	mp_lapic_addr = address;
-	set_fixmap_nocache(FIX_APIC_BASE, mp_lapic_addr);
 
+	set_fixmap_nocache(FIX_APIC_BASE, mp_lapic_addr);
 	if (boot_cpu_physical_apicid == -1U)
 		boot_cpu_physical_apicid = read_apic_id();
 
-	pr_debug("Boot CPU = %d\n", boot_cpu_physical_apicid);
+	pr_info("Boot CPU = %d\n", boot_cpu_physical_apicid);
 }
 
 /* All CPUs enumerated by SFI must be present and enabled */
@@ -191,12 +190,11 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 }
 #endif /* CONFIG_X86_LOCAL_APIC */
 
-#ifdef	CONFIG_X86_IO_APIC
+#ifdef CONFIG_X86_IO_APIC
 void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 {
 	int idx = 0;
 	int tmpid;
-	static u32 gsi_base;
 
 	if (nr_ioapics >= MAX_IO_APICS) {
 		pr_err("ERROR: Max # of I/O APICs (%d) exceeded "
@@ -221,11 +219,7 @@ void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 		return;
 
 	mp_ioapics[idx].apicid = tmpid;
-#ifdef CONFIG_X86_32
 	mp_ioapics[idx].apicver = io_apic_get_version(idx);
-#else
-	mp_ioapics[idx].apicver = 0;
-#endif
 
 	/*
 	 * Build basic GSI lookup table to facilitate gsi->io_apic lookups
@@ -275,10 +269,10 @@ int __init sfi_platform_init(void)
 {
 #ifdef CONFIG_X86_LOCAL_APIC
 	mp_sfi_register_lapic_address(sfi_lapic_addr);
-	sfi_table_parse(SFI_SIG_CPUS, NULL, NULL, 0, sfi_parse_cpus);
+	sfi_table_parse(SFI_SIG_CPUS, NULL, NULL, sfi_parse_cpus);
 #endif
 #ifdef CONFIG_X86_IO_APIC
-	sfi_table_parse(SFI_SIG_APIC, NULL, NULL, 0, sfi_parse_ioapic);
+	sfi_table_parse(SFI_SIG_APIC, NULL, NULL, sfi_parse_ioapic);
 #endif
 	return 0;
 }

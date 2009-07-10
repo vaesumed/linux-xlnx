@@ -42,8 +42,8 @@
 
 #include <linux/kernel.h>
 #include <acpi/acpi.h>
-#include <linux/sfi.h>
 
+#include <linux/sfi.h>
 #include "sfi_core.h"
 
 /*
@@ -60,6 +60,18 @@ static struct acpi_table_xsdt *xsdt_va __read_mostly;
 	((ptable->header.length - sizeof(struct acpi_table_header)) / \
 	(sizeof(entry_type)))
 
+static inline struct sfi_table_header *acpi_to_sfi_th(
+				struct acpi_table_header *th)
+{
+	return (struct sfi_table_header *)th;
+}
+
+static inline struct acpi_table_header *sfi_to_acpi_th(
+				struct sfi_table_header *th)
+{
+	return (struct acpi_table_header *)th;
+}
+
 /*
  * sfi_acpi_parse_xsdt()
  *
@@ -68,10 +80,9 @@ static struct acpi_table_xsdt *xsdt_va __read_mostly;
 static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 {
 	int tbl_cnt, i;
+
 	xsdt_va = (struct acpi_table_xsdt *)table;
-
 	tbl_cnt = XSDT_GET_NUM_ENTRIES(xsdt_va, u64);
-
 	for (i = 0; i < tbl_cnt; i++) {
 		if (sfi_check_table(xsdt_va->table_offset_entry[i])) {
 			disable_sfi();
@@ -84,12 +95,12 @@ static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
 
 int __init sfi_acpi_init(void)
 {
-	sfi_table_parse(SFI_SIG_XSDT, NULL, NULL, 0, sfi_acpi_parse_xsdt);
+	sfi_table_parse(SFI_SIG_XSDT, NULL, NULL, sfi_acpi_parse_xsdt);
 	return 0;
 }
 
 static struct acpi_table_header *sfi_acpi_get_table(char *signature,
-			char *oem_id, char *oem_table_id, unsigned int flags)
+			char *oem_id, char *oem_table_id)
 {
 	struct acpi_table_header *th;
 	u32 tbl_cnt, i;
@@ -100,7 +111,7 @@ static struct acpi_table_header *sfi_acpi_get_table(char *signature,
 	for (i = 0; i < tbl_cnt; i++) {
 		pa = xsdt_va->table_offset_entry[i];
 
-		th = (struct acpi_table_header *)sfi_map_table(pa);
+		th = sfi_to_acpi_th(sfi_map_table(pa));
 		if (!th)
 			return NULL;
 
@@ -124,16 +135,16 @@ loop_continue:
 
 static void sfi_acpi_put_table(struct acpi_table_header *table)
 {
-	sfi_put_table((struct sfi_table_header *)table);
+	sfi_put_table(acpi_to_sfi_th(table));
 }
 
 /*
  * sfi_acpi_table_parse()
  *
- * find specified table in XSDT, run handler on it and return its return value
+ * Find specified table in XSDT, run handler on it and return its return value
  */
 int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
-		 unsigned int flags, int(*handler)(struct acpi_table_header *))
+			int(*handler)(struct acpi_table_header *))
 {
 	int ret = 0;
 	struct acpi_table_header *table = NULL;
@@ -141,7 +152,7 @@ int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 	if (sfi_disabled)
 		return -1;
 
-	table = sfi_acpi_get_table(signature, oem_id, oem_table_id, flags);
+	table = sfi_acpi_get_table(signature, oem_id, oem_table_id);
 	if (!table)
 		return -EINVAL;
 

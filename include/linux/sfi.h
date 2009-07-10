@@ -55,9 +55,6 @@
 #define SFI_SIG_I2CB		"I2CB"
 #define SFI_SIG_GPEM		"GPEM"
 
-#define SFI_ACPI_TABLE		(1 << 0)
-#define SFI_NORMAL_TABLE	(1 << 1)
-
 #define SFI_SIGNATURE_SIZE	4
 #define SFI_OEM_ID_SIZE		6
 #define SFI_OEM_TABLE_ID_SIZE	8
@@ -158,9 +155,8 @@ extern int __init sfi_init_memory_map(void);
 extern void __init sfi_init(void);
 extern int __init sfi_platform_init(void);
 extern void __init sfi_init_late(void);
-
-int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
-			uint flag, sfi_table_handler handler);
+extern int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
+				sfi_table_handler handler);
 
 extern int sfi_disabled;
 static inline void disable_sfi(void)
@@ -177,7 +173,6 @@ static inline int sfi_init_memory_map(void)
 
 static inline void sfi_init(void)
 {
-	return;
 }
 
 static inline void sfi_init_late(void)
@@ -187,7 +182,7 @@ static inline void sfi_init_late(void)
 #define sfi_disabled	0
 
 static inline int sfi_table_parse(char *signature, char *oem_id,
-					char *oem_table_id, unsigned int flags,
+					char *oem_table_id,
 					sfi_table_handler handler)
 {
 	return -1;
@@ -195,4 +190,4 @@ static inline int sfi_table_parse(char *signature, char *oem_id,
 
 #endif /* CONFIG_SFI */
 
-#endif	/*_LINUX_SFI_H*/
+#endif /*_LINUX_SFI_H*/
