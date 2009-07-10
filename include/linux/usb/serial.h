@@ -325,13 +325,14 @@ extern struct usb_serial_driver usb_serial_generic_device;
 extern struct bus_type usb_serial_bus_type;
 extern struct tty_driver *usb_serial_tty_driver;
 
-static inline int usb_serial_handle_sysrq_char(struct usb_serial_port *port,
+static inline int usb_serial_handle_sysrq_char(struct tty_struct *tty,
+					       struct usb_serial_port *port,
 					       unsigned int ch)
 {
 #ifdef CONFIG_MAGIC_SYSRQ
 	if (port->sysrq && port->console) {
 		if (ch && time_before(jiffies, port->sysrq)) {
-			handle_sysrq(ch, tty_port_tty_get(&port->port));
+			handle_sysrq(ch, tty);
 			port->sysrq = 0;
 			return 1;
 		}

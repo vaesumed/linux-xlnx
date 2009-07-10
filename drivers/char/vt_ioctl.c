@@ -16,6 +16,7 @@
 #include <linux/tty.h>
 #include <linux/timer.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/kd.h>
 #include <linux/vt.h>
 #include <linux/string.h>
@@ -59,6 +60,133 @@ extern struct tty_driver *console_driver;
 #endif
 
 static void complete_change_console(struct vc_data *vc);
+
+/*
+ *	User space VT_EVENT handlers
+ */
+
+struct vt_event_wait {
+	struct list_head list;
+	struct vt_event event;
+	int done;
+};
+
+static LIST_HEAD(vt_events);
+static DEFINE_SPINLOCK(vt_event_lock);
+static DECLARE_WAIT_QUEUE_HEAD(vt_event_waitqueue);
+
+/**
+ *	vt_event_post
+ *	@event: the event that occurred
+ *	@old: old console
+ *	@new: new console
+ *
+ *	Post an VT event to interested VT handlers
+ */
+
+void vt_event_post(unsigned int event, unsigned int old, unsigned int new)
+{
+	struct list_head *pos, *head;
+	unsigned long flags;
+	int wake = 0;
+
+	spin_lock_irqsave(&vt_event_lock, flags);
+	head = &vt_events;
+
+	list_for_each(pos, head) {
+		struct vt_event_wait *ve = list_entry(pos,
+						struct vt_event_wait, list);
+		if (!(ve->event.event & event))
+			continue;
+		ve->event.event = event;
+		/* kernel view is consoles 0..n-1, user space view is
+		   console 1..n with 0 meaning current, so we must bias */
+		ve->event.old = old + 1;
+		ve->event.new = new + 1;
+		wake = 1;
+		ve->done = 1;
+	}
+	spin_unlock_irqrestore(&vt_event_lock, flags);
+	if (wake)
+		wake_up_interruptible(&vt_event_waitqueue);
+}
+
+/**
+ *	vt_event_wait		-	wait for an event
+ *	@vw: our event
+ *
+ *	Waits for an event to occur which completes our vt_event_wait
+ *	structure. On return the structure has wv->done set to 1 for success
+ *	or 0 if some event such as a signal ended the wait.
+ */
+
+static void vt_event_wait(struct vt_event_wait *vw)
+{
+	unsigned long flags;
+	/* Prepare the event */
+	INIT_LIST_HEAD(&vw->list);
+	vw->done = 0;
+	/* Queue our event */
+	spin_lock_irqsave(&vt_event_lock, flags);
+	list_add(&vw->list, &vt_events);
+	spin_unlock_irqrestore(&vt_event_lock, flags);
+	/* Wait for it to pass */
+	wait_event_interruptible(vt_event_waitqueue, vw->done);
+	/* Dequeue it */
+	spin_lock_irqsave(&vt_event_lock, flags);
+	list_del(&vw->list);
+	spin_unlock_irqrestore(&vt_event_lock, flags);
+}
+
+/**
+ *	vt_event_wait_ioctl	-	event ioctl handler
+ *	@arg: argument to ioctl
+ *
+ *	Implement the VT_WAITEVENT ioctl using the VT event interface
+ */
+
+static int vt_event_wait_ioctl(struct vt_event __user *event)
+{
+	struct vt_event_wait vw;
+
+	if (copy_from_user(&vw.event, event, sizeof(struct vt_event)))
+		return -EFAULT;
+	/* Highest supported event for now */
+	if (vw.event.event & ~VT_MAX_EVENT)
+		return -EINVAL;
+
+	vt_event_wait(&vw);
+	/* If it occurred report it */
+	if (vw.done) {
+		if (copy_to_user(event, &vw.event, sizeof(struct vt_event)))
+			return -EFAULT;
+		return 0;
+	}
+	return -EINTR;
+}
+
+/**
+ *	vt_waitactive	-	active console wait
+ *	@event: event code
+ *	@n: new console
+ *
+ *	Helper for event waits. Used to implement the legacy
+ *	event waiting ioctls in terms of events
+ */
+
+int vt_waitactive(int n)
+{
+	struct vt_event_wait vw;
+	do {
+		if (n == fg_console + 1)
+			break;
+		vw.event.event = VT_EVENT_SWITCH;
+		vt_event_wait(&vw);
+		if (vw.done == 0)
+			return -EINTR;
+	} while (vw.event.new != n);
+	return 0;
+}
 
 /*
  * these are the valid i/o ports we're allowed to change. they map all the
@@ -358,6 +486,8 @@ do_unimap_ioctl(int cmd, struct unimapdesc __user *user_ud, int perm, struct vc_
 	}
 	return 0;
 }
+
+
 
 /*
  * We handle the console-specific ioctl's here.  We allow the
@@ -841,6 +971,41 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		}
 		break;
 
+	case VT_SETACTIVATE:
+	{
+		struct vt_setactivate vsa;
+
+		if (!perm)
+			goto eperm;
+
+		if (copy_from_user(&vsa, (struct vt_setactivate __user *)arg,
+						sizeof(struct vt_setactivate)))
+			return -EFAULT;
+		if (vsa.console == 0 || vsa.console > MAX_NR_CONSOLES)
+			ret = -ENXIO;
+		else {
+			vsa.console--;
+			acquire_console_sem();
+			ret = vc_allocate(vsa.console);
+			if (ret == 0) {
+				struct vc_data *nvc;
+				/* This is safe providing we don't drop the
+				   console sem between vc_allocate and
+				   finishing referencing nvc */
+				nvc = vc_cons[vsa.console].d;
+				nvc->vt_mode = vsa.mode;
+				nvc->vt_mode.frsig = 0;
+				put_pid(nvc->vt_pid);
+				nvc->vt_pid = get_pid(task_pid(current));
+			}
+			release_console_sem();
+			if (ret)
+				break;
+			/* Commence switch and lock */
+			set_console(arg);
+		}
+	}
+
 	/*
 	 * wait until the specified VT has been activated
 	 */
@@ -850,7 +1015,7 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		if (arg == 0 || arg > MAX_NR_CONSOLES)
 			ret = -ENXIO;
 		else
-			ret = vt_waitactive(arg - 1);
+			ret = vt_waitactive(arg);
 		break;
 
 	/*
@@ -1158,6 +1323,9 @@ int vt_ioctl(struct tty_struct *tty, struct file * file,
 		ret = put_user(vc->vc_hi_font_mask,
 					(unsigned short __user *)arg);
 		break;
+	case VT_WAITEVENT:
+		ret = vt_event_wait_ioctl((struct vt_event __user *)arg);
+		break;
 	default:
 		ret = -ENOIOCTLCMD;
 	}
@@ -1168,54 +1336,6 @@ eperm:
 	ret = -EPERM;
 	goto out;
 }
-
-/*
- * Sometimes we want to wait until a particular VT has been activated. We
- * do it in a very simple manner. Everybody waits on a single queue and
- * get woken up at once. Those that are satisfied go on with their business,
- * while those not ready go back to sleep. Seems overkill to add a wait
- * to each vt just for this - usually this does nothing!
- */
-static DECLARE_WAIT_QUEUE_HEAD(vt_activate_queue);
-
-/*
- * Sleeps until a vt is activated, or the task is interrupted. Returns
- * 0 if activation, -EINTR if interrupted by a signal handler.
- */
-int vt_waitactive(int vt)
-{
-	int retval;
-	DECLARE_WAITQUEUE(wait, current);
-
-	add_wait_queue(&vt_activate_queue, &wait);
-	for (;;) {
-		retval = 0;
-
-		/*
-		 * Synchronize with redraw_screen(). By acquiring the console
-		 * semaphore we make sure that the console switch is completed
-		 * before we return. If we didn't wait for the semaphore, we
-		 * could return at a point where fg_console has already been
-		 * updated, but the console switch hasn't been completed.
-		 */
-		acquire_console_sem();
-		set_current_state(TASK_INTERRUPTIBLE);
-		if (vt == fg_console) {
-			release_console_sem();
-			break;
-		}
-		release_console_sem();
-		retval = -ERESTARTNOHAND;
-		if (signal_pending(current))
-			break;
-		schedule();
-	}
-	remove_wait_queue(&vt_activate_queue, &wait);
-	__set_current_state(TASK_RUNNING);
-	return retval;
-}
-
-#define vt_wake_waitactive() wake_up(&vt_activate_queue)
 
 void reset_vc(struct vc_data *vc)
 {
@@ -1256,11 +1376,13 @@ void vc_SAK(struct work_struct *work)
 }
 
 /*
- * Performs the back end of a vt switch
+ * Performs the back end of a vt switch. Called under the console
+ * semaphore.
  */
 static void complete_change_console(struct vc_data *vc)
 {
 	unsigned char old_vc_mode;
+	int old = fg_console;
 
 	last_console = fg_console;
 
@@ -1324,7 +1446,7 @@ static void complete_change_console(struct vc_data *vc)
 	/*
 	 * Wake anyone waiting for their VT to activate
 	 */
-	vt_wake_waitactive();
+	vt_event_post(VT_EVENT_SWITCH, old, vc->vc_num);
 	return;
 }
 
@@ -1397,3 +1519,58 @@ void change_console(struct vc_data *new_vc)
 
 	complete_change_console(new_vc);
 }
+
+/* Perform a kernel triggered VT switch for suspend/resume */
+
+static int disable_vt_switch;
+
+int vt_move_to_console(unsigned int vt, int alloc)
+{
+	int prev;
+
+	acquire_console_sem();
+	/* Graphics mode - up to X */
+	if (disable_vt_switch) {
+		release_console_sem();
+		return 0;
+	}
+	prev = fg_console;
+
+	if (alloc && vc_allocate(vt)) {
+		/* we can't have a free VC for now. Too bad,
+		 * we don't want to mess the screen for now. */
+		release_console_sem();
+		return -ENOSPC;
+	}
+
+	if (set_console(vt)) {
+		/*
+		 * We're unable to switch to the SUSPEND_CONSOLE.
+		 * Let the calling function know so it can decide
+		 * what to do.
+		 */
+		release_console_sem();
+		return -EIO;
+	}
+	release_console_sem();
+	if (vt_waitactive(vt)) {
+		pr_debug("Suspend: Can't switch VCs.");
+		return -EINTR;
+	}
+	return prev;
+}
+
+/*
+ * Normally during a suspend, we allocate a new console and switch to it.
+ * When we resume, we switch back to the original console.  This switch
+ * can be slow, so on systems where the framebuffer can handle restoration
+ * of video registers anyways, there's little point in doing the console
+ * switch.  This function allows you to disable it by passing it '0'.
+ */
+void pm_set_vt_switch(int do_switch)
+{
+	acquire_console_sem();
+	disable_vt_switch = !do_switch;
+	release_console_sem();
+}
+EXPORT_SYMBOL(pm_set_vt_switch);
