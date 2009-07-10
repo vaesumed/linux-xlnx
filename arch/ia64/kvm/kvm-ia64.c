@@ -210,16 +210,6 @@ int kvm_dev_ioctl_check_extension(long ext)
 
 }
 
-static struct kvm_io_device *vcpu_find_mmio_dev(struct kvm_vcpu *vcpu,
-					gpa_t addr, int len, int is_write)
-{
-	struct kvm_io_device *dev;
-
-	dev = kvm_io_bus_find_dev(&vcpu->kvm->mmio_bus, addr, len, is_write);
-
-	return dev;
-}
-
 static int handle_vm_error(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
@@ -231,6 +221,7 @@ static int handle_mmio(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	struct kvm_mmio_req *p;
 	struct kvm_io_device *mmio_dev;
+	int r;
 
 	p = kvm_get_vcpu_ioreq(vcpu);
 
@@ -247,16 +238,13 @@ static int handle_mmio(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	kvm_run->exit_reason = KVM_EXIT_MMIO;
 	return 0;
 mmio:
-	mmio_dev = vcpu_find_mmio_dev(vcpu, p->addr, p->size, !p->dir);
-	if (mmio_dev) {
-		if (!p->dir)
-			kvm_iodevice_write(mmio_dev, p->addr, p->size,
-						&p->data);
-		else
-			kvm_iodevice_read(mmio_dev, p->addr, p->size,
-						&p->data);
-
-	} else
+	if (p->dir)
+		r = kvm_io_bus_read(&vcpu->kvm->mmio_bus, p->addr,
+				    p->size, &p->data);
+	else
+		r = kvm_io_bus_write(&vcpu->kvm->mmio_bus, p->addr,
+				     p->size, &p->data);
+	if (r)
 		printk(KERN_ERR"kvm: No iodevice found! addr:%lx\n", p->addr);
 	p->state = STATE_IORESP_READY;
 
@@ -337,13 +325,12 @@ static struct kvm_vcpu *lid_to_vcpu(struct kvm *kvm, unsigned long id,
 {
 	union ia64_lid lid;
 	int i;
+	struct kvm_vcpu *vcpu;
 
-	for (i = 0; i < kvm->arch.online_vcpus; i++) {
-		if (kvm->vcpus[i]) {
-			lid.val = VCPU_LID(kvm->vcpus[i]);
-			if (lid.id == id && lid.eid == eid)
-				return kvm->vcpus[i];
-		}
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		lid.val = VCPU_LID(vcpu);
+		if (lid.id == id && lid.eid == eid)
+			return vcpu;
 	}
 
 	return NULL;
@@ -409,21 +396,21 @@ static int handle_global_purge(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	struct kvm *kvm = vcpu->kvm;
 	struct call_data call_data;
 	int i;
+	struct kvm_vcpu *vcpui;
 
 	call_data.ptc_g_data = p->u.ptc_g_data;
 
-	for (i = 0; i < kvm->arch.online_vcpus; i++) {
-		if (!kvm->vcpus[i] || kvm->vcpus[i]->arch.mp_state ==
-						KVM_MP_STATE_UNINITIALIZED ||
-					vcpu == kvm->vcpus[i])
+	kvm_for_each_vcpu(i, vcpui, kvm) {
+		if (vcpui->arch.mp_state == KVM_MP_STATE_UNINITIALIZED ||
+				vcpu == vcpui)
 			continue;
 
-		if (waitqueue_active(&kvm->vcpus[i]->wq))
-			wake_up_interruptible(&kvm->vcpus[i]->wq);
+		if (waitqueue_active(&vcpui->wq))
+			wake_up_interruptible(&vcpui->wq);
 
-		if (kvm->vcpus[i]->cpu != -1) {
-			call_data.vcpu = kvm->vcpus[i];
-			smp_call_function_single(kvm->vcpus[i]->cpu,
+		if (vcpui->cpu != -1) {
+			call_data.vcpu = vcpui;
+			smp_call_function_single(vcpui->cpu,
 					vcpu_global_purge, &call_data, 1);
 		} else
 			printk(KERN_WARNING"kvm: Uninit vcpu received ipi!\n");
@@ -852,8 +839,6 @@ struct  kvm *kvm_arch_create_vm(void)
 
 	kvm_init_vm(kvm);
 
-	kvm->arch.online_vcpus = 0;
-
 	return kvm;
 
 }
@@ -1216,7 +1201,7 @@ int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	if (IS_ERR(vmm_vcpu))
 		return PTR_ERR(vmm_vcpu);
 
-	if (vcpu->vcpu_id == 0) {
+	if (kvm_vcpu_is_bsp(vcpu)) {
 		vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 
 		/*Set entry address for first run.*/
@@ -1224,7 +1209,7 @@ int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 
 		/*Initialize itc offset for vcpus*/
 		itc_offset = 0UL - kvm_get_itc(vcpu);
-		for (i = 0; i < kvm->arch.online_vcpus; i++) {
+		for (i = 0; i < KVM_MAX_VCPUS; i++) {
 			v = (struct kvm_vcpu *)((char *)vcpu +
 					sizeof(struct kvm_vcpu_data) * i);
 			v->arch.itc_offset = itc_offset;
@@ -1355,8 +1340,6 @@ struct kvm_vcpu *kvm_arch_vcpu_create(struct kvm *kvm,
 		printk(KERN_DEBUG"kvm: vcpu_setup error!!\n");
 		goto fail;
 	}
-
-	kvm->arch.online_vcpus++;
 
 	return vcpu;
 fail:
