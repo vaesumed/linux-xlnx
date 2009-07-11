@@ -102,8 +102,8 @@ static void sfi_print_table_header(unsigned long long pa,
 				struct sfi_table_header *header)
 {
 	pr_info("%4.4s %llX, %04X (v%d %6.6s %8.8s)\n",
-		header->signature, pa,
-		header->length, header->revision, header->oem_id,
+		header->sig, pa,
+		header->len, header->rev, header->oem_id,
 		header->oem_table_id);
 }
 
@@ -116,7 +116,7 @@ static __init int sfi_verify_table(struct sfi_table_header *table)
 
 	u8 checksum = 0;
 	u8 *puchar = (u8 *)table;
-	u32 length = table->length;
+	u32 length = table->len;
 
 	/* Sanity check table length against arbitrary 1MB limit */
 	if (length > 0x100000) {
@@ -129,7 +129,7 @@ static __init int sfi_verify_table(struct sfi_table_header *table)
 
 	if (checksum) {
 		pr_err("Checksum %2.2X should be %2.2X\n",
-			table->checksum, table->checksum - checksum);
+			table->csum, table->csum - checksum);
 		return -1;
 	}
 	return 0;
@@ -153,11 +153,11 @@ struct sfi_table_header *sfi_map_table(u64 pa)
 		th = (void *)syst_va + (pa - syst_pa);
 
 	 /* If table fits on same page as its header, we are done */
-	if (TABLE_ON_PAGE(th, th, th->length))
+	if (TABLE_ON_PAGE(th, th, th->len))
 		return th;
 
 	/* Entire table does not fit on same page as SYST */
-	length = th->length;
+	length = th->len;
 	if (!TABLE_ON_PAGE(syst_pa, pa, sizeof(struct sfi_table_header)))
 		sfi_unmap_memory(th, sizeof(struct sfi_table_header));
 
@@ -172,9 +172,9 @@ struct sfi_table_header *sfi_map_table(u64 pa)
  */
 void sfi_unmap_table(struct sfi_table_header *th)
 {
-	if (!TABLE_ON_PAGE(syst_va, th, th->length))
-		sfi_unmap_memory(th, TABLE_ON_PAGE(th, th, th->length) ?
-					sizeof(*th) : th->length);
+	if (!TABLE_ON_PAGE(syst_va, th, th->len))
+		sfi_unmap_memory(th, TABLE_ON_PAGE(th, th, th->len) ?
+					sizeof(*th) : th->len);
 }
 
 /*
@@ -195,7 +195,7 @@ static struct sfi_table_header *sfi_get_table(char *signature, char *oem_id,
 		if (!th)
 			return NULL;
 
-		if (strncmp(th->signature, signature, SFI_SIGNATURE_SIZE))
+		if (strncmp(th->sig, signature, SFI_SIGNATURE_SIZE))
 			goto loop_continue;
 
 		if (oem_id && strncmp(th->oem_id, oem_id, SFI_OEM_ID_SIZE))
@@ -215,10 +215,10 @@ loop_continue:
 
 void sfi_put_table(struct sfi_table_header *table)
 {
-	if (!ON_SAME_PAGE(((void *)table + table->length),
-		(void *)syst_va + syst_va->header.length)
+	if (!ON_SAME_PAGE(((void *)table + table->len),
+		(void *)syst_va + syst_va->header.len)
 		&& !ON_SAME_PAGE(table, syst_va))
-		sfi_unmap_memory(table, table->length);
+		sfi_unmap_memory(table, table->len);
 }
 
 /* Find table with signature, run handler on it */
@@ -308,11 +308,11 @@ static __init int sfi_find_syst(void)
 		struct sfi_table_header *syst_hdr;
 
 		syst_hdr = start + offset;
-		if (strncmp(syst_hdr->signature, SFI_SIG_SYST,
+		if (strncmp(syst_hdr->sig, SFI_SIG_SYST,
 				SFI_SIGNATURE_SIZE))
 			continue;
 
-		if (syst_hdr->length > PAGE_SIZE)
+		if (syst_hdr->len > PAGE_SIZE)
 			continue;
 
 		sfi_print_table_header(SFI_SYST_SEARCH_BEGIN + offset,
@@ -324,13 +324,13 @@ static __init int sfi_find_syst(void)
 		/*
 		 * Enforce SFI spec mandate that SYST reside within a page.
 		 */
-		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst_hdr->length)) {
+		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst_hdr->len)) {
 			pr_debug("SYST 0x%llx + 0x%x crosses page\n",
-					syst_pa, syst_hdr->length);
+					syst_pa, syst_hdr->len);
 			continue;
 		}
 
-		/* success */
+		/* Success */
 		syst_pa = SFI_SYST_SEARCH_BEGIN + offset;
 		sfi_unmap_memory(start, len);
 		return 0;
@@ -363,7 +363,7 @@ void __init sfi_init_late(void)
 	if (sfi_disabled)
 		return;
 
-	length = syst_va->header.length;
+	length = syst_va->header.len;
 	sfi_unmap_memory(syst_va, sizeof(struct sfi_table_simple));
 
 	/* Use ioremap now after it is ready */

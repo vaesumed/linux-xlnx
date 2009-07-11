@@ -113,7 +113,7 @@ int __init sfi_init_memory_map(void)
 	num = SFI_GET_NUM_ENTRIES(mmapt, struct sfi_mem_entry);
 	mentry = (struct sfi_mem_entry *)mmapt->pentry;
 	for (i = 0; i < num; i++) {
-		start = mentry->phy_start;
+		start = mentry->phys_start;
 		size = mentry->pages << PAGE_SHIFT;
 		end = start + size;
 
@@ -181,7 +181,7 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 	pentry = (struct sfi_cpu_table_entry *)sb->pentry;
 
 	for (i = 0; i < cpu_num; i++) {
-		mp_sfi_register_lapic(pentry->apicid);
+		mp_sfi_register_lapic(pentry->apic_id);
 		pentry++;
 	}
 
@@ -194,31 +194,28 @@ static int __init sfi_parse_cpus(struct sfi_table_header *table)
 void __init mp_sfi_register_ioapic(u8 id, u32 paddr)
 {
 	int idx = 0;
-	int tmpid;
 
 	if (nr_ioapics >= MAX_IO_APICS) {
-		pr_err("ERROR: Max # of I/O APICs (%d) exceeded "
-			"(found %d)\n", MAX_IO_APICS, nr_ioapics);
-		panic("Recompile kernel with bigger MAX_IO_APICS!\n");
+		pr_warning("WARNING: Max # of I/O APICs (%d) exceeded "
+			"(found %d), skipping!\n", MAX_IO_APICS, nr_ioapics);
+		return;
 	}
+
 	if (!paddr) {
 		pr_warning("WARNING: Bogus (zero) I/O APIC address"
-			" found in MADT table, skipping!\n");
+			" found in IOAPIC table, skipping!\n");
 		return;
 	}
 
 	idx = nr_ioapics;
-
 	mp_ioapics[idx].type = MP_IOAPIC;
 	mp_ioapics[idx].flags = MPC_APIC_USABLE;
 	mp_ioapics[idx].apicaddr = paddr;
 
 	set_fixmap_nocache(FIX_IO_APIC_BASE_0 + idx, paddr);
-	tmpid = unique_ioapic_id(id);
-	if (tmpid == -1)
+	mp_ioapics[idx].apicid = unique_ioapic_id(id);
+	if (mp_ioapics[idx].apicid == -1)
 		return;
-
-	mp_ioapics[idx].apicid = tmpid;
 	mp_ioapics[idx].apicver = io_apic_get_version(idx);
 
 	/*
@@ -251,7 +248,7 @@ static int __init sfi_parse_ioapic(struct sfi_table_header *table)
 	pentry = (struct sfi_apic_table_entry *)sb->pentry;
 
 	for (i = 0; i < num; i++) {
-		mp_sfi_register_ioapic(i, pentry->phy_addr);
+		mp_sfi_register_ioapic(i, pentry->phys_addr);
 		pentry++;
 	}
 
