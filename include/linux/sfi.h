@@ -63,17 +63,17 @@
 #define SFI_SYST_SEARCH_END		0x000FFFFF
 
 #define SFI_GET_NUM_ENTRIES(ptable, entry_type) \
-	((ptable->header.length - sizeof(struct sfi_table_header)) / \
+	((ptable->header.len - sizeof(struct sfi_table_header)) / \
 	(sizeof(entry_type)))
 /*
  * Table structures must be byte-packed to match the SFI specification,
  * as they are provided by the BIOS.
  */
 struct sfi_table_header {
-	char	signature[SFI_SIGNATURE_SIZE];
-	u32	length;
-	u8	revision;
-	u8	checksum;
+	char	sig[SFI_SIGNATURE_SIZE];
+	u32	len;
+	u8	rev;
+	u8	csum;
 	char	oem_id[SFI_OEM_ID_SIZE];
 	char	oem_table_id[SFI_OEM_TABLE_ID_SIZE];
 } __packed;
@@ -83,17 +83,17 @@ struct sfi_table_simple {
 	u64				pentry[1];
 } __packed;
 
-/* comply with UEFI spec 2.1 */
+/* Comply with UEFI spec 2.1 */
 struct sfi_mem_entry {
 	u32	type;
-	u64	phy_start;
-	u64	vir_start;
+	u64	phys_start;
+	u64	virt_start;
 	u64	pages;
 	u64	attrib;
 } __packed;
 
 struct sfi_cpu_table_entry {
-	u32	apicid;
+	u32	apic_id;
 } __packed;
 
 struct sfi_cstate_table_entry {
@@ -102,27 +102,27 @@ struct sfi_cstate_table_entry {
 } __packed;
 
 struct sfi_apic_table_entry {
-	u64	phy_addr;	/* phy base addr for APIC reg */
+	u64	phys_addr;	/* phy base addr for APIC reg */
 } __packed;
 
 struct sfi_freq_table_entry {
-	u32	freq;
+	u32	freq_mhz;	/* in MHZ */
 	u32	latency;	/* transition latency in ms */
 	u32	ctrl_val;	/* value to write to PERF_CTL */
 } __packed;
 
 struct sfi_wake_table_entry {
-	u64 phy_addr;	/* pointer to where the wake vector locates */
+	u64	phys_addr;	/* pointer to where the wake vector locates */
 } __packed;
 
 struct sfi_timer_table_entry {
-	u64	phy_addr;	/* phy base addr for the timer */
-	u32	freq;		/* in HZ */
+	u64	phys_addr;	/* phy base addr for the timer */
+	u32	freq_hz;	/* in HZ */
 	u32	irq;
 } __packed;
 
 struct sfi_rtc_table_entry {
-	u64	phy_addr;	/* phy base addr for the RTC */
+	u64	phys_addr;	/* phy base addr for the RTC */
 	u32	irq;
 } __packed;
 
@@ -144,7 +144,7 @@ struct sfi_i2c_table_entry {
 
 struct sfi_gpe_table_entry {
 	u16	logical_id;	/* logical id */
-	u16	phy_id;		/* physical GPE id */
+	u16	phys_id;	/* physical GPE id */
 } __packed;
 
 
