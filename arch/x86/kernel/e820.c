@@ -20,7 +20,6 @@
 #include <linux/pfn.h>
 #include <linux/suspend.h>
 #include <linux/firmware-map.h>
-#include <linux/sfi.h>
 
 #include <asm/pgtable.h>
 #include <asm/page.h>
@@ -1436,10 +1435,6 @@ char *__init default_machine_specific_memory_setup(void)
 	if (append_e820_map(boot_params.e820_map, boot_params.e820_entries)
 	  < 0) {
 		u64 mem_size;
-
-		/* if SFI mmap table exists, use SFI to setup e820 mmap */
-		if (!sfi_init_memory_map())
-			return "SFI";
 
 		/* compare results from other methods and take the greater */
 		if (boot_params.alt_mem_k
