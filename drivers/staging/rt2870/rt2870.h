@@ -89,6 +89,7 @@
 	{USB_DEVICE(0x0DF6,0x002C)}, /* Sitecom */		\
 	{USB_DEVICE(0x0DF6,0x002D)}, /* Sitecom */		\
 	{USB_DEVICE(0x0DF6,0x0039)}, /* Sitecom */		\
+	{USB_DEVICE(0x0DF6,0x003F)}, /* Sitecom WL-608 */	\
 	{USB_DEVICE(0x14B2,0x3C06)}, /* Conceptronic */		\
 	{USB_DEVICE(0x14B2,0x3C28)}, /* Conceptronic */		\
 	{USB_DEVICE(0x2019,0xED06)}, /* Planex Communications, Inc. */		\
@@ -215,6 +216,7 @@
 	{USB_DEVICE(0x0789,0x0163)}, /* Logitec 2870 */		\
 	{USB_DEVICE(0x0789,0x0164)}, /* Logitec 2870 */		\
 	{USB_DEVICE(0x1EDA,0x2310)}, /* AirTies 3070 */		\
+	{USB_DEVICE(0x1737,0x0077)}, /* Linksys WUSB54GC-EU v3 */	\
 	{ }/* Terminating entry */                      \
 }
 #endif
@@ -522,7 +524,11 @@ extern UCHAR EpToQueue[6];
 	{	RTUSB_SET_BULK_FLAG(pAd, fRTUSB_BULK_OUT_PSPOLL);	\
 		RTUSBKickBulkOut(pAd); }
 
+#ifdef RT30xx
+#define RT28xx_CHIP_NAME            "RT3070"
+#else
 #define RT28xx_CHIP_NAME            "RT2870"
+#endif
 #define USB_CYC_CFG                 0x02a4
 #ifndef RT30xx
 #define STATUS_SUCCESS				0x00
