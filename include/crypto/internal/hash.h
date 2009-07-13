@@ -34,6 +34,14 @@ struct crypto_hash_walk {
 	unsigned int flags;
 };
 
+struct shash_instance {
+	struct shash_alg alg;
+};
+
+struct crypto_shash_spawn {
+	struct crypto_spawn base;
+};
+
 extern const struct crypto_type crypto_ahash_type;
 
 int crypto_hash_walk_done(struct crypto_hash_walk *walk, int err);
@@ -45,6 +53,15 @@ int crypto_hash_walk_first_compat(struct hash_desc *hdesc,
 
 int crypto_register_shash(struct shash_alg *alg);
 int crypto_unregister_shash(struct shash_alg *alg);
+int shash_register_instance(struct crypto_template *tmpl,
+			    struct shash_instance *inst);
+void shash_free_instance(struct crypto_instance *inst);
+
+int crypto_init_shash_spawn(struct crypto_shash_spawn *spawn,
+			    struct shash_alg *alg,
+			    struct crypto_instance *inst);
+
+struct shash_alg *shash_attr_alg(struct rtattr *rta, u32 type, u32 mask);
 
 static inline void *crypto_ahash_ctx(struct crypto_ahash *tfm)
 {
@@ -78,6 +95,47 @@ static inline int ahash_tfm_in_queue(struct crypto_queue *queue,
 static inline void *crypto_shash_ctx(struct crypto_shash *tfm)
 {
 	return crypto_tfm_ctx(&tfm->base);
+}
+
+static inline struct crypto_instance *shash_crypto_instance(
+	struct shash_instance *inst)
+{
+	return container_of(&inst->alg.base, struct crypto_instance, alg);
+}
+
+static inline struct shash_instance *shash_instance(
+	struct crypto_instance *inst)
+{
+	return container_of(__crypto_shash_alg(&inst->alg),
+			    struct shash_instance, alg);
+}
+
+static inline void *shash_instance_ctx(struct shash_instance *inst)
+{
+	return crypto_instance_ctx(shash_crypto_instance(inst));
+}
+
+static inline struct shash_instance *shash_alloc_instance(
+	const char *name, struct crypto_alg *alg)
+{
+	return crypto_alloc_instance2(name, alg,
+				      sizeof(struct shash_alg) - sizeof(*alg));
+}
+
+static inline struct crypto_shash *crypto_spawn_shash(
+	struct crypto_shash_spawn *spawn)
+{
+	return crypto_spawn_tfm2(&spawn->base);
+}
+
+static inline void *crypto_shash_ctx_aligned(struct crypto_shash *tfm)
+{
+	return crypto_tfm_ctx_aligned(&tfm->base);
+}
+
+static inline struct crypto_shash *__crypto_shash_cast(struct crypto_tfm *tfm)
+{
+	return (struct crypto_shash *)tfm;
 }
 
 #endif	/* _CRYPTO_INTERNAL_HASH_H */
