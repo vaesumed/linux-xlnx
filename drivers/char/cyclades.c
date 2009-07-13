@@ -143,7 +143,7 @@ static struct tty_driver *cy_serial_driver;
    causing problems, remove the offending address from this table.
 */
 
-static const unsigned int cy_isa_addresses[] = {
+static unsigned int cy_isa_addresses[] = {
 	0xD0000,
 	0xD2000,
 	0xD4000,
