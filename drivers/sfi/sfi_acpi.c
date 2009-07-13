@@ -77,14 +77,17 @@ static inline struct acpi_table_header *sfi_to_acpi_th(
  *
  * Parse the ACPI XSDT for later access by sfi_acpi_table_parse().
  */
-static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *table)
+static int __init sfi_acpi_parse_xsdt(struct sfi_table_header *th)
 {
+	struct sfi_table_key key = SFI_ANY_KEY;
 	int tbl_cnt, i;
+	void *ret;
 
-	xsdt_va = (struct acpi_table_xsdt *)table;
+	xsdt_va = (struct acpi_table_xsdt *)th;
 	tbl_cnt = XSDT_GET_NUM_ENTRIES(xsdt_va, u64);
 	for (i = 0; i < tbl_cnt; i++) {
-		if (sfi_check_table(xsdt_va->table_offset_entry[i])) {
+		ret = sfi_check_table(xsdt_va->table_offset_entry[i], &key);
+		if (IS_ERR(ret)) {
 			disable_sfi();
 			return -1;
 		}
@@ -99,35 +102,16 @@ int __init sfi_acpi_init(void)
 	return 0;
 }
 
-static struct acpi_table_header *sfi_acpi_get_table(char *signature,
-			char *oem_id, char *oem_table_id)
+static struct acpi_table_header *sfi_acpi_get_table(struct sfi_table_key *key)
 {
-	struct acpi_table_header *th;
 	u32 tbl_cnt, i;
-	u64 pa;
+	void *ret;
 
 	tbl_cnt = XSDT_GET_NUM_ENTRIES(xsdt_va, u64);
-
 	for (i = 0; i < tbl_cnt; i++) {
-		pa = xsdt_va->table_offset_entry[i];
-
-		th = sfi_to_acpi_th(sfi_map_table(pa));
-		if (!th)
-			return NULL;
-
-		if (strncmp(th->signature, signature, SFI_SIGNATURE_SIZE))
-			goto loop_continue;
-
-		if (oem_id && strncmp(th->oem_id, oem_id, SFI_OEM_ID_SIZE))
-			goto loop_continue;
-
-		if (oem_table_id && strncmp(th->oem_table_id, oem_table_id,
-						SFI_OEM_TABLE_ID_SIZE))
-			goto loop_continue;
-
-		return th;      /* success */
-loop_continue:
-		sfi_unmap_table((struct sfi_table_header *)th);
+		ret = sfi_check_table(xsdt_va->table_offset_entry[i], key);
+		if (!IS_ERR(ret) && ret)
+			return sfi_to_acpi_th(ret);
 	}
 
 	return NULL;
@@ -146,13 +130,18 @@ static void sfi_acpi_put_table(struct acpi_table_header *table)
 int sfi_acpi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 			int(*handler)(struct acpi_table_header *))
 {
-	int ret = 0;
 	struct acpi_table_header *table = NULL;
+	struct sfi_table_key key;
+	int ret = 0;
 
 	if (sfi_disabled)
 		return -1;
 
-	table = sfi_acpi_get_table(signature, oem_id, oem_table_id);
+	key.sig = signature;
+	key.oem_id = oem_id;
+	key.oem_table_id = oem_table_id;
+
+	table = sfi_acpi_get_table(&key);
 	if (!table)
 		return -EINVAL;
 

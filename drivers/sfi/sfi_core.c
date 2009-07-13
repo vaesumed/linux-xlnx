@@ -177,48 +177,79 @@ void sfi_unmap_table(struct sfi_table_header *th)
 					sizeof(*th) : th->len);
 }
 
+static int sfi_table_check_key(struct sfi_table_header *th,
+				struct sfi_table_key *key)
+{
+
+	if (strncmp(th->sig, key->sig, SFI_SIGNATURE_SIZE)
+		|| (key->oem_id && strncmp(th->oem_id,
+				key->oem_id, SFI_OEM_ID_SIZE))
+		|| (key->oem_table_id && strncmp(th->oem_table_id,
+				key->oem_table_id, SFI_OEM_TABLE_ID_SIZE)))
+		 return -1;
+
+	return 0;
+}
+
+/*
+ * This function will be used in 2 cases:
+ * 1. used to enumerate and verify the tables addressed by SYST/XSDT,
+ *    thus no signature will be given (in kernel boot phase)
+ * 2. used to parse one specific table, signature must exist, and
+ *    the mapped virt address will be returned, and the virt space
+ *    will be released by call sfi_put_table() later
+ *
+ * Return value:
+ *	NULL:			when can't find a table matching the key
+ *	ERR_PTR(error):		error value
+ *	virt table address:	when a matched table is found
+ */
+struct sfi_table_header *sfi_check_table(u64 pa, struct sfi_table_key *key)
+{
+	struct sfi_table_header *th;
+	void *ret = NULL;
+
+	th = sfi_map_table(pa);
+	if (!th)
+		return ERR_PTR(-ENOMEM);
+
+	if (!key->sig) {
+		sfi_print_table_header(pa, th);
+		if (sfi_verify_table(th))
+			ret = ERR_PTR(-EINVAL);
+	} else {
+		if (!sfi_table_check_key(th, key))
+			return th;	/* Success */
+	}
+
+	sfi_unmap_table(th);
+	return ret;
+}
+
 /*
  * sfi_get_table()
  *
- * Search SYST for the specified table, and return the mapped table
+ * Search SYST for the specified table with the signature in
+ * the key, and return the mapped table
  */
-static struct sfi_table_header *sfi_get_table(char *signature, char *oem_id,
-		char *oem_table_id)
+static struct sfi_table_header *sfi_get_table(struct sfi_table_key *key)
 {
 	struct sfi_table_header *th;
 	u32 tbl_cnt, i;
 
 	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
-
 	for (i = 0; i < tbl_cnt; i++) {
-		th = sfi_map_table(syst_va->pentry[i]);
-		if (!th)
-			return NULL;
-
-		if (strncmp(th->sig, signature, SFI_SIGNATURE_SIZE))
-			goto loop_continue;
-
-		if (oem_id && strncmp(th->oem_id, oem_id, SFI_OEM_ID_SIZE))
-			goto loop_continue;
-
-		if (oem_table_id && strncmp(th->oem_table_id, oem_table_id,
-						SFI_OEM_TABLE_ID_SIZE))
-			goto loop_continue;
-
-		return th;	/* success */
-loop_continue:
-		sfi_unmap_table(th);
+		th = sfi_check_table(syst_va->pentry[i], key);
+		if (!IS_ERR(th) && th)
+			return th;
 	}
 
 	return NULL;
 }
 
-void sfi_put_table(struct sfi_table_header *table)
+void sfi_put_table(struct sfi_table_header *th)
 {
-	if (!ON_SAME_PAGE(((void *)table + table->len),
-		(void *)syst_va + syst_va->header.len)
-		&& !ON_SAME_PAGE(table, syst_va))
-		sfi_unmap_memory(table, table->len);
+	sfi_unmap_table(th);
 }
 
 /* Find table with signature, run handler on it */
@@ -226,12 +257,17 @@ int sfi_table_parse(char *signature, char *oem_id, char *oem_table_id,
 			sfi_table_handler handler)
 {
 	struct sfi_table_header *table = NULL;
+	struct sfi_table_key key;
 	int ret = -EINVAL;
 
 	if (sfi_disabled || !handler || !signature)
 		goto exit;
 
-	table = sfi_get_table(signature, oem_id, oem_table_id);
+	key.sig = signature;
+	key.oem_id = oem_id;
+	key.oem_table_id = oem_table_id;
+
+	table = sfi_get_table(&key);
 	if (!table)
 		goto exit;
 
@@ -243,26 +279,6 @@ exit:
 EXPORT_SYMBOL_GPL(sfi_table_parse);
 
 /*
- * sfi_check_table(pa)
- */
-int __init sfi_check_table(u64 pa)
-{
-	struct sfi_table_header *th;
-	int ret;
-
-	th = sfi_map_table(pa);
-	if (!th)
-		return -1;
-
-	sfi_print_table_header(pa, th);
-	ret = sfi_verify_table(th);
-
-	sfi_unmap_table(th);
-
-	return ret;
-}
-
-/*
  * sfi_parse_syst()
  * Checksum all the tables in SYST and print their headers
  *
@@ -270,16 +286,19 @@ int __init sfi_check_table(u64 pa)
  */
 static int __init sfi_parse_syst(void)
 {
+	struct sfi_table_key key = SFI_ANY_KEY;
 	int tbl_cnt, i;
+	void *ret;
 
 	syst_va = sfi_map_memory(syst_pa, sizeof(struct sfi_table_simple));
 	if (!syst_va)
-		return -1;
+		return -ENOMEM;
 
 	tbl_cnt = SFI_GET_NUM_ENTRIES(syst_va, u64);
 	for (i = 0; i < tbl_cnt; i++) {
-		if (sfi_check_table(syst_va->pentry[i]))
-			return -1;
+		ret = sfi_check_table(syst_va->pentry[i], &key);
+		if (IS_ERR(ret))
+			return PTR_ERR(ret);
 	}
 
 	return 0;
@@ -325,7 +344,7 @@ static __init int sfi_find_syst(void)
 		 * Enforce SFI spec mandate that SYST reside within a page.
 		 */
 		if (!ON_SAME_PAGE(syst_pa, syst_pa + syst_hdr->len)) {
-			pr_debug("SYST 0x%llx + 0x%x crosses page\n",
+			pr_info("SYST 0x%llx + 0x%x crosses page\n",
 					syst_pa, syst_hdr->len);
 			continue;
 		}
