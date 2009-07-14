@@ -64,6 +64,14 @@
 #define DA9034_MDTV2		(0x33)
 #define DA9034_MVRC		(0x34)
 
+/* DA9035 Registers. DA9034 Registers are comptabile to DA9035. */
+#define DA9035_OVER3		(0x12)
+#define DA9035_VCC2		(0x1f)
+#define DA9035_3DTV1		(0x2c)
+#define DA9035_3DTV2		(0x2d)
+#define DA9035_3VRC		(0x2e)
+#define DA9035_AUTOSKIP		(0x2f)
+
 struct da903x_regulator_info {
 	struct regulator_desc desc;
 
@@ -367,6 +375,27 @@ static struct regulator_ops da9034_regulator_ldo12_ops = {
 	.enable_bit	= (ebit),					\
 }
 
+#define DA9030_DVC(_id, min, max, step, vreg, nbits, ureg, ubit, ereg, ebit) \
+{									\
+	.desc	= {							\
+		.name	= #_id,						\
+		.ops	= &da9034_regulator_dvc_ops,			\
+		.type	= REGULATOR_VOLTAGE,				\
+		.id	= DA9030_ID_##_id,				\
+		.owner	= THIS_MODULE,					\
+	},								\
+	.min_uV		= (min) * 1000,					\
+	.max_uV		= (max) * 1000,					\
+	.step_uV	= (step) * 1000,				\
+	.vol_reg	= DA9030_##vreg,				\
+	.vol_shift	= (0),						\
+	.vol_nbits	= (nbits),					\
+	.update_reg	= DA9030_##ureg,				\
+	.update_bit	= (ubit),					\
+	.enable_reg	= DA9030_##ereg,				\
+	.enable_bit	= (ebit),					\
+}
+
 #define DA9034_DVC(_id, min, max, step, vreg, nbits, ureg, ubit, ereg, ebit) \
 {									\
 	.desc	= {							\
@@ -388,6 +417,27 @@ static struct regulator_ops da9034_regulator_ldo12_ops = {
 	.enable_bit	= (ebit),					\
 }
 
+#define DA9035_DVC(_id, min, max, step, vreg, nbits, ureg, ubit, ereg, ebit) \
+{									\
+	.desc	= {							\
+		.name	= #_id,						\
+		.ops	= &da9034_regulator_dvc_ops,			\
+		.type	= REGULATOR_VOLTAGE,				\
+		.id	= DA9035_ID_##_id,				\
+		.owner	= THIS_MODULE,					\
+	},								\
+	.min_uV		= (min) * 1000,					\
+	.max_uV		= (max) * 1000,					\
+	.step_uV	= (step) * 1000,				\
+	.vol_reg	= DA9035_##vreg,				\
+	.vol_shift	= (0),						\
+	.vol_nbits	= (nbits),					\
+	.update_reg	= DA9035_##ureg,				\
+	.update_bit	= (ubit),					\
+	.enable_reg	= DA9035_##ereg,				\
+	.enable_bit	= (ebit),					\
+}
+
 #define DA9034_LDO(_id, min, max, step, vreg, shift, nbits, ereg, ebit)	\
 	DA903x_LDO(DA9034, _id, min, max, step, vreg, shift, nbits, ereg, ebit)
 
@@ -396,6 +446,8 @@ static struct regulator_ops da9034_regulator_ldo12_ops = {
 
 static struct da903x_regulator_info da903x_regulator_info[] = {
 	/* DA9030 */
+	DA9030_DVC(BUCK2, 850, 1625, 25, BUCK2DVM1, 5, BUCK2DVM1, 7, RCTL11, 0),
+
 	DA9030_LDO( 1, 1200, 3200, 100,    LDO1, 0, 5, RCTL12, 1),
 	DA9030_LDO( 2, 1800, 3200, 100,   LDO23, 0, 4, RCTL12, 2),
 	DA9030_LDO( 3, 1800, 3200, 100,   LDO23, 4, 4, RCTL12, 3),
@@ -417,9 +469,9 @@ static struct da903x_regulator_info da903x_regulator_info[] = {
 	DA9030_LDO(13, 2100, 2100, 0, INVAL, 0, 0, RCTL11, 3), /* fixed @2.1V */
 
 	/* DA9034 */
-	DA9034_DVC(BUCK1, 725, 1500, 25, ADTV1, 5, VCC1, 0, OVER1, 0),
-	DA9034_DVC(BUCK2, 725, 1500, 25, CDTV1, 5, VCC1, 2, OVER1, 1),
-	DA9034_DVC(LDO2,  725, 1500, 25, SDTV1, 5, VCC1, 4, OVER1, 2),
+	DA9034_DVC(BUCK1, 725, 1500, 25, ADTV2, 5, VCC1, 0, OVER1, 0),
+	DA9034_DVC(BUCK2, 725, 1500, 25, CDTV2, 5, VCC1, 2, OVER1, 1),
+	DA9034_DVC(LDO2,  725, 1500, 25, SDTV2, 5, VCC1, 4, OVER1, 2),
 	DA9034_DVC(LDO1, 1700, 2075, 25, MDTV1, 4, VCC1, 6, OVER3, 4),
 
 	DA9034_LDO( 3, 1800, 3300, 100,  LDO643, 0, 4, OVER3, 5),
@@ -435,6 +487,9 @@ static struct da903x_regulator_info da903x_regulator_info[] = {
 	DA9034_LDO(14, 1800, 3300, 100, LDO1514, 0, 4, OVER3, 0),
 	DA9034_LDO(15, 1800, 3300, 100, LDO1514, 4, 4, OVER3, 1),
 	DA9034_LDO(5, 3100, 3100, 0, INVAL, 0, 0, OVER3, 7), /* fixed @3.1V */
+
+	/* DA9035 */
+	DA9035_DVC(BUCK3, 1800, 2200, 100, 3DTV1, 3, VCC2, 0, OVER3, 3),
 };
 
 static inline struct da903x_regulator_info *find_regulator_info(int id)
