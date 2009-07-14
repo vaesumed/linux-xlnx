@@ -1,0 +1,126 @@
+Importing driver-core.current based on 2.6.31-rc2-git9
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 7638d5322bd89d49e013a03fe2afaeb6d214fabd
+HEAD is now at 7638d53 Merge branch 'kmemleak' of git://linux-arm.org/linux-2.6
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core.current
+driver-core-move-dev_get-set_drvdata-to-drivers-base-dd.c.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core.current
+From ../quilt-tmp
+ + ddb7998...e9b92dc master     -> quilt/driver-core.current  (forced update)
+Importing usb.current based on quilt/driver-core.current
+	quilt series is empty
+$ git update-ref refs/heads/quilt/usb.current e9b92dc3e909b587eb7b297e31e34801f695d6a5
+Importing i2c based on 2.6.31-rc2-git9
+$ cd ../quilt-tmp
+$ git reset --hard 7638d5322bd89d49e013a03fe2afaeb6d214fabd
+HEAD is now at 7638d53 Merge branch 'kmemleak' of git://linux-arm.org/linux-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/i2c
+i2c-tsl2550-fix-lux-value-in-dark-env.patch
+i2c-drop-i2c_driver-id.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/i2c
+From ../quilt-tmp
+ + cc5e225...aca63f4 master     -> quilt/i2c  (forced update)
+Importing jdelvare-hwmon based on 2.6.31-rc2-git9
+$ cd ../quilt-tmp
+$ git reset --hard 7638d5322bd89d49e013a03fe2afaeb6d214fabd
+HEAD is now at 7638d53 Merge branch 'kmemleak' of git://linux-arm.org/linux-2.6
+$ git quiltimport --author Jean Delvare <khali@linux-fr.org> --patches ../quilt/jdelvare-hwmon
+hwmon-vid-limit-AMD-0Fh-6-bit-VID.patch
+hwmon-driver-for-TI-TMP421-TMP422-TMP423-chips.patch
+hwmon-tmp421-add-documentation.patch
+hwmon-use-resource_size.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/jdelvare-hwmon
+From ../quilt-tmp
+ + 1f04044...969318a master     -> quilt/jdelvare-hwmon  (forced update)
+Importing kernel-doc based on 2.6.31-rc1-git5
+	quilt series is empty
+$ git update-ref refs/heads/quilt/kernel-doc 52989765629e7d182b4f146050ebba0abf2cb0b7
+Importing rr based on v2.6.31-rc2-432-gf00caa7
+Unchanged quilt series rr
+Importing device-mapper based on block/for-next
+Unchanged quilt series device-mapper
+Importing ttydev based on 34f25476ace556263784ea2f8173e22b25557a13
+$ cd ../quilt-tmp
+$ git reset --hard 34f25476ace556263784ea2f8173e22b25557a13
+HEAD is now at 34f2547 Merge branch 'fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/davej/cpufreq
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+tty-net-locking
+tty-usb-fix-perf-regression
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:21: trailing whitespace.
+	   where the USB serial is not a console anyway */	
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:24: trailing whitespace.
+	else {	
+warning: 2 lines add whitespace errors.
+tty-usb-fix-kref-leak
+tty-usb-pl2303-fastpath
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:31: trailing whitespace.
+	
+warning: 1 line adds whitespace errors.
+tty-usb-ftdi-ccsnew
+kfifo-const
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+tty-cyclades-fix-const-assign
+tty-usb-mos7840-modem
+tty-usb-cp210x-arkham
+vt-events
+vt-pm-extract
+vt-incfix
+vt-lockactive
+net-slip-ttyfix
+serial-add-irqflags-support
+serial-8250-amstrad-e3
+serial-8250-minbaud
+tty-bfin-remove-memset
+dmi-sanity
+kernel-shared-regions
+tty-usb-mos7720-modem
+tty-usb-mos7720-lsr
+tty-ldisc-close-hangup-racefix
+tty-x86-termios-clean
+tty-usb-ft232-add-turtelizer
+tty-usb-sierra-order-devices
+tty-usb-sierra-updates-pm
+serial-kill-info
+serial-msm-platform-probe
+serial-fold-closing-port
+serial-port-portptr
+serial-move-counts
+serial-move-flags
+serial-move-mutex
+serial-move-users
+serial-msr-move
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + 4a82603...bfaed20 master     -> quilt/ttydev  (forced update)
+Importing aoe based on v2.6.29-rc2
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+$ cd ../quilt-tmp
+$ git reset --hard e9b92dc3e909b587eb7b297e31e34801f695d6a5
+HEAD is now at e9b92dc Driver core: move dev_get/set_drvdata to drivers/base/dd.c
+$ git quiltimport --author Greg KH <greg@kroah.com> --patches ../quilt/driver-core
+uio-remove-default-n-from-kconfig.patch
+driver-model-constify-attribute-groups.patch
+mem_class-use-minor-as-index-instead-of-searching-the-array.patch
+driver-core-devtmpfs-driver-core-maintained-dev-tmpfs.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/driver-core
+From ../quilt-tmp
+ + e5115a8...a2e761f master     -> quilt/driver-core  (forced update)
