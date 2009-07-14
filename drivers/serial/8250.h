@@ -20,6 +20,7 @@ struct old_serial_port {
 	unsigned int baud_base;
 	unsigned int port;
 	unsigned int irq;
+	unsigned long irqflags;
 	unsigned int flags;
 	unsigned char hub6;
 	unsigned char io_type;
