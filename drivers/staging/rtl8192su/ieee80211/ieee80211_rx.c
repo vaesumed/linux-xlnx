@@ -44,9 +44,7 @@
 #include <linux/ctype.h>
 
 #include "ieee80211.h"
-#ifdef ENABLE_DOT11D
 #include "dot11d.h"
-#endif
 static inline void ieee80211_monitor_rx(struct ieee80211_device *ieee,
 					struct sk_buff *skb,
 					struct ieee80211_rx_stats *rx_stats)
@@ -55,11 +53,7 @@ static inline void ieee80211_monitor_rx(struct ieee80211_device *ieee,
 	u16 fc = le16_to_cpu(hdr->frame_ctl);
 
 	skb->dev = ieee->dev;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
         skb_reset_mac_header(skb);
-#else
-        skb->mac.raw = skb->data;
-#endif
 
 	skb_pull(skb, ieee80211_get_hdrlen(fc));
 	skb->pkt_type = PACKET_OTHERHOST;
@@ -626,10 +620,6 @@ void RxReorderIndicatePacket( struct ieee80211_device *ieee,
 	u8			index = 0;
 	bool			bMatchWinStart = false, bPktInBuf = false;
 	IEEE80211_DEBUG(IEEE80211_DL_REORDER,"%s(): Seq is %d,pTS->RxIndicateSeq is %d, WinSize is %d\n",__FUNCTION__,SeqNum,pTS->RxIndicateSeq,WinSize);
-#if 0
-	if(!list_empty(&ieee->RxReorder_Unused_List))
-		IEEE80211_DEBUG(IEEE80211_DL_REORDER,"%s(): ieee->RxReorder_Unused_List is nut NULL\n");
-#endif
 	/* Rx Reorder initialize condition.*/
 	if(pTS->RxIndicateSeq == 0xffff) {
 		pTS->RxIndicateSeq = SeqNum;
@@ -790,14 +780,7 @@ void RxReorderIndicatePacket( struct ieee80211_device *ieee,
 		// Set new pending timer.
 		IEEE80211_DEBUG(IEEE80211_DL_REORDER,"%s(): SET rx timeout timer\n", __FUNCTION__);
 		pTS->RxTimeoutIndicateSeq = pTS->RxIndicateSeq;
-#if 0
-		if(timer_pending(&pTS->RxPktPendingTimer))
-			del_timer_sync(&pTS->RxPktPendingTimer);
-		pTS->RxPktPendingTimer.expires = jiffies + MSECS(pHTInfo->RxReorderPendingTime);
-		add_timer(&pTS->RxPktPendingTimer);
-#else
 		mod_timer(&pTS->RxPktPendingTimer,  jiffies + MSECS(pHTInfo->RxReorderPendingTime));
-#endif
 	}
 #endif
 }
@@ -866,11 +849,6 @@ u8 parse_subframe(struct sk_buff *skb,
 			nSubframe_Length = (nSubframe_Length>>8) + (nSubframe_Length<<8);
 
 			if(skb->len<(ETHERNET_HEADER_SIZE + nSubframe_Length)) {
-#if 0//cosa
-				RT_ASSERT(
-						(nRemain_Length>=(ETHERNET_HEADER_SIZE + nSubframe_Length)),
-						("ParseSubframe(): A-MSDU subframe parse error!! Subframe Length: %d\n", nSubframe_Length) );
-#endif
 				printk("%s: A-MSDU parse error!! pRfd->nTotalSubframe : %d\n",\
 						__FUNCTION__,rxb->nr_subframes);
 				printk("%s: A-MSDU parse error!! Subframe Length: %d\n",__FUNCTION__, nSubframe_Length);
@@ -990,7 +968,6 @@ int ieee80211_rx(struct ieee80211_device *ieee, struct sk_buff *skb,
 
 	//IEEE80211_DEBUG_DATA(IEEE80211_DL_DATA, skb->data, skb->len);
 #ifdef NOT_YET
-#if WIRELESS_EXT > 15
 	/* Put this code here so that we avoid duplicating it in all
 	 * Rx paths. - Jean II */
 #ifdef IW_WIRELESS_SPY		/* defined in iw_handler.h */
@@ -1004,18 +981,16 @@ int ieee80211_rx(struct ieee80211_device *ieee, struct sk_buff *skb,
 		wireless_spy_update(dev, hdr->addr2, &wstats);
 	}
 #endif /* IW_WIRELESS_SPY */
-#endif /* WIRELESS_EXT > 15 */
 	hostap_update_rx_stats(local->ap, hdr, rx_stats);
 #endif
 
-#if WIRELESS_EXT > 15
 	if (ieee->iw_mode == IW_MODE_MONITOR) {
 		ieee80211_monitor_rx(ieee, skb, rx_stats);
 		stats->rx_packets++;
 		stats->rx_bytes += skb->len;
 		return 1;
 	}
-#endif
+
 	if (ieee->host_decrypt) {
 		int idx = 0;
 		if (skb->len >= hdrlen + 3)
@@ -1067,17 +1042,6 @@ int ieee80211_rx(struct ieee80211_device *ieee, struct sk_buff *skb,
 	else
 	{
 		PRX_TS_RECORD pRxTS = NULL;
-	#if 0
-		struct ieee80211_hdr_3addr *hdr;
-		u16 fc;
-		hdr = (struct ieee80211_hdr_3addr *)skb->data;
-		fc = le16_to_cpu(hdr->frame_ctl);
-		u8 tmp = (fc & IEEE80211_FCTL_FROMDS) && (fc & IEEE80211_FCTL_TODS);
-
-		u8 tid = (*((u8*)skb->data + (((fc& IEEE80211_FCTL_FROMDS) && (fc & IEEE80211_FCTL_TODS))?30:24)))&0xf;
-		printk("====================>fc:%x, tid:%d, tmp:%d\n", fc, tid, tmp);
-		//u8 tid =  (u8)((frameqos*)(buf + ((fc & IEEE80211_FCTL_TODS)&&(fc & IEEE80211_FCTL_FROMDS))? 30 : 24))->field.tid;
-	#endif
 			//IEEE80211_DEBUG(IEEE80211_DL_REORDER,"%s(): QOS ENABLE AND RECEIVE QOS DATA , we will get Ts, tid:%d\n",__FUNCTION__, tid);
 #if 1
 		if(GetTs(
@@ -1110,20 +1074,6 @@ int ieee80211_rx(struct ieee80211_device *ieee, struct sk_buff *skb,
 	}
 #endif
 	if (type == IEEE80211_FTYPE_MGMT) {
-
-	#if 0
-		if ( stype == IEEE80211_STYPE_AUTH &&
-		    fc & IEEE80211_FCTL_WEP && ieee->host_decrypt &&
-		    (keyidx = hostap_rx_frame_decrypt(ieee, skb, crypt)) < 0)
-		{
-			printk(KERN_DEBUG "%s: failed to decrypt mgmt::auth "
-			       "from " MAC_FMT "\n", dev->name,
-			       MAC_ARG(hdr->addr2));
-			/* TODO: could inform hostapd about this so that it
-			 * could send auth failure report */
-			goto rx_dropped;
-		}
-	#endif
 
 	//IEEE80211_DEBUG_DATA(IEEE80211_DL_DATA, skb->data, skb->len);
 		if (ieee80211_rx_frame_mgmt(ieee, skb, rx_stats, type, stype))
@@ -1659,7 +1609,6 @@ static const char *get_info_element_string(u16 id)
 }
 #endif
 
-#ifdef ENABLE_DOT11D
 static inline void ieee80211_extract_country_ie(
 	struct ieee80211_device *ieee,
 	struct ieee80211_info_element *info_element,
@@ -1692,7 +1641,6 @@ static inline void ieee80211_extract_country_ie(
 	}
 
 }
-#endif
 
 int ieee80211_parse_info_param(struct ieee80211_device *ieee,
 		struct ieee80211_info_element *info_element,
@@ -1823,12 +1771,8 @@ int ieee80211_parse_info_param(struct ieee80211_device *ieee,
                         network->dtim_period = info_element->data[1];
                         if(ieee->state != IEEE80211_LINKED)
                                 break;
-#if 0
-                        network->last_dtim_sta_time[0] = stats->mac_time[0];
-#else
 			//we use jiffies for legacy Power save
 			network->last_dtim_sta_time[0] = jiffies;
-#endif
                         network->last_dtim_sta_time[1] = stats->mac_time[1];
 
                         network->dtim_data = IEEE80211_DTIM_VALID;
@@ -1891,7 +1835,6 @@ int ieee80211_parse_info_param(struct ieee80211_device *ieee,
 				break;
 			}
 
-#ifdef THOMAS_TURBO
                         if (info_element->len == 7 &&
                             info_element->data[0] == 0x00 &&
                             info_element->data[1] == 0xe0 &&
@@ -1900,7 +1843,6 @@ int ieee80211_parse_info_param(struct ieee80211_device *ieee,
                             info_element->data[4] == 0x02) {
                                 network->Turbo_Enable = 1;
                         }
-#endif
 
                         //for HTcap and HTinfo parameters
 			if(tmp_htcap_len == 0){
@@ -1997,16 +1939,6 @@ int ieee80211_parse_info_param(struct ieee80211_device *ieee,
 
 				}
 			}
-#if 0
-			if (tmp_htcap_len !=0)
-				{
-					u16 cap_ext = ((PHT_CAPABILITY_ELE)&info_element->data[0])->ExtHTCapInfo;
-					if ((cap_ext & 0x0c00) == 0x0c00)
-						{
-							network->ralink_cap_exist = true;
-						}
-				}
-#endif
 			if(info_element->len >= 3 &&
 				info_element->data[0] == 0x00 &&
 				info_element->data[1] == 0x0c &&
@@ -2183,53 +2115,12 @@ int ieee80211_parse_info_param(struct ieee80211_device *ieee,
 			       "QoS Error need to parse QOS_PARAMETER IE\n");
 			break;
 
-#ifdef ENABLE_DOT11D
 		case MFIE_TYPE_COUNTRY:
 			IEEE80211_DEBUG_SCAN("MFIE_TYPE_COUNTRY: %d bytes\n",
 					     info_element->len);
 			//printk("=====>Receive <%s> Country IE\n",network->ssid);
 			ieee80211_extract_country_ie(ieee, info_element, network, network->bssid);//addr2 is same as addr3 when from an AP
 			break;
-#endif
-/* TODO */
-#if 0
-			/* 802.11h */
-		case MFIE_TYPE_POWER_CONSTRAINT:
-			network->power_constraint = info_element->data[0];
-			network->flags |= NETWORK_HAS_POWER_CONSTRAINT;
-			break;
-
-		case MFIE_TYPE_CSA:
-			network->power_constraint = info_element->data[0];
-			network->flags |= NETWORK_HAS_CSA;
-			break;
-
-		case MFIE_TYPE_QUIET:
-			network->quiet.count = info_element->data[0];
-			network->quiet.period = info_element->data[1];
-			network->quiet.duration = info_element->data[2];
-			network->quiet.offset = info_element->data[3];
-			network->flags |= NETWORK_HAS_QUIET;
-			break;
-
-		case MFIE_TYPE_IBSS_DFS:
-			if (network->ibss_dfs)
-				break;
-			network->ibss_dfs = kmemdup(info_element->data,
-						    info_element->len,
-						    GFP_ATOMIC);
-			if (!network->ibss_dfs)
-				return 1;
-			network->flags |= NETWORK_HAS_IBSS_DFS;
-			break;
-
-		case MFIE_TYPE_TPC_REPORT:
-			network->tpc_report.transmit_power =
-			    info_element->data[0];
-			network->tpc_report.link_margin = info_element->data[1];
-			network->flags |= NETWORK_HAS_TPC_REPORT;
-			break;
-#endif
 		default:
 			IEEE80211_DEBUG_MGMT
 			    ("Unsupported info element: %s (%d)\n",
@@ -2363,13 +2254,9 @@ static inline int ieee80211_network_init(
 	network->unknown_cap_exist = false;
 	network->realtek_cap_exit = false;
 	network->marvell_cap_exist = false;
-#ifdef THOMAS_TURBO
 	network->Turbo_Enable = 0;
-#endif
-#ifdef ENABLE_DOT11D
 	network->CountryIeLen = 0;
 	memset(network->CountryIeBuf, 0, MAX_IE_LEN);
-#endif
 //Initialize HT parameters
 	//ieee80211_ht_initialize(&network->bssht);
 	HTInitializeBssDesc(&network->bssht);
@@ -2543,14 +2430,10 @@ static inline void update_network(struct ieee80211_network *dst,
 #else
 	dst->QoS_Enable = 1;//for Rtl8187 simulation
 #endif
-#ifdef THOMAS_TURBO
 	dst->Turbo_Enable = src->Turbo_Enable;
-#endif
 
-#ifdef ENABLE_DOT11D
 	dst->CountryIeLen = src->CountryIeLen;
 	memcpy(dst->CountryIeBuf, src->CountryIeBuf, src->CountryIeLen);
-#endif
 
 	//added by amy for LEAP
 	dst->bWithAironetIE = src->bWithAironetIE;
@@ -2618,7 +2501,6 @@ static inline void ieee80211_process_probe_response(
 		return;
 	}
 
-#ifdef ENABLE_DOT11D
 	// For Asus EeePc request,
 	// (1) if wireless adapter receive get any 802.11d country code in AP beacon,
 	//	   wireless adapter should follow the country code.
@@ -2675,7 +2557,6 @@ static inline void ieee80211_process_probe_response(
 			}
 		}
 	}
-#endif
 
 	/* The network parsed correctly -- so now we scan our known networks
 	 * to see if we can find it in our list.
@@ -2823,10 +2704,5 @@ void ieee80211_rx_mgt(struct ieee80211_device *ieee,
 	}
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 EXPORT_SYMBOL(ieee80211_rx_mgt);
 EXPORT_SYMBOL(ieee80211_rx);
-#else
-EXPORT_SYMBOL_NOVERS(ieee80211_rx_mgt);
-EXPORT_SYMBOL_NOVERS(ieee80211_rx);
-#endif
