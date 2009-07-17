@@ -146,7 +146,7 @@ extern void smp_generic_take_timebase(void);
 extern struct smp_ops_t *smp_ops;
 
 extern void arch_send_call_function_single_ipi(int cpu);
-extern void arch_send_call_function_ipi(cpumask_t mask);
+extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
 #endif /* __ASSEMBLY__ */
 
