@@ -341,7 +341,7 @@ static void device_remove_attributes(struct device *dev,
 }
 
 static int device_add_groups(struct device *dev,
-			     struct attribute_group **groups)
+			     const struct attribute_group **groups)
 {
 	int error = 0;
 	int i;
@@ -361,7 +361,7 @@ static int device_add_groups(struct device *dev,
 }
 
 static void device_remove_groups(struct device *dev,
-				 struct attribute_group **groups)
+				 const struct attribute_group **groups)
 {
 	int i;
 
@@ -929,6 +929,8 @@ int device_add(struct device *dev)
 		error = device_create_sys_dev_entry(dev);
 		if (error)
 			goto devtattrError;
+
+		devtmpfs_create_node(dev);
 	}
 
 	error = device_add_class_symlinks(dev);
@@ -1075,6 +1077,7 @@ void device_del(struct device *dev)
 	if (parent)
 		klist_del(&dev->p->knode_parent);
 	if (MAJOR(dev->devt)) {
+		devtmpfs_delete_node(dev);
 		device_remove_sys_dev_entry(dev);
 		device_remove_file(dev, &devt_attr);
 	}

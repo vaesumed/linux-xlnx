@@ -131,7 +131,7 @@ struct device_driver {
 	void (*shutdown) (struct device *dev);
 	int (*suspend) (struct device *dev, pm_message_t state);
 	int (*resume) (struct device *dev);
-	struct attribute_group **groups;
+	const struct attribute_group **groups;
 
 	struct dev_pm_ops *pm;
 
@@ -287,7 +287,7 @@ extern void class_destroy(struct class *cls);
  */
 struct device_type {
 	const char *name;
-	struct attribute_group **groups;
+	const struct attribute_group **groups;
 	int (*uevent)(struct device *dev, struct kobj_uevent_env *env);
 	char *(*nodename)(struct device *dev);
 	void (*release)(struct device *dev);
@@ -411,7 +411,7 @@ struct device {
 
 	struct klist_node	knode_class;
 	struct class		*class;
-	struct attribute_group	**groups;	/* optional groups */
+	const struct attribute_group **groups;	/* optional groups */
 
 	void	(*release)(struct device *dev);
 };
@@ -537,6 +537,16 @@ extern struct device *get_device(struct device *dev);
 extern void put_device(struct device *dev);
 
 extern void wait_for_device_probe(void);
+
+#ifdef CONFIG_DEVTMPFS
+extern int devtmpfs_create_node(struct device *dev);
+extern int devtmpfs_delete_node(struct device *dev);
+extern int devtmpfs_mount(const char *mountpoint);
+#else
+static inline int devtmpfs_create_node(struct device *dev) { return 0; }
+static inline int devtmpfs_delete_node(struct device *dev) { return 0; }
+static inline int devtmpfs_mount(const char *mountpoint) { return 0; }
+#endif
 
 /* drivers/base/power/shutdown.c */
 extern void device_shutdown(void);
