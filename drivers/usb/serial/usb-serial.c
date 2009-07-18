@@ -214,15 +214,13 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 		goto bailout_port_put;
 	}
 
-	++port->port.count;
-
 	/* set up our port structure making the tty driver
 	 * remember our port object, and us it */
 	tty->driver_data = port;
 	tty_port_tty_set(&port->port, tty);
 
 	/* If the console is attached, the device is already open */
-	if (port->port.count == 1 && !port->console) {
+	if (!port->port.count && !port->console) {
 
 		/* lock this module before we call it
 		 * this may fail, which means we must bail out,
@@ -240,12 +238,16 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 		if (retval)
 			goto bailout_module_put;
 
+		++port->port.count;
+
 		/* only call the device specific open if this
 		 * is the first time the port is opened */
 		retval = serial->type->open(tty, port, filp);
 		if (retval)
 			goto bailout_interface_put;
 		mutex_unlock(&serial->disc_mutex);
+	} else {
+		++port->port.count;
 	}
 	mutex_unlock(&port->mutex);
 	/* Now do the correct tty layer semantics */
