@@ -1072,8 +1072,8 @@ EXPORT_SYMBOL_GPL(hid_report_raw_event);
  */
 int hid_input_report(struct hid_device *hid, int type, u8 *data, int size, int interrupt)
 {
-	struct hid_report_enum *report_enum = hid->report_enum + type;
-	struct hid_driver *hdrv = hid->driver;
+	struct hid_report_enum *report_enum;
+	struct hid_driver *hdrv;
 	struct hid_report *report;
 	char *buf;
 	unsigned int i;
@@ -1081,6 +1081,8 @@ int hid_input_report(struct hid_device *hid, int type, u8 *data, int size, int i
 
 	if (!hid || !hid->driver)
 		return -ENODEV;
+	report_enum = hid->report_enum + type;
+	hdrv = hid->driver;
 
 	if (!size) {
 		dbg_hid("empty report\n");
