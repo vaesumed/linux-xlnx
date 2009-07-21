@@ -12,11 +12,13 @@
 #define __ASM_ARCH_DM355_H
 
 #include <mach/hardware.h>
+#include <media/davinci/vpfe_capture.h>
 
 struct spi_board_info;
 
 void __init dm355_init(void);
 void dm355_init_spi0(unsigned chipselect_mask,
 		struct spi_board_info *info, unsigned len);
+void dm355_set_vpfe_config(struct vpfe_config *cfg);
 
 #endif /* __ASM_ARCH_DM355_H */

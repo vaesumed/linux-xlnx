@@ -31,6 +31,15 @@
 #include "clock.h"
 #include "mux.h"
 
+#define DAVINCI_VPIF_BASE       (0x01C12000)
+#define VDD3P3V_PWDN_OFFSET	(0x48)
+#define VSCLKDIS_OFFSET		(0x6C)
+
+#define VDD3P3V_VID_MASK	(BIT_MASK(7) | BIT_MASK(6) | BIT_MASK(5) |\
+					BIT_MASK(4))
+#define VSCLKDIS_MASK		(BIT_MASK(11) | BIT_MASK(10) | BIT_MASK(9) |\
+					BIT_MASK(8))
+
 /*
  * Device specific clocks
  */
@@ -509,6 +518,37 @@ static struct platform_device dm646x_edma_device = {
 	.resource		= edma_resources,
 };
 
+static u64 vpif_dma_mask = DMA_BIT_MASK(32);
+
+static struct resource vpif_resource[] = {
+	{
+		.start	= DAVINCI_VPIF_BASE,
+		.end	= DAVINCI_VPIF_BASE + 0x03fff,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start = IRQ_DM646X_VP_VERTINT2,
+		.end   = IRQ_DM646X_VP_VERTINT2,
+		.flags = IORESOURCE_IRQ,
+	},
+	{
+		.start = IRQ_DM646X_VP_VERTINT3,
+		.end   = IRQ_DM646X_VP_VERTINT3,
+		.flags = IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device vpif_display_dev = {
+	.name		= "vpif_display",
+	.id		= -1,
+	.dev		= {
+			.dma_mask 		= &vpif_dma_mask,
+			.coherent_dma_mask	= DMA_32BIT_MASK,
+	},
+	.resource	= vpif_resource,
+	.num_resources	= ARRAY_SIZE(vpif_resource),
+};
+
 /*----------------------------------------------------------------------*/
 
 static struct map_desc dm646x_io_desc[] = {
@@ -618,6 +658,28 @@ static struct davinci_soc_info davinci_soc_info_dm646x = {
 	.sram_dma		= 0x10010000,
 	.sram_len		= SZ_32K,
 };
+
+void dm646x_setup_vpif(struct vpif_config *config)
+{
+	unsigned int value;
+	void __iomem *base = IO_ADDRESS(DAVINCI_SYSTEM_MODULE_BASE);
+
+	value = __raw_readl(base + VSCLKDIS_OFFSET);
+	value &= ~VSCLKDIS_MASK;
+	__raw_writel(value, base + VSCLKDIS_OFFSET);
+
+	value = __raw_readl(base + VDD3P3V_PWDN_OFFSET);
+	value &= ~VDD3P3V_VID_MASK;
+	__raw_writel(value, base + VDD3P3V_PWDN_OFFSET);
+
+	davinci_cfg_reg(DM646X_STSOMUX_DISABLE);
+	davinci_cfg_reg(DM646X_STSIMUX_DISABLE);
+	davinci_cfg_reg(DM646X_PTSOMUX_DISABLE);
+	davinci_cfg_reg(DM646X_PTSIMUX_DISABLE);
+
+	vpif_display_dev.dev.platform_data = config;
+	platform_device_register(&vpif_display_dev);
+}
 
 void __init dm646x_init(void)
 {
