@@ -1309,7 +1309,6 @@ static void iommu_detach_domain(struct dmar_domain *domain,
 }
 
 static struct iova_domain reserved_iova_list;
-static struct lock_class_key reserved_alloc_key;
 static struct lock_class_key reserved_rbtree_key;
 
 static void dmar_init_reserved_ranges(void)
@@ -1320,8 +1319,6 @@ static void dmar_init_reserved_ranges(void)
 
 	init_iova_domain(&reserved_iova_list, DMA_32BIT_PFN);
 
-	lockdep_set_class(&reserved_iova_list.iova_alloc_lock,
-		&reserved_alloc_key);
 	lockdep_set_class(&reserved_iova_list.iova_rbtree_lock,
 		&reserved_rbtree_key);
 
@@ -2227,7 +2224,6 @@ int __init init_dmars(void)
 	deferred_flush = kzalloc(g_num_of_iommus *
 		sizeof(struct deferred_flush_tables), GFP_KERNEL);
 	if (!deferred_flush) {
-		kfree(g_iommus);
 		ret = -ENOMEM;
 		goto error;
 	}
@@ -2455,8 +2451,7 @@ static struct iova *intel_alloc_iova(struct device *dev,
 	return iova;
 }
 
-static struct dmar_domain *
-get_valid_domain_for_dev(struct pci_dev *pdev)
+static struct dmar_domain *__get_valid_domain_for_dev(struct pci_dev *pdev)
 {
 	struct dmar_domain *domain;
 	int ret;
@@ -2482,6 +2477,18 @@ get_valid_domain_for_dev(struct pci_dev *pdev)
 	}
 
 	return domain;
+}
+
+static inline struct dmar_domain *get_valid_domain_for_dev(struct pci_dev *dev)
+{
+	struct device_domain_info *info;
+
+	/* No lock here, assumes no domain exit in normal case */
+	info = dev->dev.archdata.iommu;
+	if (likely(info))
+		return info->domain;
+
+	return __get_valid_domain_for_dev(dev);
 }
 
 static int iommu_dummy(struct pci_dev *pdev)
@@ -2733,12 +2740,6 @@ static void intel_unmap_page(struct device *dev, dma_addr_t dev_addr,
 	}
 }
 
-static void intel_unmap_single(struct device *dev, dma_addr_t dev_addr, size_t size,
-			       int dir)
-{
-	intel_unmap_page(dev, dev_addr, size, dir, NULL);
-}
-
 static void *intel_alloc_coherent(struct device *hwdev, size_t size,
 				  dma_addr_t *dma_handle, gfp_t flags)
 {
@@ -2771,7 +2772,7 @@ static void intel_free_coherent(struct device *hwdev, size_t size, void *vaddr,
 	size = PAGE_ALIGN(size);
 	order = get_order(size);
 
-	intel_unmap_single(hwdev, dma_handle, size, DMA_BIDIRECTIONAL);
+	intel_unmap_page(hwdev, dma_handle, size, DMA_BIDIRECTIONAL, NULL);
 	free_pages((unsigned long)vaddr, order);
 }
 
@@ -2807,11 +2808,18 @@ static void intel_unmap_sg(struct device *hwdev, struct scatterlist *sglist,
 	/* free page tables */
 	dma_pte_free_pagetable(domain, start_pfn, last_pfn);
 
-	iommu_flush_iotlb_psi(iommu, domain->id, start_pfn,
-			      (last_pfn - start_pfn + 1));
-
-	/* free iova */
-	__free_iova(&domain->iovad, iova);
+	if (intel_iommu_strict) {
+		iommu_flush_iotlb_psi(iommu, domain->id, start_pfn,
+				      last_pfn - start_pfn + 1);
+		/* free iova */
+		__free_iova(&domain->iovad, iova);
+	} else {
+		add_unmap(domain, iova);
+		/*
+		 * queue up the release of the unmap to save the 1/6th of the
+		 * cpu used up by the iotlb flush operation...
+		 */
+	}
 }
 
 static int intel_nontranslate_map_sg(struct device *hddev,
