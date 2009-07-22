@@ -23,4 +23,28 @@
 
 void __init dm646x_init(void);
 
+void dm646x_video_init(void);
+
+struct vpif_output {
+	u16 id;
+	const char *name;
+};
+
+struct subdev_info {
+	unsigned short addr;
+	const char *name;
+};
+
+struct vpif_config {
+	int (*set_clock)(int, int);
+	const struct subdev_info *subdevinfo;
+	int subdev_count;
+	const char **output;
+	int output_count;
+	const char *card_name;
+};
+
+
+void dm646x_setup_vpif(struct vpif_config *config);
+
 #endif /* __ASM_ARCH_DM646X_H */
