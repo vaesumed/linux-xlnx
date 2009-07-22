@@ -13,6 +13,7 @@
 
 #include <mach/hardware.h>
 #include <mach/emac.h>
+#include <mach/asp.h>
 
 #define DM646X_EMAC_BASE		(0x01C80000)
 #define DM646X_EMAC_CNTRL_OFFSET	(0x0000)
@@ -21,6 +22,11 @@
 #define DM646X_EMAC_MDIO_OFFSET		(0x4000)
 #define DM646X_EMAC_CNTRL_RAM_SIZE	(0x2000)
 
+#define DM646X_ATA_REG_BASE		(0x01C66000)
+
 void __init dm646x_init(void);
+void __init dm646x_init_ide(void);
+void __init dm646x_init_mcasp0(struct snd_platform_data *pdata);
+void __init dm646x_init_mcasp1(struct snd_platform_data *pdata);
 
 #endif /* __ASM_ARCH_DM646X_H */
