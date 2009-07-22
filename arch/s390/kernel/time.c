@@ -59,7 +59,8 @@
 
 #define TICK_SIZE tick
 
-u64 sched_clock_base_cc = -1;	/* Force to data section. */
+u64 sched_clock_base = -1;	/* Force to data section. */
+EXPORT_SYMBOL(sched_clock_base);
 
 static DEFINE_PER_CPU(struct clock_event_device, comparators);
 
@@ -68,7 +69,7 @@ static DEFINE_PER_CPU(struct clock_event_device, comparators);
  */
 unsigned long long notrace sched_clock(void)
 {
-	return ((get_clock_xt() - sched_clock_base_cc) * 125) >> 9;
+	return (get_clock_monotonic() * 125) >> 9;
 }
 
 /*
@@ -277,7 +278,7 @@ void __init time_init(void)
 	tod_to_timeval(now - TOD_UNIX_EPOCH, &xtime);
 	clocksource_tod.cycle_last = now;
 	clocksource_tod.raw_time = xtime;
-	tod_to_timeval(sched_clock_base_cc - TOD_UNIX_EPOCH, &ts);
+	tod_to_timeval(sched_clock_base - TOD_UNIX_EPOCH, &ts);
 	set_normalized_timespec(&wall_to_monotonic, -ts.tv_sec, -ts.tv_nsec);
 	write_sequnlock_irqrestore(&xtime_lock, flags);
 
@@ -315,7 +316,7 @@ static unsigned long long adjust_time(unsigned long long old,
 		delta = -delta;
 		adjust.offset = -ticks * (1000000 / HZ);
 	}
-	sched_clock_base_cc += delta;
+	sched_clock_base += delta;
 	if (adjust.offset != 0) {
 		pr_notice("The ETR interface has adjusted the clock "
 			  "by %li microseconds\n", adjust.offset);
