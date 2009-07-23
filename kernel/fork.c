@@ -62,6 +62,7 @@
 #include <linux/fs_struct.h>
 #include <linux/magic.h>
 #include <linux/perf_counter.h>
+#include <linux/kmemleak.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -104,16 +105,20 @@ static struct kmem_cache *task_struct_cachep;
 #ifndef __HAVE_ARCH_THREAD_INFO_ALLOCATOR
 static inline struct thread_info *alloc_thread_info(struct task_struct *tsk)
 {
+	struct thread_info *ti;
 #ifdef CONFIG_DEBUG_STACK_USAGE
 	gfp_t mask = GFP_KERNEL | __GFP_ZERO;
 #else
 	gfp_t mask = GFP_KERNEL;
 #endif
-	return (struct thread_info *)__get_free_pages(mask, THREAD_SIZE_ORDER);
+	ti = (struct thread_info *)__get_free_pages(mask, THREAD_SIZE_ORDER);
+	kmemleak_alloc(ti, THREAD_SIZE, 1, mask);
+	return ti;
 }
 
 static inline void free_thread_info(struct thread_info *ti)
 {
+	kmemleak_free(ti);
 	free_pages((unsigned long)ti, THREAD_SIZE_ORDER);
 }
 #endif
