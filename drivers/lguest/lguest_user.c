@@ -32,10 +32,36 @@ bool send_notify_to_eventfd(struct lg_cpu *cpu)
 	return cpu->pending_notify == 0;
 }
 
+/*L:055
+ * One of the more tricksy tricks in the Linux Kernel is a technique called
+ * Read Copy Update.  Since one point of lguest is to teach lguest journeyers
+ * about kernel coding, I use it here.  (In case you're curious, other purposes
+ * include learning about virtualization and instilling a deep appreciation for
+ * simplicity and puppies).
+ *
+ * We keep a simple array which maps LHCALL_NOTIFY values to eventfds, but we
+ * we add new eventfds without ever blocking readers from accessing the array.
+ * The current Launcher only does this during boot, so that never happens.  But
+ * Read Copy Update is cool, and adding a lock risks damaging even more puppies
+ * than this code does.
+ *
+ * We allocate a brand new one-larger array, copy the old one and add our new
+ * element.  Then we make the lg eventfd pointer point to the new array.
+ * That's the easy part: now we need to free the old one, but we need to make
+ * sure no slow CPU somewhere is still looking at it.  That's what
+ * synchronize_rcu does for us: waits until every CPU has indicated that it has
+ * moved on to know it's no longer using the old one.
+ *
+ * If that's unclear, see http://en.wikipedia.org/wiki/Read-copy-update.
+ */
 static int add_eventfd(struct lguest *lg, unsigned long addr, int fd)
 {
 	struct lg_eventfd_map *new, *old = lg->eventfds;
 
+	/*
+	 * We don't allow notifications on address 0 anyway (pending_notify of
+	 * 0 means "nothing pending).
+	 */
 	if (!addr)
 		return -EINVAL;
 
@@ -75,6 +101,14 @@ static int add_eventfd(struct lguest *lg, unsigned long addr, int fd)
 	return 0;
 }
 
+/*L:052
+ * Receiving notifications from the Guest is usually done by attaching a
+ * particular LHCALL_NOTIFY value to an event filedescriptor.  The eventfd will
+ * become readable when the Guest does an LHCALL_NOTIFY with that value.
+ *
+ * This is really convenient for processing each virtqueue in a separate
+ * thread.
+ */
 static int attach_eventfd(struct lguest *lg, const unsigned long __user *input)
 {
 	unsigned long addr, fd;
@@ -86,6 +120,11 @@ static int attach_eventfd(struct lguest *lg, const unsigned long __user *input)
 	if (get_user(fd, input) != 0)
 		return -EFAULT;
 
+	/*
+	 * Just make sure two callers don't add eventfds at once.  We really
+	 * only need to lock against callers adding to the same Guest, so using
+	 * the Big Lguest Lock is overkill.  But this is setup, not a fast path.
+	 */
 	mutex_lock(&lguest_lock);
 	err = add_eventfd(lg, addr, fd);
 	mutex_unlock(&lguest_lock);
@@ -106,6 +145,10 @@ static int user_send_irq(struct lg_cpu *cpu, const unsigned long __user *input)
 	if (irq >= LGUEST_IRQS)
 		return -EINVAL;
 
+	/*
+	 * Next time the Guest runs, the core code will see if it can deliver
+	 * this interrupt.
+	 */
 	set_interrupt(cpu, irq);
 	return 0;
 }
@@ -307,10 +350,10 @@ unlock:
  * The first operation the Launcher does must be a write.  All writes
  * start with an unsigned long number: for the first write this must be
  * LHREQ_INITIALIZE to set up the Guest.  After that the Launcher can use
- * writes of other values to send interrupts.
+ * writes of other values to send interrupts or set up receipt of notifications.
  *
  * Note that we overload the "offset" in the /dev/lguest file to indicate what
- * CPU number we're dealing with.  Currently this is always 0, since we only
+ * CPU number we're dealing with.  Currently this is always 0 since we only
  * support uniprocessor Guests, but you can see the beginnings of SMP support
  * here.
  */
