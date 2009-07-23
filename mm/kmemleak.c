@@ -203,8 +203,6 @@ static unsigned long jiffies_min_age;
 static unsigned long jiffies_last_scan;
 /* delay between automatic memory scannings */
 static signed long jiffies_scan_wait;
-/* enables or disables the task stacks scanning */
-static int kmemleak_stack_scan = 1;
 /* protects the memory scanning, parameters and debug/kmemleak file access */
 static DEFINE_MUTEX(scan_mutex);
 
@@ -1064,7 +1062,6 @@ static void kmemleak_scan(void)
 {
 	unsigned long flags;
 	struct kmemleak_object *object, *tmp;
-	struct task_struct *task;
 	int i;
 	int new_leaks = 0;
 	int gray_list_pass = 0;
@@ -1128,19 +1125,6 @@ static void kmemleak_scan(void)
 				continue;
 			scan_block(page, page + 1, NULL, 1);
 		}
-	}
-
-	/*
-	 * Scanning the task stacks may introduce false negatives and it is
-	 * not enabled by default.
-	 */
-	if (kmemleak_stack_scan) {
-		read_lock(&tasklist_lock);
-		for_each_process(task)
-			scan_block(task_stack_page(task),
-				   task_stack_page(task) + THREAD_SIZE,
-				   NULL, 0);
-		read_unlock(&tasklist_lock);
 	}
 
 	/*
@@ -1413,8 +1397,6 @@ static int dump_str_object_info(const char *str)
  * File write operation to configure kmemleak at run-time. The following
  * commands can be written to the /sys/kernel/debug/kmemleak file:
  *   off	- disable kmemleak (irreversible)
- *   stack=on	- enable the task stacks scanning
- *   stack=off	- disable the tasks stacks scanning
  *   scan=on	- start the automatic memory scanning thread
  *   scan=off	- stop the automatic memory scanning thread
  *   scan=...	- set the automatic memory scanning period in seconds (0 to
@@ -1440,10 +1422,6 @@ static ssize_t kmemleak_write(struct file *file, const char __user *user_buf,
 
 	if (strncmp(buf, "off", 3) == 0)
 		kmemleak_disable();
-	else if (strncmp(buf, "stack=on", 8) == 0)
-		kmemleak_stack_scan = 1;
-	else if (strncmp(buf, "stack=off", 9) == 0)
-		kmemleak_stack_scan = 0;
 	else if (strncmp(buf, "scan=on", 7) == 0)
 		start_scan_thread();
 	else if (strncmp(buf, "scan=off", 8) == 0)
