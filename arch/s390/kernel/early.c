@@ -52,7 +52,7 @@ static void __init reset_tod_clock(void)
 	if (set_clock(TOD_UNIX_EPOCH) != 0 || store_clock(&time) != 0)
 		disabled_wait(0);
 
-	sched_clock_base_cc = TOD_UNIX_EPOCH;
+	sched_clock_base = TOD_UNIX_EPOCH;
 }
 
 #ifdef CONFIG_SHARED_KERNEL
