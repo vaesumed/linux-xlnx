@@ -1422,18 +1422,13 @@ static void uart_hangup(struct tty_struct *tty)
 	struct uart_state *state = tty->driver_data;
 	struct tty_port *port = &state->port;
 
-	BUG_ON(!kernel_locked());
 	pr_debug("uart_hangup(%d)\n", state->uart_port->line);
 
 	mutex_lock(&port->mutex);
 	if (port->flags & ASYNC_NORMAL_ACTIVE) {
 		uart_flush_buffer(tty);
 		uart_shutdown(state);
-		port->count = 0;
-		clear_bit(ASYNCB_NORMAL_ACTIVE, &port->flags);
-		tty_port_tty_set(port, NULL);
-		wake_up_interruptible(&port->open_wait);
-		wake_up_interruptible(&port->delta_msr_wait);
+		tty_port_hangup(port);
 	}
 	mutex_unlock(&port->mutex);
 }
