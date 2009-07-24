@@ -1306,7 +1306,7 @@ extern int  drbd_bm_set_bits(
 extern int  drbd_bm_clear_bits(
 		struct drbd_conf *mdev, unsigned long s, unsigned long e);
 /* bm_set_bits variant for use while holding drbd_bm_lock */
-extern int _drbd_bm_set_bits(struct drbd_conf *mdev,
+extern void _drbd_bm_set_bits(struct drbd_conf *mdev,
 		const unsigned long s, const unsigned long e);
 extern int  drbd_bm_test_bit(struct drbd_conf *mdev, unsigned long bitnr);
 extern int  drbd_bm_e_weight(struct drbd_conf *mdev, unsigned long enr);
@@ -1334,9 +1334,6 @@ extern void drbd_bm_get_lel(struct drbd_conf *mdev, size_t offset,
 extern void drbd_bm_lock(struct drbd_conf *mdev, char *why);
 extern void drbd_bm_unlock(struct drbd_conf *mdev);
 
-extern void _drbd_bm_recount_bits(struct drbd_conf *mdev, char *file, int line);
-#define drbd_bm_recount_bits(mdev) \
-	_drbd_bm_recount_bits(mdev, __FILE__, __LINE__)
 extern int drbd_bm_count_bits(struct drbd_conf *mdev, const unsigned long s, const unsigned long e);
 /* drbd_main.c */
 

@@ -1381,6 +1381,10 @@ static int recv_dless_read(struct drbd_conf *mdev, struct drbd_request *req,
 
 	data_size -= dgs;
 
+	/* optimistically update recv_cnt.  if receiving fails below,
+	 * we disconnect anyways, and counters will be reset. */
+	mdev->recv_cnt += data_size>>9;
+
 	bio = req->master_bio;
 	D_ASSERT(sector == bio->bi_sector);
 
@@ -2483,8 +2487,6 @@ static enum drbd_conns drbd_sync_handshake(struct drbd_conf *mdev, enum drbd_rol
 			     drbd_bm_total_weight(mdev));
 		}
 	}
-
-	drbd_bm_recount_bits(mdev);
 
 	return rv;
 }
