@@ -2633,7 +2633,7 @@ _scsih_qcmd(struct scsi_cmnd *scmd, void (*done)(struct scsi_cmnd *))
 		return 0;
 	}
 
-	/* see if we are busy with task managment stuff */
+	/* see if we are busy with task management stuff */
 	spin_lock_irqsave(&ioc->ioc_reset_in_progress_lock, flags);
 	if (sas_target_priv_data->tm_busy ||
 	    ioc->shost_recovery || ioc->ioc_link_reset_in_progress) {
@@ -5857,7 +5857,7 @@ _scsih_init(void)
 	 /* queuecommand callback hander */
 	scsi_io_cb_idx = mpt2sas_base_register_callback_handler(_scsih_io_done);
 
-	/* task managment callback handler */
+	/* task management callback handler */
 	tm_cb_idx = mpt2sas_base_register_callback_handler(_scsih_tm_done);
 
 	/* base internal commands callback handler */
