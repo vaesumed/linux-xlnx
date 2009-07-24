@@ -180,6 +180,9 @@ int arch_update_cpu_topology(void);
 #ifndef topology_physical_package_id
 #define topology_physical_package_id(cpu)	((void)(cpu), -1)
 #endif
+#ifndef topology_cpu_node_id
+#define topology_cpu_node_id(cpu)		((void)(cpu), 0)
+#endif
 #ifndef topology_core_id
 #define topology_core_id(cpu)			((void)(cpu), 0)
 #endif
@@ -189,11 +192,17 @@ int arch_update_cpu_topology(void);
 #ifndef topology_core_siblings
 #define topology_core_siblings(cpu)		cpumask_of_cpu(cpu)
 #endif
+#ifndef topology_cpu_node_siblings
+#define topology_cpu_node_siblings(cpu)		topology_core_siblings(cpu)
+#endif
 #ifndef topology_thread_cpumask
 #define topology_thread_cpumask(cpu)		cpumask_of(cpu)
 #endif
 #ifndef topology_core_cpumask
 #define topology_core_cpumask(cpu)		cpumask_of(cpu)
+#endif
+#ifndef topology_cpu_node_cpumask
+#define topology_cpu_node_cpumask(cpu)		topology_core_cpumask(cpu)
 #endif
 
 /* Returns the number of the current Node. */
