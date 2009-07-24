@@ -1,0 +1,154 @@
+Importing driver-core.current based on 2.6.31-rc3
+Unchanged quilt series driver-core.current
+Importing usb.current based on quilt/driver-core.current
+Unchanged quilt series usb.current
+Importing i2c based on 2.6.31-rc3
+Unchanged quilt series i2c
+Importing jdelvare-hwmon based on 2.6.31-rc3-git4
+Unchanged quilt series jdelvare-hwmon
+Importing kernel-doc based on 2.6.31-rc1-git5
+Unchanged quilt series kernel-doc
+Importing rr based on v2.6.31-rc3-96-g78af08d
+$ git clone -s -l -n -q . ../quilt-tmp
+$ cd ../quilt-tmp
+$ git reset --hard 78af08d90b8f745044b1274430bc4bc6b2b27aca
+HEAD is now at 78af08d Merge branch 'drm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/airlied/drm-2.6
+$ git quiltimport --author Rusty Russell <rusty@rustcorp.com.au> --patches ../quilt/rr
+module:use_symbol_prefix_with_layout.patch
+kthread:update_the_comment_in_kthread_stop.patch
+lguest:dereferencing_freed_mem_in_add_eventfd.patch
+lguest:fix-oversize-config.patch
+lguest:comment-style.patch
+lguest:comment-update.patch
+lguest:struct-cleanup.patch
+lguest:panic_notifier-cleanup.patch
+lguest:avoid-native_set_pmd.patch
+lguest:PAE-dont-assume-PAGE_OFFSET.patch
+cpumask:use_zalloc_cpumask_var_where_possible.patch
+cpumask:remove-pcibus_to_cpumask-alpha.patch
+cpumask:remove-pcibus_to_cpumask-mips.patch
+cpumask:remove-pcibus_to_cpumask-powerpc.patch
+cpumask:remove-node_to_cpumask.patch
+cpumask:remove-CPU_MASK_ALL_PTR.patch
+cpumask:remove-address-of-CPU_MASK_ALL-mips.patch
+cpumask:remove-cpu_mask_all.patch
+cpumask:remove-last-remaining-irqaction-mask.patch
+cpumask:irqaction-remove-mask.patch
+cpumask:remove_mask_field_from_comments.patch
+cpumask:remove-set_cpus_allowed.patch
+cpumask:ia64-smp_call_function_many.patch
+cpumask:remove-smp_call_function_mask.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-core.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-sparc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-s390.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-powerpc.patch
+cpumask:remove-topology_core_siblings-and-topology_thread_siblings-ia64.patch
+cpumask:arch_send_call_function_ipi_mask-alpha.patch
+cpumask:arch_send_call_function_ipi_mask-m32r.patch
+cpumask:arch_send_call_function_ipi_mask-mips.patch
+cpumask:arch_send_call_function_ipi_mask-powerpc.patch
+cpumask:arch_send_call_function_ipi_mask-s390.patch
+cpumask:remove-arch_send_call_function_ipi.patch
+cpumask:use-cpumap-accessors-m32r.patch
+cpumask:use-cpumap-accessors-mips.patch
+cpumask:use-cpumap-accessors-powerpc.patch
+cpumask:use-cpumap-accessors-um.patch
+cpumask:use-mm_cpumask-arm.patch
+cpumask:use-mm_cpumask-m32r.patch
+cpumask:use-mm_cpumask-mn10300.patch
+cpumask:use-mm_cpumask-mips.patch
+cpumask:use-mm_cpumask-um.patch
+cpumask:use-mm_cpumask-x86.patch
+cpumask:mm_quicklist-new-cpumask-ops.patch
+cpumask:remove-unused-deprecated-functions.patch
+cpumask:move-obsolete-functions-to-end-of-header.patch
+arch-x86-kernel-acpi-cstatec-avoid-using-work_on_cpu.patch
+misc:work_on_cpu-acpi.patch
+misc:work_on_cpu-acpi-fix.patch
+misc:work_on_cpu-dcdbas.patch
+misc:remove-start_kernel-prototypes.patch
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/rr
+From ../quilt-tmp
+ + b7646a3...88599b5 master     -> quilt/rr  (forced update)
+Importing device-mapper based on block/for-next
+	quilt series is empty
+$ git update-ref refs/heads/quilt/device-mapper bdb473bcf205cc30af24a9a2dafe26f2a88f0ef6
+Importing ttydev based on 4be3bd7849165e7efa6b0b35a23d6a3598d97465
+$ cd ../quilt-tmp
+$ git reset --hard 4be3bd7849165e7efa6b0b35a23d6a3598d97465
+HEAD is now at 4be3bd7 Linux 2.6.31-rc4
+$ git quiltimport --author Alan Cox <alan@lxorguk.ukuu.org.uk> --patches ../quilt/ttydev
+kfifo-const
+tty-cyclades-refcount
+tty-cyclades-use-port-block-helper
+tty-cyclades-precompute
+tty-cyclades-use-port-hangup
+tty-cyclades-use-port-close
+tty-cyclades-cleanup
+tty-cyclades-sleep-not-busy
+tty-cyclades-use-dtr-helpers
+tty-cyclades-merge-startup-common
+tty-cyclades-ioctl-cleanup
+tty-cyclades-modem-cleanup
+tty-cyclades-add-io-helpers
+tty-cyclades-remove-set-line-dups
+tty-cyclades-fix-const-assign
+tty-usb-mos7840-modem
+vt-events
+vt-pm-extract
+vt-incfix
+vt-lockactive
+net-slip-ttyfix
+serial-add-irqflags-support
+serial-8250-amstrad-e3
+serial-8250-minbaud
+dmi-sanity
+kernel-shared-regions
+tty-usb-mos7720-modem
+tty-usb-mos7720-lsr
+tty-x86-termios-clean
+serial-kill-info
+serial-fold-closing-port
+serial-port-portptr
+serial-move-counts
+serial-move-flags
+serial-move-mutex
+serial-move-users
+serial-msr-move
+serial-kill-uif
+serial-kill-USF_CLOSING
+serial-port-kref
+serial-extract-portops
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:66: trailing whitespace.
+		
+warning: 1 line adds whitespace errors.
+serial-use-port-hangup
+serial-use-tty-close
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:16: trailing whitespace.
+	/* FIXME: We can also migrate to drain_delay here */	
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:86: trailing whitespace.
+	   FIXME: should be core tty port code ? 
+warning: 2 lines add whitespace errors.
+serial-core-port-wait
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:71: trailing whitespace.
+ 
+warning: 1 line adds whitespace errors.
+tty-usb-cdc-fix-speed
+serial-console-set-resume
+tty-usb-disc-crash-fix1
+/home/sfr/kernels/next/quilt-tmp/.git/rebase-apply/patch:26: trailing whitespace.
+		   Another user may have already reopened the port but 
+warning: 1 line adds whitespace errors.
+$ cd ../next
+$ git fetch -f ../quilt-tmp master:quilt/ttydev
+From ../quilt-tmp
+ + e34cf8a...74a56e0 master     -> quilt/ttydev  (forced update)
+Importing aoe based on v2.6.29-rc2
+Unchanged quilt series aoe
+Importing driver-core based on quilt/usb.current
+Unchanged quilt series driver-core
+Importing usb based on quilt/driver-core
+Unchanged quilt series usb
+Importing staging based on quilt/usb
+Unchanged quilt series staging
