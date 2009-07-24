@@ -22,6 +22,7 @@ extern int smp_num_siblings;
 extern unsigned int num_processors;
 
 DECLARE_PER_CPU(cpumask_var_t, cpu_sibling_map);
+DECLARE_PER_CPU(cpumask_var_t, cpu_node_map);
 DECLARE_PER_CPU(cpumask_var_t, cpu_core_map);
 DECLARE_PER_CPU(u16, cpu_llc_id);
 DECLARE_PER_CPU(int, cpu_number);
@@ -29,6 +30,11 @@ DECLARE_PER_CPU(int, cpu_number);
 static inline struct cpumask *cpu_sibling_mask(int cpu)
 {
 	return per_cpu(cpu_sibling_map, cpu);
+}
+
+static inline struct cpumask *cpu_node_mask(int cpu)
+{
+	return per_cpu(cpu_node_map, cpu);
 }
 
 static inline struct cpumask *cpu_core_mask(int cpu)
