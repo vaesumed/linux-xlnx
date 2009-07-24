@@ -23,6 +23,7 @@ void tty_port_init(struct tty_port *port)
 	memset(port, 0, sizeof(*port));
 	init_waitqueue_head(&port->open_wait);
 	init_waitqueue_head(&port->close_wait);
+	init_waitqueue_head(&port->delta_msr_wait);
 	mutex_init(&port->mutex);
 	spin_lock_init(&port->lock);
 	port->close_delay = (50 * HZ) / 100;
@@ -116,6 +117,7 @@ void tty_port_hangup(struct tty_port *port)
 	port->tty = NULL;
 	spin_unlock_irqrestore(&port->lock, flags);
 	wake_up_interruptible(&port->open_wait);
+	wake_up_interruptible(&port->delta_msr_wait);
 }
 EXPORT_SYMBOL(tty_port_hangup);
 
@@ -169,7 +171,7 @@ void tty_port_lower_dtr_rts(struct tty_port *port)
 EXPORT_SYMBOL(tty_port_lower_dtr_rts);
 
 /**
- *	tty_port_block_til_ready	-	Waiting logic for tty open
+ *	__tty_port_block_til_ready	-	Waiting logic for tty open
  *	@port: the tty port being opened
  *	@tty: the tty device being bound
  *	@filp: the file pointer of the opener
@@ -186,9 +188,12 @@ EXPORT_SYMBOL(tty_port_lower_dtr_rts);
  *	do carrier detect and the dtr_rts method if it supports software
  *	management of these lines. Note that the dtr/rts raise is done each
  *	iteration as a hangup may have previously dropped them while we wait.
+ *
+ *	Called with the port mutex held. See tty_port_block_til_ready for
+ *	normal uses.
  */
  
-int tty_port_block_til_ready(struct tty_port *port,
+int __tty_port_block_til_ready(struct tty_port *port,
 				struct tty_struct *tty, struct file *filp)
 {
 	int do_clocal = 0, retval;
@@ -254,7 +259,9 @@ int tty_port_block_til_ready(struct tty_port *port,
 			retval = -ERESTARTSYS;
 			break;
 		}
+		mutex_unlock(&port->mutex);
 		schedule();
+		mutex_lock(&port->mutex);
 	}
 	finish_wait(&port->open_wait, &wait);
 
@@ -270,6 +277,38 @@ int tty_port_block_til_ready(struct tty_port *port,
 	return retval;
 	
 }
+EXPORT_SYMBOL(__tty_port_block_til_ready);
+
+/**
+ *	tty_port_block_til_ready	-	Waiting logic for tty open
+ *	@port: the tty port being opened
+ *	@tty: the tty device being bound
+ *	@filp: the file pointer of the opener
+ *
+ *	Implement the core POSIX/SuS tty behaviour when opening a tty device.
+ *	Handles:
+ *		- hangup (both before and during)
+ *		- non blocking open
+ *		- rts/dtr/dcd
+ *		- signals
+ *		- port flags and counts
+ *
+ *	The passed tty_port must implement the carrier_raised method if it can
+ *	do carrier detect and the dtr_rts method if it supports software
+ *	management of these lines. Note that the dtr/rts raise is done each
+ *	iteration as a hangup may have previously dropped them while we wait.
+ */
+ 
+int tty_port_block_til_ready(struct tty_port *port,
+				struct tty_struct *tty, struct file *filp)
+{
+	int retval;
+	mutex_lock(&port->mutex);
+	retval = __tty_port_block_til_ready(port, tty, filp);
+	mutex_unlock(&port->mutex);
+	return retval;
+}
+
 EXPORT_SYMBOL(tty_port_block_til_ready);
 
 int tty_port_close_start(struct tty_port *port, struct tty_struct *tty, struct file *filp)

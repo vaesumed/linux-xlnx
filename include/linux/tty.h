@@ -196,11 +196,12 @@ struct tty_port {
 	int			count;		/* Usage count */
 	wait_queue_head_t	open_wait;	/* Open waiters */
 	wait_queue_head_t	close_wait;	/* Close waiters */
+	wait_queue_head_t	delta_msr_wait;	/* Modem status change */
 	unsigned long		flags;		/* TTY flags ASY_*/
 	struct mutex		mutex;		/* Locking */
 	unsigned char		*xmit_buf;	/* Optional buffer */
-	int			close_delay;	/* Close port delay */
-	int			closing_wait;	/* Delay for output */
+	unsigned int		close_delay;	/* Close port delay */
+	unsigned int		closing_wait;	/* Delay for output */
 	int			drain_delay;	/* Set to zero if no pure time
 						   based drain is needed else
 						   set to size of fifo */
@@ -451,11 +452,18 @@ extern int tty_port_carrier_raised(struct tty_port *port);
 extern void tty_port_raise_dtr_rts(struct tty_port *port);
 extern void tty_port_lower_dtr_rts(struct tty_port *port);
 extern void tty_port_hangup(struct tty_port *port);
+extern int __tty_port_block_til_ready(struct tty_port *port,
+				struct tty_struct *tty, struct file *filp);
 extern int tty_port_block_til_ready(struct tty_port *port,
 				struct tty_struct *tty, struct file *filp);
 extern int tty_port_close_start(struct tty_port *port,
 				struct tty_struct *tty, struct file *filp);
 extern void tty_port_close_end(struct tty_port *port, struct tty_struct *tty);
+
+extern inline int tty_port_users(struct tty_port *port)
+{
+	return port->count + port->blocked_open;
+}
 
 extern int tty_register_ldisc(int disc, struct tty_ldisc_ops *new_ldisc);
 extern int tty_unregister_ldisc(int disc);
