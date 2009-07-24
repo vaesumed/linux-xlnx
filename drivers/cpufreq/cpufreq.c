@@ -619,32 +619,6 @@ static ssize_t show_affected_cpus(struct cpufreq_policy *policy, char *buf)
 	return show_cpus(policy->cpus, buf);
 }
 
-static ssize_t store_scaling_setspeed(struct cpufreq_policy *policy,
-					const char *buf, size_t count)
-{
-	unsigned int freq = 0;
-	unsigned int ret;
-
-	if (!policy->governor || !policy->governor->store_setspeed)
-		return -EINVAL;
-
-	ret = sscanf(buf, "%u", &freq);
-	if (ret != 1)
-		return -EINVAL;
-
-	policy->governor->store_setspeed(policy, freq);
-
-	return count;
-}
-
-static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
-{
-	if (!policy->governor || !policy->governor->show_setspeed)
-		return sprintf(buf, "<unsupported>\n");
-
-	return policy->governor->show_setspeed(policy, buf);
-}
-
 #define define_one_ro(_name) \
 static struct freq_attr _name = \
 __ATTR(_name, 0444, show_##_name, NULL)
@@ -669,7 +643,6 @@ define_one_ro(affected_cpus);
 define_one_rw(scaling_min_freq);
 define_one_rw(scaling_max_freq);
 define_one_rw(scaling_governor);
-define_one_rw(scaling_setspeed);
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -682,7 +655,6 @@ static struct attribute *default_attrs[] = {
 	&scaling_governor.attr,
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
-	&scaling_setspeed.attr,
 	NULL
 };
 
@@ -1658,7 +1630,6 @@ static int __cpufreq_governor(struct cpufreq_policy *policy,
 	return ret;
 }
 
-
 int cpufreq_register_governor(struct cpufreq_governor *governor)
 {
 	int err;
@@ -1691,7 +1662,6 @@ void cpufreq_unregister_governor(struct cpufreq_governor *governor)
 	return;
 }
 EXPORT_SYMBOL_GPL(cpufreq_unregister_governor);
-
 
 
 /*********************************************************************
