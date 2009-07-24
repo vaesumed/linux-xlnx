@@ -162,6 +162,8 @@ struct regulator_desc {
 struct regulator_dev {
 	struct regulator_desc *desc;
 	int use_count;
+	int open_count;
+	int exclusive;
 
 	/* lists we belong to */
 	struct list_head list; /* list of all regulators */
@@ -192,6 +194,8 @@ int regulator_notifier_call_chain(struct regulator_dev *rdev,
 void *rdev_get_drvdata(struct regulator_dev *rdev);
 struct device *rdev_get_dev(struct regulator_dev *rdev);
 int rdev_get_id(struct regulator_dev *rdev);
+
+int regulator_mode_to_status(unsigned int);
 
 void *regulator_get_init_drvdata(struct regulator_init_data *reg_init_data);
 
