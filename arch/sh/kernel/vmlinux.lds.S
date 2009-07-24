@@ -97,16 +97,14 @@ SECTIONS
 	_ebss = .;			/* uClinux MTD sucks */
 	_end = . ;
 
+	STABS_DEBUG
+	DWARF_DEBUG
+
 	/*
 	 * When something in the kernel is NOT compiled as a module, the
 	 * module cleanup code and data are put into these segments. Both
 	 * can then be thrown away, as cleanup code is never called unless
 	 * it's a module.
 	 */
-	/DISCARD/ : {
-		EXIT_CALL
-	}
-
-	STABS_DEBUG
-	DWARF_DEBUG
+	DISCARDS
 }
