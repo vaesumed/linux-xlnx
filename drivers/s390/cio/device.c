@@ -1026,9 +1026,6 @@ static void ccw_device_call_sch_unregister(struct work_struct *work)
 		return;
 	sch = to_subchannel(cdev->dev.parent);
 	css_sch_device_unregister(sch);
-	/* Reset intparm to zeroes. */
-	sch->config.intparm = 0;
-	cio_commit_config(sch);
 	/* Release cdev reference for workqueue processing.*/
 	put_device(&cdev->dev);
 	/* Release subchannel reference for local processing. */
@@ -1212,9 +1209,6 @@ static void io_subchannel_do_unreg(struct work_struct *work)
 
 	sch = container_of(work, struct subchannel, work);
 	css_sch_device_unregister(sch);
-	/* Reset intparm to zeroes. */
-	sch->config.intparm = 0;
-	cio_commit_config(sch);
 	put_device(&sch->dev);
 }
 
@@ -1690,10 +1684,6 @@ static int io_subchannel_sch_event(struct subchannel *sch, int slow)
 		spin_unlock_irqrestore(sch->lock, flags);
 		css_sch_device_unregister(sch);
 		spin_lock_irqsave(sch->lock, flags);
-
-		/* Reset intparm to zeroes. */
-		sch->config.intparm = 0;
-		cio_commit_config(sch);
 		break;
 	case REPROBE:
 		ccw_device_trigger_reprobe(cdev);
