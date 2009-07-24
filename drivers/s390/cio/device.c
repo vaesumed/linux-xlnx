@@ -624,7 +624,7 @@ static struct attribute_group ccwdev_attr_group = {
 	.attrs = ccwdev_attrs,
 };
 
-static struct attribute_group *ccwdev_attr_groups[] = {
+static const struct attribute_group *ccwdev_attr_groups[] = {
 	&ccwdev_attr_group,
 	NULL,
 };
