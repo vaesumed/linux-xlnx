@@ -1524,16 +1524,20 @@ static int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	struct crypto_hash *verify_tfm = NULL;
 	struct crypto_hash *csums_tfm = NULL;
 	struct syncer_conf sc;
-	cpumask_t n_cpu_mask = CPU_MASK_NONE;
+	cpumask_var_t new_cpu_mask;
 
-	memcpy(&sc, &mdev->sync_conf, sizeof(struct syncer_conf));
+	if (!zalloc_cpumask_var(&new_cpu_mask, GFP_KERNEL)) {
+		retcode = ERR_NOMEM;
+		goto fail;
+	}
 
 	if (nlp->flags & DRBD_NL_SET_DEFAULTS) {
 		memset(&sc, 0, sizeof(struct syncer_conf));
 		sc.rate       = DRBD_RATE_DEF;
 		sc.after      = DRBD_AFTER_DEF;
 		sc.al_extents = DRBD_AL_EXTENTS_DEF;
-	}
+	} else
+		memcpy(&sc, &mdev->sync_conf, sizeof(struct syncer_conf));
 
 	if (!syncer_conf_from_tags(mdev, nlp->tag_list, &sc)) {
 		retcode = ERR_MANDATORY_TAG;
@@ -1590,8 +1594,9 @@ static int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	}
 
 	/* silently ignore cpu mask on UP kernel */
-	if (NR_CPUS > 1 && sc.cpu_mask[0] != 0) {
-		err = __bitmap_parse(sc.cpu_mask, 32, 0, (unsigned long *)&n_cpu_mask, NR_CPUS);
+	if (nr_cpu_ids > 1 && sc.cpu_mask[0] != 0) {
+		err = __bitmap_parse(sc.cpu_mask, 32, 0,
+				cpumask_bits(new_cpu_mask), nr_cpu_ids);
 		if (err) {
 			dev_warn(DEV, "__bitmap_parse() failed with %d\n", err);
 			retcode = ERR_CPU_MASK_PARSE;
@@ -1652,9 +1657,9 @@ static int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 	if (mdev->state.conn >= C_CONNECTED)
 		drbd_send_sync_param(mdev, &sc);
 
-	if (!cpus_equal(mdev->cpu_mask, n_cpu_mask)) {
-		mdev->cpu_mask = n_cpu_mask;
-		mdev->cpu_mask = drbd_calc_cpu_mask(mdev);
+	if (!cpumask_equal(&mdev->cpu_mask, new_cpu_mask)) {
+		cpumask_copy(&mdev->cpu_mask, new_cpu_mask);
+		drbd_calc_cpu_mask(mdev);
 		mdev->receiver.reset_cpu_mask = 1;
 		mdev->asender.reset_cpu_mask = 1;
 		mdev->worker.reset_cpu_mask = 1;
@@ -1662,6 +1667,7 @@ static int drbd_nl_syncer_conf(struct drbd_conf *mdev, struct drbd_nl_cfg_req *n
 
 	kobject_uevent(&disk_to_dev(mdev->vdisk)->kobj, KOBJ_CHANGE);
 fail:
+	free_cpumask_var(new_cpu_mask);
 	crypto_free_hash(csums_tfm);
 	crypto_free_hash(verify_tfm);
 	reply->ret_code = retcode;
