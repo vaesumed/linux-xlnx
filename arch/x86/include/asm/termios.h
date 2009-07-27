@@ -5,20 +5,20 @@
 #include <asm/ioctls.h>
 
 struct winsize {
-	unsigned short ws_row;
-	unsigned short ws_col;
-	unsigned short ws_xpixel;
-	unsigned short ws_ypixel;
+	unsigned short	ws_row;
+	unsigned short	ws_col;
+	unsigned short	ws_xpixel;
+	unsigned short	ws_ypixel;
 };
 
 #define NCC 8
 struct termio {
-	unsigned short c_iflag;		/* input mode flags */
-	unsigned short c_oflag;		/* output mode flags */
-	unsigned short c_cflag;		/* control mode flags */
-	unsigned short c_lflag;		/* local mode flags */
-	unsigned char c_line;		/* line discipline */
-	unsigned char c_cc[NCC];	/* control characters */
+	unsigned short	c_iflag;	/* input mode flags	*/
+	unsigned short	c_oflag;	/* output mode flags	*/
+	unsigned short	c_cflag;	/* control mode flags	*/
+	unsigned short	c_lflag;	/* local mode flags	*/
+	unsigned char	c_line;		/* line discipline	*/
+	unsigned char	c_cc[NCC];	/* control characters	*/
 };
 
 /* modem lines */
@@ -37,9 +37,9 @@ struct termio {
 #define TIOCM_OUT2	0x4000
 #define TIOCM_LOOP	0x8000
 
-/* ioctl (fd, TIOCSERGETLSR, &result) where result may be as below */
-
 #ifdef __KERNEL__
+
+/* ioctl (fd, TIOCSERGETLSR, &result) where result may be as below */
 
 #include <asm/uaccess.h>
 
@@ -110,5 +110,4 @@ static inline int kernel_termios_to_user_termios_1(struct termios __user *u,
 }
 
 #endif	/* __KERNEL__ */
-
 #endif /* _ASM_X86_TERMIOS_H */
