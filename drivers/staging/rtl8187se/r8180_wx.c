@@ -20,11 +20,8 @@
 
 #include "r8180.h"
 #include "r8180_hw.h"
-#include "r8180_sa2400.h"
 
-#ifdef ENABLE_DOT11D
-#include "dot11d.h"
-#endif
+#include "ieee80211/dot11d.h"
 
 //#define RATE_COUNT 4
 u32 rtl8180_rates[] = {1000000,2000000,5500000,11000000,
@@ -197,13 +194,11 @@ static int r8180_wx_set_mode(struct net_device *dev, struct iw_request_info *a,
 		return 0;
 
 	down(&priv->wx_sem);
-#ifdef ENABLE_IPS
 //	printk("set mode ENABLE_IPS\n");
 	if(priv->bInactivePs){
 		if(wrqu->mode == IW_MODE_ADHOC)
 			IPSLeave(dev);
 	}
-#endif
 	ret = ieee80211_wx_set_mode(priv->ieee80211,a,wrqu,b);
 
 	//rtl8180_commit(dev);
@@ -313,11 +308,7 @@ static int rtl8180_wx_get_range(struct net_device *dev,
 	for (i = 0, val = 0; i < 14; i++) {
 
 		// Include only legal frequencies for some countries
-#ifdef ENABLE_DOT11D
 		if ((GET_DOT11D_INFO(priv->ieee80211)->channel_map)[i+1]) {
-#else
-		if ((priv->ieee80211->channel_map)[i+1]) {
-#endif
 		        range->freq[val].i = i + 1;
 			range->freq[val].m = ieee80211_wlan_frequencies[i] * 100000;
 			range->freq[val].e = 1;
@@ -370,7 +361,6 @@ static int r8180_wx_set_scan(struct net_device *dev, struct iw_request_info *a,
 
 	down(&priv->wx_sem);
 	if(priv->up){
-#ifdef ENABLE_IPS
 //		printk("set scan ENABLE_IPS\n");
 		priv->ieee80211->actscanning = true;
 		if(priv->bInactivePs && (priv->ieee80211->state != IEEE80211_LINKED)){
@@ -393,7 +383,6 @@ static int r8180_wx_set_scan(struct net_device *dev, struct iw_request_info *a,
 			ret = 0;
 		}
 		else
-#endif
 		{
 			//YJ,add,080828, prevent scan in BusyTraffic
 			//FIXME: Need to consider last scan time
@@ -446,11 +435,9 @@ static int r8180_wx_set_essid(struct net_device *dev,
 		return 0;
 
 	down(&priv->wx_sem);
-#ifdef ENABLE_IPS
 	//printk("set essid ENABLE_IPS\n");
 	if(priv->bInactivePs)
 		IPSLeave(dev);
-#endif
 //	printk("haha:set essid %s essid_len = %d essid_flgs = %d\n",b,  wrqu->essid.length, wrqu->essid.flags);
 
 	ret = ieee80211_wx_set_essid(priv->ieee80211,a,wrqu,b);
@@ -1189,20 +1176,12 @@ static int r8180_wx_set_channelplan(struct net_device *dev,
 		// Clear old channel map
 		for (i=1;i<=MAX_CHANNEL_NUMBER;i++)
 		{
-#ifdef ENABLE_DOT11D
 			GET_DOT11D_INFO(priv->ieee80211)->channel_map[i] = 0;
-#else
-			priv->ieee80211->channel_map[i] = 0;
-#endif
 		}
 		// Set new channel map
 		for (i=1;i<=DefaultChannelPlan[*val].Len;i++)
 		{
-#ifdef ENABLE_DOT11D
 			GET_DOT11D_INFO(priv->ieee80211)->channel_map[DefaultChannelPlan[*val].Channel[i-1]] = 1;
-#else
-			priv->ieee80211->channel_map[DefaultChannelPlan[*val].Channel[i-1]] = 1;
-#endif
 		}
 	}
 	up(&priv->wx_sem);
@@ -1543,7 +1522,6 @@ static iw_handler r8180_private_handler[] = {
 	r8180_wx_set_forcerate,
 };
 
-#if WIRELESS_EXT >= 17
 static inline int is_same_network(struct ieee80211_network *src,
                                   struct ieee80211_network *dst,
 				  struct ieee80211_device *ieee)
@@ -1584,36 +1562,7 @@ static struct iw_statistics *r8180_get_wireless_stats(struct net_device *dev)
 		wstats->qual.updated = IW_QUAL_ALL_UPDATED | IW_QUAL_DBM;
 		return wstats;
 	}
-#if 0
-	spin_lock_irqsave(&ieee->lock, flag);
-	list_for_each_entry(target, &ieee->network_list, list)
-	{
-		if (is_same_network(target, &ieee->current_network, ieee))
-		{
-			printk("it's same network:%s\n", target->ssid);
-#if 0
-			if (!tmp_level)
-			{
-				tmp_level = target->stats.signalstrength;
-				tmp_qual = target->stats.signal;
-			}
-			else
-			{
 
-				tmp_level = (15*tmp_level + target->stats.signalstrength)/16;
-				tmp_qual = (15*tmp_qual + target->stats.signal)/16;
-			}
-#else
-			tmp_level = target->stats.signal;
-			tmp_qual = target->stats.signalstrength;
-			tmp_noise = target->stats.noise;
-			printk("level:%d, qual:%d, noise:%d\n", tmp_level, tmp_qual, tmp_noise);
-#endif
-			break;
-		}
-	}
-	spin_unlock_irqrestore(&ieee->lock, flag);
-#endif
 	tmp_level = (&ieee->current_network)->stats.signal;
 	tmp_qual = (&ieee->current_network)->stats.signalstrength;
 	tmp_noise = (&ieee->current_network)->stats.noise;
@@ -1626,8 +1575,6 @@ static struct iw_statistics *r8180_get_wireless_stats(struct net_device *dev)
 	wstats->qual.updated = IW_QUAL_ALL_UPDATED| IW_QUAL_DBM;
 	return wstats;
 }
-#endif
-
 
 struct iw_handler_def  r8180_wx_handlers_def={
 	.standard = r8180_wx_handlers,
@@ -1635,9 +1582,7 @@ struct iw_handler_def  r8180_wx_handlers_def={
 	.private = r8180_private_handler,
 	.num_private = sizeof(r8180_private_handler) / sizeof(iw_handler),
  	.num_private_args = sizeof(r8180_private_args) / sizeof(struct iw_priv_args),
-#if WIRELESS_EXT >= 17
 	.get_wireless_stats = r8180_get_wireless_stats,
-#endif
 	.private_args = (struct iw_priv_args *)r8180_private_args,
 };
 

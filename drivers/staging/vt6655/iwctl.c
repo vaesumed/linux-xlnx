@@ -68,9 +68,7 @@
 #endif
 #endif
 
-#if WIRELESS_EXT > 12
 #include <net/iw_handler.h>
-#endif
 extern WORD TxRate_iwconfig;//2008-5-8 <add> by chester
 
 /*---------------------  Static Definitions -------------------------*/
@@ -82,8 +80,6 @@ extern WORD TxRate_iwconfig;//2008-5-8 <add> by chester
 #define SUPPORTED_WIRELESS_EXT                  17
 #endif
 
-#ifdef WIRELESS_EXT
-
 static const long frequency_list[] = {
     2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462, 2467, 2472, 2484,
     4915, 4920, 4925, 4935, 4940, 4945, 4960, 4980,
@@ -91,8 +87,6 @@ static const long frequency_list[] = {
     5260, 5280, 5300, 5320, 5500, 5520, 5540, 5560, 5580, 5600, 5620, 5640, 5660, 5680,
     5700, 5745, 5765, 5785, 5805, 5825
 	};
-
-#endif
 
 
 /*---------------------  Static Classes  ----------------------------*/
@@ -106,10 +100,6 @@ static int          msglevel                =MSG_LEVEL_INFO;
 /*---------------------  Static Functions  --------------------------*/
 
 /*---------------------  Export Variables  --------------------------*/
-
-#ifdef WIRELESS_EXT
-
-#if WIRELESS_EXT > 12
 
 struct iw_statistics *iwctl_get_wireless_stats(struct net_device *dev)
 {
@@ -156,8 +146,6 @@ struct iw_statistics *iwctl_get_wireless_stats(struct net_device *dev)
 	return &pDevice->wstats;
 }
 
-#endif
-
 
 
 /*------------------------------------------------------------------*/
@@ -198,7 +186,6 @@ int iwctl_giwnwid(struct net_device *dev,
 	//return 0;
   return -EOPNOTSUPP;
 }
-#if WIRELESS_EXT > 13
 
 /*
  * Wireless Handler : set scan
@@ -286,9 +273,7 @@ int iwctl_giwscan(struct net_device *dev,
 	char *current_val = NULL;
 	struct iw_event iwe;
 	long ldBm;
-#if WIRELESS_EXT > 14
 	char buf[MAX_WPA_IE_LEN * 2 + 30];
-#endif /* WIRELESS_EXT > 14 */
 
 
     DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWSCAN \n");
@@ -397,14 +382,12 @@ int iwctl_giwscan(struct net_device *dev,
 	        if((current_val - current_ev) > IW_EV_LCP_LEN)
 		        current_ev = current_val;
 
-#if WIRELESS_EXT > 14
             memset(&iwe, 0, sizeof(iwe));
             iwe.cmd = IWEVCUSTOM;
             sprintf(buf, "bcn_int=%d", pBSS->wBeaconInterval);
             iwe.u.data.length = strlen(buf);
             current_ev = iwe_stream_add_point(info,current_ev, end_buf, &iwe, buf);
 
-#if WIRELESS_EXT > 17
             if ((pBSS->wWPALen > 0) && (pBSS->wWPALen <= MAX_WPA_IE_LEN)) {
                 memset(&iwe, 0, sizeof(iwe));
                 iwe.cmd = IWEVGENIE;
@@ -419,33 +402,6 @@ int iwctl_giwscan(struct net_device *dev,
                 current_ev = iwe_stream_add_point(info,current_ev, end_buf, &iwe, pBSS->byRSNIE);
             }
 
-#else // WIRELESS_EXT > 17
-            if ((pBSS->wWPALen > 0) && (pBSS->wWPALen <= MAX_WPA_IE_LEN)) {
-                u8 *p = buf;
-                memset(&iwe, 0, sizeof(iwe));
-                iwe.cmd = IWEVCUSTOM;
-		        p += sprintf(p, "wpa_ie=");
-		        for (ii = 0; ii < pBSS->wWPALen; ii++) {
-			        p += sprintf(p, "%02x", pBSS->byWPAIE[ii]);
-		        }
-		        iwe.u.data.length = strlen(buf);
-                current_ev = iwe_stream_add_point(info,current_ev, end_buf, &iwe, buf);
-		    }
-
-
-            if ((pBSS->wRSNLen > 0) && (pBSS->wRSNLen <= MAX_WPA_IE_LEN)) {
-                u8 *p = buf;
-                memset(&iwe, 0, sizeof(iwe));
-                iwe.cmd = IWEVCUSTOM;
-		        p += sprintf(p, "rsn_ie=");
-		        for (ii = 0; ii < pBSS->wRSNLen; ii++) {
-			        p += sprintf(p, "%02x", pBSS->byRSNIE[ii]);
-		        }
-		        iwe.u.data.length = strlen(buf);
-                current_ev = iwe_stream_add_point(info,current_ev, end_buf, &iwe, buf);
-		    }
-#endif
-#endif
         }
     }// for
 
@@ -453,8 +409,6 @@ int iwctl_giwscan(struct net_device *dev,
 	return 0;
 
 }
-
-#endif	/* WIRELESS_EXT > 13 */
 
 
 /*
@@ -708,12 +662,9 @@ int iwctl_giwrange(struct net_device *dev,
 	    // 4 keys are allowed
 	    range->max_encoding_tokens = 4;
 
-#if WIRELESS_EXT > 17
 	    range->enc_capa = IW_ENC_CAPA_WPA | IW_ENC_CAPA_WPA2 |
 		    IW_ENC_CAPA_CIPHER_TKIP | IW_ENC_CAPA_CIPHER_CCMP;
-#endif
 
-#if WIRELESS_EXT > 9
 		range->min_pmp = 0;
 		range->max_pmp = 1000000;// 1 secs
 		range->min_pmt = 0;
@@ -727,8 +678,6 @@ int iwctl_giwrange(struct net_device *dev,
         range->txpower[0] = 100;
 		range->num_txpower = 1;
 		range->txpower_capa = IW_TXPOW_MWATT;
-#endif // WIRELESS_EXT > 9
-#if WIRELESS_EXT > 10
 		range->we_version_source = SUPPORTED_WIRELESS_EXT;
 		range->we_version_compiled = WIRELESS_EXT;
 		range->retry_capa = IW_RETRY_LIMIT | IW_RETRY_LIFETIME;
@@ -738,15 +687,12 @@ int iwctl_giwrange(struct net_device *dev,
 		range->max_retry = 65535;
 		range->min_r_time = 1024;
 		range->max_r_time = 65535 * 1024;
-#endif // WIRELESS_EXT > 10
-#if WIRELESS_EXT > 11
 		// Experimental measurements - boundary 11/5.5 Mb/s
 		// Note : with or without the (local->rssi), results
 		//  are somewhat different. - Jean II
 		range->avg_qual.qual = 6;
 		range->avg_qual.level = 176;	// -80 dBm
 		range->avg_qual.noise = 0;
-#endif // WIRELESS_EXT > 11
 	}
 
 
@@ -1004,13 +950,8 @@ if (pMgmt->eScanState ==  WMAC_IS_SCANNING) {
 
 	    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "set essid = %s \n", pItemSSID->abySSID);
 /*
-	             #if WIRELESS_EXT < 21
- DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO " SIOCSIWESSID1 \n");
-		pItemSSID->len = wrq->length - 1;
-	     #else
  DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO " SIOCSIWESSID2 \n");
 		pItemSSID->len = wrq->length;
-	     #endif
 	     */
 	}
 
@@ -1049,11 +990,7 @@ int iwctl_giwessid(struct net_device *dev,
 	extra[pItemSSID->len] = '\0';
 	wrq->length = pItemSSID->len + 1;
 	        //2008-0409-03, <Add> by Einsn Liu
-        #if WIRELESS_EXT < 21
-	wrq->length = pItemSSID->len + 1;
-        #else
         wrq->length = pItemSSID->len;
-        #endif
 	wrq->flags = 1; // active
 
 
@@ -2217,8 +2154,6 @@ int iwctl_siwmlme(struct net_device *dev,
  */
 
 
-#if WIRELESS_EXT > 12
-
 /*
 static const iw_handler		iwctl_handler[] =
 {
@@ -2246,13 +2181,8 @@ static const iw_handler		iwctl_handler[] =
 	(iw_handler) iwctl_giwap,		    // SIOCGIWAP
 	(iw_handler) NULL,				    // -- hole -- 0x16
 	(iw_handler) iwctl_giwaplist,       // SIOCGIWAPLIST
-#if WIRELESS_EXT > 13
 	(iw_handler) iwctl_siwscan,         // SIOCSIWSCAN
 	(iw_handler) iwctl_giwscan,         // SIOCGIWSCAN
-#else
-	(iw_handler) NULL,
-	(iw_handler) NULL,
-#endif
 	(iw_handler) iwctl_siwessid,		// SIOCSIWESSID
 	(iw_handler) iwctl_giwessid,		// SIOCGIWESSID
 	(iw_handler) NULL,		// SIOCSIWNICKN
@@ -2273,7 +2203,6 @@ static const iw_handler		iwctl_handler[] =
 	(iw_handler) iwctl_giwencode,		// SIOCGIWENCODE
 	(iw_handler) iwctl_siwpower,		// SIOCSIWPOWER
 	(iw_handler) iwctl_giwpower,		// SIOCGIWPOWER
-#if WIRELESS_EXT > 17
 	(iw_handler) NULL,			// -- hole --
 	(iw_handler) NULL,			// -- hole --
 	(iw_handler) iwctl_siwgenie,    // SIOCSIWGENIE
@@ -2284,7 +2213,6 @@ static const iw_handler		iwctl_handler[] =
 	(iw_handler) iwctl_giwencodeext,		// SIOCGIWENCODEEXT
 	(iw_handler) NULL,				// SIOCSIWPMKSA
 	(iw_handler) NULL,				// -- hole --
-#endif // WIRELESS_EXT > 17
 
 };
 */
@@ -2315,13 +2243,8 @@ static const iw_handler		iwctl_handler[] =
 	(iw_handler) NULL,		    // SIOCGIWAP
 	(iw_handler) NULL,				    // -- hole -- 0x16
 	(iw_handler) NULL,       // SIOCGIWAPLIST
-#if WIRELESS_EXT > 13
 	(iw_handler) iwctl_siwscan,         // SIOCSIWSCAN
 	(iw_handler) iwctl_giwscan,         // SIOCGIWSCAN
-#else
-	(iw_handler) NULL,
-	(iw_handler) NULL,
-#endif
 	(iw_handler) NULL,		// SIOCSIWESSID
 	(iw_handler) NULL,		// SIOCGIWESSID
 	(iw_handler) NULL,		// SIOCSIWNICKN
@@ -2344,7 +2267,6 @@ static const iw_handler		iwctl_handler[] =
 	(iw_handler) NULL,		// SIOCGIWPOWER
 
 //2008-0409-07, <Add> by Einsn Liu
-#if WIRELESS_EXT > 17
 	(iw_handler) NULL,			// -- hole --
 	(iw_handler) NULL,			// -- hole --
 	(iw_handler) NULL,    // SIOCSIWGENIE
@@ -2355,7 +2277,6 @@ static const iw_handler		iwctl_handler[] =
 	(iw_handler) NULL,		// SIOCGIWENCODEEXT
 	(iw_handler) NULL,				// SIOCSIWPMKSA
 	(iw_handler) NULL,				// -- hole --
-#endif // WIRELESS_EXT > 17
 };
 
 
@@ -2375,9 +2296,7 @@ struct iw_priv_args iwctl_private_args[] = {
 
 const struct iw_handler_def	iwctl_handler_def =
 {
-#if WIRELESS_EXT > 16
 	.get_wireless_stats = &iwctl_get_wireless_stats,
-#endif
 	.num_standard	= sizeof(iwctl_handler)/sizeof(iw_handler),
 //	.num_private	= sizeof(iwctl_private_handler)/sizeof(iw_handler),
 //	.num_private_args = sizeof(iwctl_private_args)/sizeof(struct iw_priv_args),
@@ -2389,9 +2308,3 @@ const struct iw_handler_def	iwctl_handler_def =
 	.private	= NULL,
 	.private_args	= NULL,
 };
-
-
-#endif // WIRELESS_EXT > 12
-
-
-#endif // WIRELESS_EXT
