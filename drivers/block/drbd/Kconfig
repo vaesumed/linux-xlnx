@@ -41,6 +41,7 @@ config BLK_DEV_DRBD
 config DRBD_TRACE
 	tristate "DRBD tracing"
 	depends on BLK_DEV_DRBD
+	depends on BROKEN
 	select TRACEPOINTS
 	default m
 	help
