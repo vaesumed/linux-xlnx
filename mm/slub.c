@@ -141,6 +141,13 @@
 				SLAB_POISON | SLAB_STORE_USER)
 
 /*
+ * Debugging flags that require metadata to be stored in the slab, up to
+ * DEBUG_SIZE in size.
+ */
+#define DEBUG_SIZE_FLAGS (SLAB_RED_ZONE | SLAB_POISON | SLAB_STORE_USER)
+#define DEBUG_SIZE (3 * sizeof(void *) + 2 * sizeof(struct track))
+
+/*
  * Set of flags that will prevent slab merging
  */
 #define SLUB_NEVER_MERGE (SLAB_RED_ZONE | SLAB_POISON | SLAB_STORE_USER | \
@@ -325,6 +332,7 @@ static int slub_debug;
 #endif
 
 static char *slub_debug_slabs;
+static int disable_higher_order_debug;
 
 /*
  * Object debugging
@@ -976,6 +984,15 @@ static int __init setup_slub_debug(char *str)
 		 */
 		goto check_slabs;
 
+	if (tolower(*str) == 'o') {
+		/*
+		 * Avoid enabling debugging on caches if its minimum order
+		 * would increase as a result.
+		 */
+		disable_higher_order_debug = 1;
+		goto out;
+	}
+
 	slub_debug = 0;
 	if (*str == '-')
 		/*
@@ -1022,13 +1039,27 @@ static unsigned long kmem_cache_flags(unsigned long objsize,
 	unsigned long flags, const char *name,
 	void (*ctor)(void *))
 {
+	int debug_flags = slub_debug;
+
 	/*
 	 * Enable debugging if selected on the kernel commandline.
 	 */
-	if (slub_debug && (!slub_debug_slabs ||
-	    strncmp(slub_debug_slabs, name, strlen(slub_debug_slabs)) == 0))
-			flags |= slub_debug;
+	if (debug_flags) {
+		if (slub_debug_slabs &&
+		    strncmp(slub_debug_slabs, name, strlen(slub_debug_slabs)))
+			goto out;
 
+		/*
+		 * Disable debugging that increases slab size if the minimum
+		 * slab order would have increased as a result.
+		 */
+		if (disable_higher_order_debug &&
+		    get_order(objsize + DEBUG_SIZE) > get_order(objsize))
+			debug_flags &= ~DEBUG_SIZE_FLAGS;
+
+		flags |= debug_flags;
+	}
+out:
 	return flags;
 }
 #else
@@ -1559,6 +1590,10 @@ slab_out_of_memory(struct kmem_cache *s, gfp_t gfpflags, int nid)
 	printk(KERN_WARNING "  cache: %s, object size: %d, buffer size: %d, "
 		"default order: %d, min order: %d\n", s->name, s->objsize,
 		s->size, oo_order(s->oo), oo_order(s->min));
+
+	if (oo_order(s->min) > get_order(s->objsize))
+		printk(KERN_WARNING "  %s debugging increased min order, use "
+		       "slub_debug=O to disable.\n", s->name);
 
 	for_each_online_node(node) {
 		struct kmem_cache_node *n = get_node(s, node);
@@ -4543,8 +4578,11 @@ static int sysfs_slab_add(struct kmem_cache *s)
 	}
 
 	err = sysfs_create_group(&s->kobj, &slab_attr_group);
-	if (err)
+	if (err) {
+		kobject_del(&s->kobj);
+		kobject_put(&s->kobj);
 		return err;
+	}
 	kobject_uevent(&s->kobj, KOBJ_ADD);
 	if (!unmergeable) {
 		/* Setup first alias */
@@ -4559,6 +4597,7 @@ static void sysfs_slab_remove(struct kmem_cache *s)
 	kobject_uevent(&s->kobj, KOBJ_REMOVE);
 	kobject_del(&s->kobj);
 	kobject_put(&s->kobj);
+	kfree(s);
 }
 
 /*
