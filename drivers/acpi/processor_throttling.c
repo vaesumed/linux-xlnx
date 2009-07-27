@@ -616,6 +616,8 @@ static int acpi_processor_get_throttling_fadt(struct acpi_processor *pr)
 	u32 duty_mask = 0;
 	u32 duty_value = 0;
 
+	WARN_ON_ONCE(!irqs_disabled());
+
 	if (!pr)
 		return -EINVAL;
 
@@ -627,8 +629,6 @@ static int acpi_processor_get_throttling_fadt(struct acpi_processor *pr)
 	duty_mask = pr->throttling.state_count - 1;
 
 	duty_mask <<= pr->throttling.duty_offset;
-
-	local_irq_disable();
 
 	value = inl(pr->throttling.address);
 
@@ -645,8 +645,6 @@ static int acpi_processor_get_throttling_fadt(struct acpi_processor *pr)
 	}
 
 	pr->throttling.state = state;
-
-	local_irq_enable();
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 			  "Throttling state is T%d (%d%% throttling applied)\n",
@@ -919,6 +917,8 @@ static int acpi_processor_set_throttling_fadt(struct acpi_processor *pr,
 	u32 duty_mask = 0;
 	u32 duty_value = 0;
 
+	WARN_ON_ONCE(!irqs_disabled());
+
 	if (!pr)
 		return -EINVAL;
 
@@ -948,8 +948,6 @@ static int acpi_processor_set_throttling_fadt(struct acpi_processor *pr,
 		duty_mask = ~duty_mask;
 	}
 
-	local_irq_disable();
-
 	/*
 	 * Disable throttling by writing a 0 to bit 4.  Note that we must
 	 * turn it off before you can change the duty_value.
@@ -974,8 +972,6 @@ static int acpi_processor_set_throttling_fadt(struct acpi_processor *pr,
 	}
 
 	pr->throttling.state = state;
-
-	local_irq_enable();
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 			  "Throttling state set to T%d (%d%%)\n", state,
