@@ -646,7 +646,7 @@ static void iwl_dbg_report_frame(struct iwl_priv *priv,
 	u32 tsf_low;
 	int rssi;
 
-	if (likely(!(priv->debug_level & IWL_DL_RX)))
+	if (likely(!(iwl_debug_level & IWL_DL_RX)))
 		return;
 
 	/* MAC header */
@@ -742,7 +742,7 @@ static void iwl_dbg_report_frame(struct iwl_priv *priv,
 		}
 	}
 	if (print_dump)
-		iwl_print_hex_dump(priv, IWL_DL_RX, header, length);
+		iwl_print_hex_dump(IWL_DL_RX, header, length);
 }
 #endif
 
@@ -927,12 +927,13 @@ static void iwl_pass_packet_to_mac80211(struct iwl_priv *priv,
 	hdr = (struct ieee80211_hdr *)rxb->skb->data;
 
 	/*  in case of HW accelerated crypto and bad decryption, drop */
-	if (!priv->hw_params.sw_crypto &&
+	if (!priv->cfg->mod_params->sw_crypto &&
 	    iwl_set_decrypted_flag(priv, hdr, ampdu_status, stats))
 		return;
 
 	iwl_update_rx_stats(priv, le16_to_cpu(hdr->frame_control), len);
-	ieee80211_rx_irqsafe(priv->hw, rxb->skb, stats);
+	memcpy(IEEE80211_SKB_RXCB(rxb->skb), stats, sizeof(*stats));
+	ieee80211_rx_irqsafe(priv->hw, rxb->skb);
 	priv->alloc_rxb_skb--;
 	rxb->skb = NULL;
 }
@@ -1060,11 +1061,11 @@ void iwl_rx_reply_rx(struct iwl_priv *priv,
 
 	/* Set "1" to report good data frames in groups of 100 */
 #ifdef CONFIG_IWLWIFI_DEBUG
-	if (unlikely(priv->debug_level & IWL_DL_RX))
+	if (unlikely(iwl_debug_level & IWL_DL_RX))
 		iwl_dbg_report_frame(priv, rx_start, len, header, 1);
 #endif
 	IWL_DEBUG_STATS_LIMIT(priv, "Rssi %d, noise %d, qual %d, TSF %llu\n",
-		rx_status.signal, rx_status.noise, rx_status.signal,
+		rx_status.signal, rx_status.noise, rx_status.qual,
 		(unsigned long long)rx_status.mactime);
 
 	/*

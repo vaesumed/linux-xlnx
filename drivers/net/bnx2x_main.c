@@ -56,8 +56,8 @@
 #include "bnx2x_init_ops.h"
 #include "bnx2x_dump.h"
 
-#define DRV_MODULE_VERSION	"1.48.105-1"
-#define DRV_MODULE_RELDATE	"2009/04/22"
+#define DRV_MODULE_VERSION	"1.48.113-1"
+#define DRV_MODULE_RELDATE	"2009/07/21"
 #define BNX2X_BC_VER		0x040200
 
 #include <linux/firmware.h>
@@ -653,6 +653,11 @@ static void bnx2x_int_enable(struct bnx2x *bp)
 	   val, port, addr, (msix ? "MSI-X" : (msi ? "MSI" : "INTx")));
 
 	REG_WR(bp, addr, val);
+	/*
+	 * Ensure that HC_CONFIG is written before leading/trailing edge config
+	 */
+	mmiowb();
+	barrier();
 
 	if (CHIP_IS_E1H(bp)) {
 		/* init leading/trailing edge */
@@ -667,6 +672,9 @@ static void bnx2x_int_enable(struct bnx2x *bp)
 		REG_WR(bp, HC_REG_TRAILING_EDGE_0 + port*8, val);
 		REG_WR(bp, HC_REG_LEADING_EDGE_0 + port*8, val);
 	}
+
+	/* Make sure that interrupts are indeed enabled from here on */
+	mmiowb();
 }
 
 static void bnx2x_int_disable(struct bnx2x *bp)
@@ -699,6 +707,8 @@ static void bnx2x_int_disable_sync(struct bnx2x *bp, int disable_hw)
 
 	/* disable interrupt handling */
 	atomic_inc(&bp->intr_sem);
+	smp_wmb(); /* Ensure that bp->intr_sem update is SMP-safe */
+
 	if (disable_hw)
 		/* prevent the HW from sending interrupts */
 		bnx2x_int_disable(bp);
@@ -740,6 +750,10 @@ static inline void bnx2x_ack_sb(struct bnx2x *bp, u8 sb_id,
 	DP(BNX2X_MSG_OFF, "write 0x%08x to HC addr 0x%x\n",
 	   (*(u32 *)&igu_ack), hc_addr);
 	REG_WR(bp, hc_addr, (*(u32 *)&igu_ack));
+
+	/* Make sure that ACK is written */
+	mmiowb();
+	barrier();
 }
 
 static inline u16 bnx2x_update_fpsb_idx(struct bnx2x_fastpath *fp)
@@ -2430,8 +2444,13 @@ static int bnx2x_sp_post(struct bnx2x *bp, int command, int cid,
 		bp->spq_prod_idx++;
 	}
 
+	/* Make sure that BD data is updated before writing the producer */
+	wmb();
+
 	REG_WR(bp, BAR_XSTRORM_INTMEM + XSTORM_SPQ_PROD_OFFSET(func),
 	       bp->spq_prod_idx);
+
+	mmiowb();
 
 	spin_unlock_bh(&bp->spq_lock);
 	return 0;
@@ -2599,11 +2618,27 @@ static void bnx2x_attn_int_asserted(struct bnx2x *bp, u32 asserted)
 	}
 }
 
+static inline void bnx2x_fan_failure(struct bnx2x *bp)
+{
+	int port = BP_PORT(bp);
+
+	/* mark the failure */
+	bp->link_params.ext_phy_config &= ~PORT_HW_CFG_XGXS_EXT_PHY_TYPE_MASK;
+	bp->link_params.ext_phy_config |= PORT_HW_CFG_XGXS_EXT_PHY_TYPE_FAILURE;
+	SHMEM_WR(bp, dev_info.port_hw_config[port].external_phy_config,
+		 bp->link_params.ext_phy_config);
+
+	/* log the failure */
+	printk(KERN_ERR PFX "Fan Failure on Network Controller %s has caused"
+	       " the driver to shutdown the card to prevent permanent"
+	       " damage.  Please contact Dell Support for assistance\n",
+	       bp->dev->name);
+}
 static inline void bnx2x_attn_int_deasserted0(struct bnx2x *bp, u32 attn)
 {
 	int port = BP_PORT(bp);
 	int reg_offset;
-	u32 val;
+	u32 val, swap_val, swap_override;
 
 	reg_offset = (port ? MISC_REG_AEU_ENABLE1_FUNC_1_OUT_0 :
 			     MISC_REG_AEU_ENABLE1_FUNC_0_OUT_0);
@@ -2616,36 +2651,32 @@ static inline void bnx2x_attn_int_deasserted0(struct bnx2x *bp, u32 attn)
 
 		BNX2X_ERR("SPIO5 hw attention\n");
 
+		/* Fan failure attention */
 		switch (XGXS_EXT_PHY_TYPE(bp->link_params.ext_phy_config)) {
 		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_SFX7101:
-			/* Fan failure attention */
-
-			/* The PHY reset is controlled by GPIO 1 */
-			bnx2x_set_gpio(bp, MISC_REGISTERS_GPIO_1,
-				       MISC_REGISTERS_GPIO_OUTPUT_LOW, port);
 			/* Low power mode is controlled by GPIO 2 */
 			bnx2x_set_gpio(bp, MISC_REGISTERS_GPIO_2,
 				       MISC_REGISTERS_GPIO_OUTPUT_LOW, port);
-			/* mark the failure */
-			bp->link_params.ext_phy_config &=
-					~PORT_HW_CFG_XGXS_EXT_PHY_TYPE_MASK;
-			bp->link_params.ext_phy_config |=
-					PORT_HW_CFG_XGXS_EXT_PHY_TYPE_FAILURE;
-			SHMEM_WR(bp,
-				 dev_info.port_hw_config[port].
-							external_phy_config,
-				 bp->link_params.ext_phy_config);
-			/* log the failure */
-			printk(KERN_ERR PFX "Fan Failure on Network"
-			       " Controller %s has caused the driver to"
-			       " shutdown the card to prevent permanent"
-			       " damage.  Please contact Dell Support for"
-			       " assistance\n", bp->dev->name);
+			/* The PHY reset is controlled by GPIO 1 */
+			bnx2x_set_gpio(bp, MISC_REGISTERS_GPIO_1,
+				       MISC_REGISTERS_GPIO_OUTPUT_LOW, port);
+			break;
+
+		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727:
+			/* The PHY reset is controlled by GPIO 1 */
+			/* fake the port number to cancel the swap done in
+			   set_gpio() */
+			swap_val = REG_RD(bp, NIG_REG_PORT_SWAP);
+			swap_override = REG_RD(bp, NIG_REG_STRAP_OVERRIDE);
+			port = (swap_val && swap_override) ^ 1;
+			bnx2x_set_gpio(bp, MISC_REGISTERS_GPIO_1,
+				       MISC_REGISTERS_GPIO_OUTPUT_LOW, port);
 			break;
 
 		default:
 			break;
 		}
+		bnx2x_fan_failure(bp);
 	}
 
 	if (attn & (AEU_INPUTS_ATTN_BITS_GPIO3_FUNCTION_0 |
@@ -5185,6 +5216,11 @@ static void bnx2x_nic_init(struct bnx2x *bp, u32 load_code)
 	mmiowb();
 
 	bnx2x_int_enable(bp);
+
+	/* Check for SPIO5 */
+	bnx2x_attn_int_deasserted0(bp,
+		REG_RD(bp, MISC_REG_AEU_AFTER_INVERT_1_FUNC_0 + BP_PORT(bp)*4) &
+				   AEU_INPUTS_ATTN_BITS_SPIO5);
 }
 
 /* end of nic init */
@@ -5510,6 +5546,60 @@ static void bnx2x_reset_common(struct bnx2x *bp)
 	REG_WR(bp, GRCBASE_MISC + MISC_REGISTERS_RESET_REG_2_CLEAR, 0x1403);
 }
 
+
+static void bnx2x_setup_fan_failure_detection(struct bnx2x *bp)
+{
+	u32 val;
+	u8 port;
+	u8 is_required = 0;
+
+	val = SHMEM_RD(bp, dev_info.shared_hw_config.config2) &
+	      SHARED_HW_CFG_FAN_FAILURE_MASK;
+
+	if (val == SHARED_HW_CFG_FAN_FAILURE_ENABLED)
+		is_required = 1;
+
+	/*
+	 * The fan failure mechanism is usually related to the PHY type since
+	 * the power consumption of the board is affected by the PHY. Currently,
+	 * fan is required for most designs with SFX7101, BCM8727 and BCM8481.
+	 */
+	else if (val == SHARED_HW_CFG_FAN_FAILURE_PHY_TYPE)
+		for (port = PORT_0; port < PORT_MAX; port++) {
+			u32 phy_type =
+				SHMEM_RD(bp, dev_info.port_hw_config[port].
+					 external_phy_config) &
+				PORT_HW_CFG_XGXS_EXT_PHY_TYPE_MASK;
+			is_required |=
+				((phy_type ==
+				  PORT_HW_CFG_XGXS_EXT_PHY_TYPE_SFX7101) ||
+				 (phy_type ==
+				  PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727) ||
+				 (phy_type ==
+				  PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8481));
+		}
+
+	DP(NETIF_MSG_HW, "fan detection setting: %d\n", is_required);
+
+	if (is_required == 0)
+		return;
+
+	/* Fan failure is indicated by SPIO 5 */
+	bnx2x_set_spio(bp, MISC_REGISTERS_SPIO_5,
+		       MISC_REGISTERS_SPIO_INPUT_HI_Z);
+
+	/* set to active low mode */
+	val = REG_RD(bp, MISC_REG_SPIO_INT);
+	val |= ((1 << MISC_REGISTERS_SPIO_5) <<
+				MISC_REGISTERS_SPIO_INT_OLD_SET_POS);
+	REG_WR(bp, MISC_REG_SPIO_INT, val);
+
+	/* enable interrupt to signal the IGU */
+	val = REG_RD(bp, MISC_REG_SPIO_EVENT_EN);
+	val |= (1 << MISC_REGISTERS_SPIO_5);
+	REG_WR(bp, MISC_REG_SPIO_EVENT_EN, val);
+}
+
 static int bnx2x_init_common(struct bnx2x *bp)
 {
 	u32 val, i;
@@ -5736,29 +5826,15 @@ static int bnx2x_init_common(struct bnx2x *bp)
 	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8072:
 	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8073:
 	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8726:
+	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727:
 		bp->port.need_hw_lock = 1;
-		break;
-
-	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_SFX7101:
-		/* Fan failure is indicated by SPIO 5 */
-		bnx2x_set_spio(bp, MISC_REGISTERS_SPIO_5,
-			       MISC_REGISTERS_SPIO_INPUT_HI_Z);
-
-		/* set to active low mode */
-		val = REG_RD(bp, MISC_REG_SPIO_INT);
-		val |= ((1 << MISC_REGISTERS_SPIO_5) <<
-					MISC_REGISTERS_SPIO_INT_OLD_SET_POS);
-		REG_WR(bp, MISC_REG_SPIO_INT, val);
-
-		/* enable interrupt to signal the IGU */
-		val = REG_RD(bp, MISC_REG_SPIO_EVENT_EN);
-		val |= (1 << MISC_REGISTERS_SPIO_5);
-		REG_WR(bp, MISC_REG_SPIO_EVENT_EN, val);
 		break;
 
 	default:
 		break;
 	}
+
+	bnx2x_setup_fan_failure_detection(bp);
 
 	/* clear PXP2 attentions */
 	REG_RD(bp, PXP2_REG_PXP2_INT_STS_CLR_0);
@@ -5989,10 +6065,15 @@ static int bnx2x_init_port(struct bnx2x *bp)
 		break;
 
 	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_SFX7101:
+	case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727:
 		/* add SPIO 5 to group 0 */
-		val = REG_RD(bp, MISC_REG_AEU_ENABLE1_FUNC_0_OUT_0);
+		{
+		u32 reg_addr = (port ? MISC_REG_AEU_ENABLE1_FUNC_1_OUT_0 :
+				       MISC_REG_AEU_ENABLE1_FUNC_0_OUT_0);
+		val = REG_RD(bp, reg_addr);
 		val |= AEU_INPUTS_ATTN_BITS_SPIO5;
-		REG_WR(bp, MISC_REG_AEU_ENABLE1_FUNC_0_OUT_0, val);
+		REG_WR(bp, reg_addr, val);
+		}
 		break;
 
 	default:
@@ -6142,7 +6223,7 @@ init_hw_err:
 }
 
 /* send the MCP a request, block until there is a reply */
-static u32 bnx2x_fw_command(struct bnx2x *bp, u32 command)
+u32 bnx2x_fw_command(struct bnx2x *bp, u32 command)
 {
 	int func = BP_FUNC(bp);
 	u32 seq = ++bp->fw_seq;
@@ -6583,7 +6664,12 @@ static void bnx2x_napi_disable(struct bnx2x *bp)
 
 static void bnx2x_netif_start(struct bnx2x *bp)
 {
-	if (atomic_dec_and_test(&bp->intr_sem)) {
+	int intr_sem;
+
+	intr_sem = atomic_dec_and_test(&bp->intr_sem);
+	smp_wmb(); /* Ensure that bp->intr_sem update is SMP-safe */
+
+	if (intr_sem) {
 		if (netif_running(bp->dev)) {
 			bnx2x_napi_enable(bp);
 			bnx2x_int_enable(bp);
@@ -7610,6 +7696,9 @@ static void __devinit bnx2x_get_common_hwinfo(struct bnx2x *bp)
 		BNX2X_ERR("This driver needs bc_ver %X but found %X,"
 			  " please upgrade BC\n", BNX2X_BC_VER, val);
 	}
+	bp->link_params.feature_config_flags |=
+		(val >= REQ_BC_VER_4_VRFY_OPT_MDL) ?
+		FEATURE_CONFIG_BC_SUPPORTS_OPT_MDL_VRFY : 0;
 
 	if (BP_E1HVN(bp) == 0) {
 		pci_read_config_word(bp->pdev, bp->pm_cap + PCI_PM_PMC, &pmc);
@@ -7760,6 +7849,18 @@ static void __devinit bnx2x_link_settings_supported(struct bnx2x *bp,
 
 		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8726:
 			BNX2X_DEV_INFO("ext_phy_type 0x%x (8726)\n",
+				       ext_phy_type);
+
+			bp->port.supported |= (SUPPORTED_10000baseT_Full |
+					       SUPPORTED_1000baseT_Full |
+					       SUPPORTED_Autoneg |
+					       SUPPORTED_FIBRE |
+					       SUPPORTED_Pause |
+					       SUPPORTED_Asym_Pause);
+			break;
+
+		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727:
+			BNX2X_DEV_INFO("ext_phy_type 0x%x (8727)\n",
 				       ext_phy_type);
 
 			bp->port.supported |= (SUPPORTED_10000baseT_Full |
@@ -8033,6 +8134,17 @@ static void __devinit bnx2x_get_port_hwinfo(struct bnx2x *bp)
 	bp->link_params.ext_phy_config =
 		SHMEM_RD(bp,
 			 dev_info.port_hw_config[port].external_phy_config);
+	/* BCM8727_NOC => BCM8727 no over current */
+	if (XGXS_EXT_PHY_TYPE(bp->link_params.ext_phy_config) ==
+	    PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727_NOC) {
+		bp->link_params.ext_phy_config &=
+			~PORT_HW_CFG_XGXS_EXT_PHY_TYPE_MASK;
+		bp->link_params.ext_phy_config |=
+			PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727;
+		bp->link_params.feature_config_flags |=
+			FEATURE_CONFIG_BCM8727_NOC;
+	}
+
 	bp->link_params.speed_cap_mask =
 		SHMEM_RD(bp,
 			 dev_info.port_hw_config[port].speed_capability_mask);
@@ -8053,17 +8165,10 @@ static void __devinit bnx2x_get_port_hwinfo(struct bnx2x *bp)
 		bp->link_params.xgxs_config_tx[(i << 1) + 1] = (val & 0xffff);
 	}
 
-	config = SHMEM_RD(bp, dev_info.port_feature_config[port].config);
-	if (config & PORT_FEAT_CFG_OPT_MDL_ENFRCMNT_ENABLED)
-		bp->link_params.feature_config_flags |=
-				FEATURE_CONFIG_MODULE_ENFORCMENT_ENABLED;
-	else
-		bp->link_params.feature_config_flags &=
-				~FEATURE_CONFIG_MODULE_ENFORCMENT_ENABLED;
-
 	/* If the device is capable of WoL, set the default state according
 	 * to the HW
 	 */
+	config = SHMEM_RD(bp, dev_info.port_feature_config[port].config);
 	bp->wol = (!(bp->flags & NO_WOL_FLAG) &&
 		   (config & PORT_FEATURE_WOL_ENABLED));
 
@@ -8073,8 +8178,8 @@ static void __devinit bnx2x_get_port_hwinfo(struct bnx2x *bp)
 		       bp->link_params.ext_phy_config,
 		       bp->link_params.speed_cap_mask, bp->port.link_config);
 
-	bp->link_params.switch_cfg = (bp->port.link_config &
-				      PORT_FEATURE_CONNECTED_SWITCH_MASK);
+	bp->link_params.switch_cfg |= (bp->port.link_config &
+				       PORT_FEATURE_CONNECTED_SWITCH_MASK);
 	bnx2x_link_settings_supported(bp, bp->link_params.switch_cfg);
 
 	bnx2x_link_settings_requested(bp);
@@ -8170,6 +8275,7 @@ static int __devinit bnx2x_init_bp(struct bnx2x *bp)
 
 	/* Disable interrupt handling until HW is initialized */
 	atomic_set(&bp->intr_sem, 1);
+	smp_wmb(); /* Ensure that bp->intr_sem update is SMP-safe */
 
 	mutex_init(&bp->port.phy_mutex);
 
@@ -8269,6 +8375,7 @@ static int bnx2x_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8705:
 		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8706:
 		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8726:
+		case PORT_HW_CFG_XGXS_EXT_PHY_TYPE_BCM8727:
 			cmd->port = PORT_FIBRE;
 			break;
 
@@ -9243,9 +9350,17 @@ static int bnx2x_set_tso(struct net_device *dev, u32 data)
 	if (data) {
 		dev->features |= (NETIF_F_TSO | NETIF_F_TSO_ECN);
 		dev->features |= NETIF_F_TSO6;
+#ifdef BCM_VLAN
+		dev->vlan_features |= (NETIF_F_TSO | NETIF_F_TSO_ECN);
+		dev->vlan_features |= NETIF_F_TSO6;
+#endif
 	} else {
 		dev->features &= ~(NETIF_F_TSO | NETIF_F_TSO_ECN);
 		dev->features &= ~NETIF_F_TSO6;
+#ifdef BCM_VLAN
+		dev->vlan_features &= ~(NETIF_F_TSO | NETIF_F_TSO_ECN);
+		dev->vlan_features &= ~NETIF_F_TSO6;
+#endif
 	}
 
 	return 0;
@@ -9692,7 +9807,14 @@ static void bnx2x_self_test(struct net_device *dev,
 		etest->flags &= ~ETH_TEST_FL_OFFLINE;
 
 	if (etest->flags & ETH_TEST_FL_OFFLINE) {
+		int port = BP_PORT(bp);
+		u32 val;
 		u8 link_up;
+
+		/* save current value of input enable for TX port IF */
+		val = REG_RD(bp, NIG_REG_EGRESS_UMP0_IN_EN + port*4);
+		/* disable input for TX port IF */
+		REG_WR(bp, NIG_REG_EGRESS_UMP0_IN_EN + port*4, 0);
 
 		link_up = bp->link_vars.link_up;
 		bnx2x_nic_unload(bp, UNLOAD_NORMAL);
@@ -9713,6 +9835,10 @@ static void bnx2x_self_test(struct net_device *dev,
 			etest->flags |= ETH_TEST_FL_FAILED;
 
 		bnx2x_nic_unload(bp, UNLOAD_NORMAL);
+
+		/* restore input for TX port IF */
+		REG_WR(bp, NIG_REG_EGRESS_UMP0_IN_EN + port*4, val);
+
 		bnx2x_nic_load(bp, LOAD_NORMAL);
 		/* wait until link state is restored */
 		bnx2x_wait_for_link(bp, link_up);
@@ -11065,12 +11191,19 @@ static int __devinit bnx2x_init_dev(struct pci_dev *pdev,
 	dev->features |= NETIF_F_HW_CSUM;
 	if (bp->flags & USING_DAC_FLAG)
 		dev->features |= NETIF_F_HIGHDMA;
+	dev->features |= (NETIF_F_TSO | NETIF_F_TSO_ECN);
+	dev->features |= NETIF_F_TSO6;
 #ifdef BCM_VLAN
 	dev->features |= (NETIF_F_HW_VLAN_TX | NETIF_F_HW_VLAN_RX);
 	bp->flags |= (HW_VLAN_RX_FLAG | HW_VLAN_TX_FLAG);
+
+	dev->vlan_features |= NETIF_F_SG;
+	dev->vlan_features |= NETIF_F_HW_CSUM;
+	if (bp->flags & USING_DAC_FLAG)
+		dev->vlan_features |= NETIF_F_HIGHDMA;
+	dev->vlan_features |= (NETIF_F_TSO | NETIF_F_TSO_ECN);
+	dev->vlan_features |= NETIF_F_TSO6;
 #endif
-	dev->features |= (NETIF_F_TSO | NETIF_F_TSO_ECN);
-	dev->features |= NETIF_F_TSO6;
 
 	return 0;
 
