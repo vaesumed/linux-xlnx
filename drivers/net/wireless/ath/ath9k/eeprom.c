@@ -1208,11 +1208,29 @@ static void ath9k_hw_4k_set_gain(struct ath_hw *ah,
 			      pModal->xatten2Margin[0]);
 		REG_RMW_FIELD(ah, AR_PHY_GAIN_2GHZ + regChainOffset,
 			      AR_PHY_GAIN_2GHZ_XATTEN2_DB, pModal->xatten2Db[0]);
+
+		/* Set the block 1 value to block 0 value */
+		REG_RMW_FIELD(ah, AR_PHY_GAIN_2GHZ + 0x1000,
+			      AR_PHY_GAIN_2GHZ_XATTEN1_MARGIN,
+			      pModal->bswMargin[0]);
+		REG_RMW_FIELD(ah, AR_PHY_GAIN_2GHZ + 0x1000,
+			      AR_PHY_GAIN_2GHZ_XATTEN1_DB, pModal->bswAtten[0]);
+		REG_RMW_FIELD(ah, AR_PHY_GAIN_2GHZ + 0x1000,
+			      AR_PHY_GAIN_2GHZ_XATTEN2_MARGIN,
+			      pModal->xatten2Margin[0]);
+		REG_RMW_FIELD(ah, AR_PHY_GAIN_2GHZ + 0x1000,
+			      AR_PHY_GAIN_2GHZ_XATTEN2_DB,
+			      pModal->xatten2Db[0]);
 	}
 
 	REG_RMW_FIELD(ah, AR_PHY_RXGAIN + regChainOffset,
 		      AR9280_PHY_RXGAIN_TXRX_ATTEN, txRxAttenLocal);
 	REG_RMW_FIELD(ah, AR_PHY_RXGAIN + regChainOffset,
+		      AR9280_PHY_RXGAIN_TXRX_MARGIN, pModal->rxTxMarginCh[0]);
+
+	REG_RMW_FIELD(ah, AR_PHY_RXGAIN + 0x1000,
+		      AR9280_PHY_RXGAIN_TXRX_ATTEN, txRxAttenLocal);
+	REG_RMW_FIELD(ah, AR_PHY_RXGAIN + 0x1000,
 		      AR9280_PHY_RXGAIN_TXRX_MARGIN, pModal->rxTxMarginCh[0]);
 
 	if (AR_SREV_9285_11(ah))
@@ -1239,7 +1257,7 @@ static void ath9k_hw_4k_set_board_values(struct ath_hw *ah,
 	ath9k_hw_4k_set_gain(ah, pModal, eep, txRxAttenLocal, 0);
 
 	/* Initialize Ant Diversity settings from EEPROM */
-	if (pModal->version == 3) {
+	if (pModal->version >= 3) {
 		ant_div_control1 = ((pModal->ob_234 >> 12) & 0xf);
 		ant_div_control2 = ((pModal->db1_234 >> 12) & 0xf);
 		regVal = REG_READ(ah, 0x99ac);
@@ -2516,10 +2534,8 @@ static void ath9k_hw_set_def_power_per_rate_table(struct ath_hw *ah,
 			targetPowerCck.tPow2x[1];
 		ratesArray[rate5_5s] = ratesArray[rate5_5l] =
 			targetPowerCck.tPow2x[2];
-		;
 		ratesArray[rate11s] = ratesArray[rate11l] =
 			targetPowerCck.tPow2x[3];
-		;
 	}
 	if (IS_CHAN_HT40(chan)) {
 		for (i = 0; i < ARRAY_SIZE(targetPowerHt40.tPow2x); i++) {
