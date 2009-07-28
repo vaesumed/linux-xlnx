@@ -1992,9 +1992,8 @@ static struct cn_handler_struct cnd_table[] = {
 	[ P_new_c_uuid ]	= { &drbd_nl_new_c_uuid,	0 },
 };
 
-static void drbd_connector_callback(void *data)
+static void drbd_connector_callback(struct cn_msg *req)
 {
-	struct cn_msg *req = data;
 	struct drbd_nl_cfg_req *nlp = (struct drbd_nl_cfg_req *)req->data;
 	struct cn_handler_struct *cm;
 	struct cn_msg *cn_reply;
@@ -2016,7 +2015,7 @@ static void drbd_connector_callback(void *data)
 		goto fail;
 	}
 
-	trace_drbd_netlink(data, 1);
+	trace_drbd_netlink(req, 1);
 
 	if (nlp->packet_type >= P_nl_after_last_packet) {
 		retcode = ERR_PACKET_NR;
