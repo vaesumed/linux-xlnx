@@ -2226,8 +2226,10 @@ static int __init netiucv_init(void)
 	netiucv_dev->release = (void (*)(struct device *))kfree;
 	netiucv_dev->driver = &netiucv_driver;
 	rc = device_register(netiucv_dev);
-	if (rc)
+	if (rc) {
+		put_device(netiucv_dev);
 		goto out_driver;
+	}
 	netiucv_banner();
 	return rc;
 
