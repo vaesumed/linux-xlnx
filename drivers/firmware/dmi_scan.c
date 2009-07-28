@@ -20,21 +20,32 @@ static char dmi_empty_string[] = "        ";
  */
 static int dmi_initialized;
 
+static u8 *dmi_end;
+
 static const char * __init dmi_string_nosave(const struct dmi_header *dm, u8 s)
 {
 	const u8 *bp = ((u8 *) dm) + dm->length;
 
 	if (s) {
 		s--;
-		while (s > 0 && *bp) {
+		while (s > 0) {
+			/* Catch corrupt table ends before we walk into
+			   undefined mappings */
+			if (bp >= dmi_end)
+				goto invalid;
+			if (*bp == 0)
+				break;
 			bp += strlen(bp) + 1;
 			s--;
 		}
 
 		if (*bp != 0) {
-			size_t len = strlen(bp)+1;
+			/* Use strnlen in case we have a BIOS table error */
+			size_t len = strnlen(bp, dmi_end - bp) + 1;
 			size_t cmp_len = len > 8 ? 8 : len;
 
+			if (bp == dmi_end)
+				goto invalid;
 			if (!memcmp(bp, dmi_empty_string, cmp_len))
 				return dmi_empty_string;
 			return bp;
@@ -42,6 +53,9 @@ static const char * __init dmi_string_nosave(const struct dmi_header *dm, u8 s)
 	}
 
 	return "";
+invalid:
+	printk(KERN_ERR "dmi: table overrun - corrupt DMI tables ?\n");
+	return dmi_empty_string;
 }
 
 static char * __init dmi_string(const struct dmi_header *dm, u8 s)
@@ -109,9 +123,11 @@ static int __init dmi_walk_early(void (*decode)(const struct dmi_header *,
 	if (buf == NULL)
 		return -1;
 
+	/* Remember the end mark for string walking */
+	dmi_end = buf + dmi_len;
 	dmi_table(buf, dmi_len, dmi_num, decode, NULL);
-
 	dmi_iounmap(buf, dmi_len);
+
 	return 0;
 }
 
@@ -154,7 +170,7 @@ static void __init dmi_save_uuid(const struct dmi_header *dm, int slot, int inde
 	char *s;
 	int is_ff = 1, is_00 = 1, i;
 
-	if (dmi_ident[slot])
+	if (dmi_ident[slot] || d > dmi_end - 16)
 		return;
 
 	for (i = 0; i < 16 && (is_ff || is_00); i++) {
@@ -182,7 +198,7 @@ static void __init dmi_save_type(const struct dmi_header *dm, int slot, int inde
 	const u8 *d = (u8*) dm + index;
 	char *s;
 
-	if (dmi_ident[slot])
+	if (dmi_ident[slot] || d == dmi_end)
 		return;
 
 	s = dmi_alloc(4);
@@ -260,6 +276,11 @@ static void __init dmi_save_ipmi_device(const struct dmi_header *dm)
 	struct dmi_device *dev;
 	void * data;
 
+	if (((u8 *)dm) + dm->length > dmi_end) {
+		printk(KERN_ERR "dmi_save_ipmi_device: table overrun.\n");
+		return;
+	}
+
 	data = dmi_alloc(dm->length);
 	if (data == NULL) {
 		printk(KERN_ERR "dmi_save_ipmi_device: out of memory.\n");
@@ -284,6 +305,9 @@ static void __init dmi_save_ipmi_device(const struct dmi_header *dm)
 static void __init dmi_save_extended_devices(const struct dmi_header *dm)
 {
 	const u8 *d = (u8*) dm + 5;
+
+	if (d >= dmi_end)
+		return;
 
 	/* Skip disabled device */
 	if ((*d & 0x80) == 0)
