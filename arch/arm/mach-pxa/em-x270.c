@@ -646,13 +646,16 @@ static int em_x270_mci_get_ro(struct device *dev)
 }
 
 static struct pxamci_platform_data em_x270_mci_platform_data = {
-	.ocr_mask	= MMC_VDD_20_21|MMC_VDD_21_22|MMC_VDD_22_23|
-			  MMC_VDD_24_25|MMC_VDD_25_26|MMC_VDD_26_27|
-			  MMC_VDD_27_28|MMC_VDD_28_29|MMC_VDD_29_30|
-			  MMC_VDD_30_31|MMC_VDD_31_32,
-	.init 		= em_x270_mci_init,
-	.setpower 	= em_x270_mci_setpower,
-	.exit		= em_x270_mci_exit,
+	.ocr_mask		= MMC_VDD_20_21|MMC_VDD_21_22|MMC_VDD_22_23|
+				  MMC_VDD_24_25|MMC_VDD_25_26|MMC_VDD_26_27|
+				  MMC_VDD_27_28|MMC_VDD_28_29|MMC_VDD_29_30|
+				  MMC_VDD_30_31|MMC_VDD_31_32,
+	.init 			= em_x270_mci_init,
+	.setpower 		= em_x270_mci_setpower,
+	.exit			= em_x270_mci_exit,
+	.gpio_card_detect	= -1,
+	.gpio_card_ro		= -1,
+	.gpio_power		= -1,
 };
 
 static void __init em_x270_init_mmc(void)
@@ -1022,22 +1025,32 @@ static int em_x270_sensor_power(struct device *dev, int on)
 	return 0;
 }
 
-static struct soc_camera_link iclink = {
-	.bus_id	= 0,
-	.power = em_x270_sensor_power,
-};
-
 static struct i2c_board_info em_x270_i2c_cam_info[] = {
 	{
 		I2C_BOARD_INFO("mt9m111", 0x48),
+	},
+};
+
+static struct soc_camera_link iclink = {
+	.bus_id		= 0,
+	.power		= em_x270_sensor_power,
+	.board_info	= &em_x270_i2c_cam_info[0],
+	.i2c_adapter_id	= 0,
+	.module_name	= "mt9m111",
+};
+
+static struct platform_device em_x270_camera = {
+	.name	= "soc-camera-pdrv",
+	.id	= -1,
+	.dev	= {
 		.platform_data = &iclink,
 	},
 };
 
 static void  __init em_x270_init_camera(void)
 {
-	i2c_register_board_info(0, ARRAY_AND_SIZE(em_x270_i2c_cam_info));
 	pxa_set_camera_info(&em_x270_camera_platform_data);
+	platform_device_register(&em_x270_camera);
 }
 #else
 static inline void em_x270_init_camera(void) {}
@@ -1141,12 +1154,16 @@ struct power_supply_info em_x270_psy_info = {
 
 static void em_x270_battery_low(void)
 {
+#if defined(CONFIG_APM_EMULATION)
 	apm_queue_event(APM_LOW_BATTERY);
+#endif
 }
 
 static void em_x270_battery_critical(void)
 {
+#if defined(CONFIG_APM_EMULATION)
 	apm_queue_event(APM_CRITICAL_SUSPEND);
+#endif
 }
 
 struct da9030_battery_info em_x270_batterty_info = {
