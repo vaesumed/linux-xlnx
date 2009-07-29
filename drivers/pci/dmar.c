@@ -33,6 +33,7 @@
 #include <linux/timer.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
+#include <linux/dmi.h>
 
 #define PREFIX "DMAR: "
 
