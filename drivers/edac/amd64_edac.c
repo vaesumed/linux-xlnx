@@ -2762,31 +2762,25 @@ static void amd64_restore_ecc_error_reporting(struct amd64_pvt *pvt)
 	wrmsr_on_cpus(cpumask, K8_MSR_MCGCTL, msrs);
 }
 
-static void check_mcg_ctl(void *ret)
+static bool amd64_nb_mce_bank_enabled_on_node(int nid)
 {
-	u64 msr_val = 0;
-	u8 nbe;
+	const cpumask_t *mask = topology_cpu_node_cpumask(nid);
+	struct msr msrs[cpumask_weight(mask)];
+	int cpu, nbe;
 
-	rdmsrl(MSR_IA32_MCG_CTL, msr_val);
-	nbe = msr_val & K8_MSR_MCGCTL_NBE;
+	rdmsr_on_cpus(mask, MSR_IA32_MCG_CTL, msrs);
 
-	debugf0("core: %u, MCG_CTL: 0x%llx, NB MSR is %s\n",
-		raw_smp_processor_id(), msr_val,
-		(nbe ? "enabled" : "disabled"));
+	for_each_cpu(cpu, mask) {
+		nbe = msrs[cpu].l & K8_MSR_MCGCTL_NBE;
 
-	if (!nbe)
-		*(int *)ret = 0;
-}
+		debugf0("core: %u, MCG_CTL: 0x%llx, NB MSR is %s\n",
+			cpu, msrs[cpu].q,
+			(nbe ? "enabled" : "disabled"));
 
-/* check MCG_CTL on all the cpus on this node */
-static int mcg_ctl_enabled_on_node(const cpumask_t *mask)
-{
-	int ret = 1;
-	preempt_disable();
-	smp_call_function_many(mask, check_mcg_ctl, &ret, 1);
-	preempt_enable();
-
-	return ret;
+		if (!nbe)
+			return false;
+	}
+	return true;
 }
 
 /*
@@ -2804,7 +2798,8 @@ static int amd64_check_ecc_enabled(struct amd64_pvt *pvt)
 {
 	u32 value;
 	int err = 0, ret;
-	u8 ecc_enabled = 0, mcg_ctl_en = 0;
+	u8 ecc_enabled = 0;
+	bool nb_mce_en = false;
 
 	err = pci_read_config_dword(pvt->misc_f3_ctl, K8_NBCFG, &value);
 	if (err)
@@ -2818,14 +2813,14 @@ static int amd64_check_ecc_enabled(struct amd64_pvt *pvt)
 	else
 		amd64_printk(KERN_INFO, "ECC is enabled by BIOS.\n");
 
-	mcg_ctl_en = mcg_ctl_enabled_on_node(cpumask_of_node(pvt->mc_node_id));
-	if (!mcg_ctl_en)
+	nb_mce_en = amd64_nb_mce_bank_enabled_on_node(pvt->mc_node_id);
+	if (!nb_mce_en)
 		amd64_printk(KERN_WARNING, "NB MCE bank disabled, set MSR "
 			     "0x%08x[4] on node %d to enable.\n",
 			     MSR_IA32_MCG_CTL, pvt->mc_node_id);
 
 	ret = 0;
-	if (!ecc_enabled || !mcg_ctl_en) {
+	if (!ecc_enabled || !nb_mce_en) {
 		if (!ecc_enable_override) {
 			amd64_printk(KERN_WARNING, "%s", ecc_warning);
 			ret = -ENODEV;
