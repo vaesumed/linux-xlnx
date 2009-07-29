@@ -190,10 +190,6 @@ static int ieee80211_open(struct net_device *dev)
 			       ETH_ALEN);
 	}
 
-	if (compare_ether_addr(null_addr, local->mdev->dev_addr) == 0)
-		memcpy(local->mdev->dev_addr, local->hw.wiphy->perm_addr,
-		       ETH_ALEN);
-
 	/*
 	 * Validate the MAC address for this device.
 	 */
@@ -229,13 +225,10 @@ static int ieee80211_open(struct net_device *dev)
 		if (sdata->u.mntr_flags & MONITOR_FLAG_OTHER_BSS)
 			local->fif_other_bss++;
 
-		netif_addr_lock_bh(local->mdev);
+		spin_lock_bh(&local->filter_lock);
 		ieee80211_configure_filter(local);
-		netif_addr_unlock_bh(local->mdev);
+		spin_unlock_bh(&local->filter_lock);
 		break;
-	case NL80211_IFTYPE_STATION:
-		sdata->u.mgd.flags &= ~IEEE80211_STA_PREV_BSSID_SET;
-		/* fall through */
 	default:
 		conf.vif = &sdata->vif;
 		conf.type = sdata->vif.type;
@@ -246,9 +239,9 @@ static int ieee80211_open(struct net_device *dev)
 
 		if (ieee80211_vif_is_mesh(&sdata->vif)) {
 			local->fif_other_bss++;
-			netif_addr_lock_bh(local->mdev);
+			spin_lock_bh(&local->filter_lock);
 			ieee80211_configure_filter(local);
-			netif_addr_unlock_bh(local->mdev);
+			spin_unlock_bh(&local->filter_lock);
 
 			ieee80211_start_mesh(sdata);
 		}
@@ -282,10 +275,6 @@ static int ieee80211_open(struct net_device *dev)
 	}
 
 	if (local->open_count == 0) {
-		res = dev_open(local->mdev);
-		WARN_ON(res);
-		if (res)
-			goto err_del_interface;
 		tasklet_enable(&local->tx_pending_tasklet);
 		tasklet_enable(&local->tasklet);
 	}
@@ -366,18 +355,6 @@ static int ieee80211_stop(struct net_device *dev)
 	rcu_read_unlock();
 
 	/*
-	 * Announce that we are leaving the network, in case we are a
-	 * station interface type. This must be done before removing
-	 * all stations associated with sta_info_flush, otherwise STA
-	 * information will be gone and no announce being done.
-	 */
-	if (sdata->vif.type == NL80211_IFTYPE_STATION) {
-		if (sdata->u.mgd.state != IEEE80211_STA_MLME_DISABLED)
-			ieee80211_sta_deauthenticate(sdata,
-				WLAN_REASON_DEAUTH_LEAVING);
-	}
-
-	/*
 	 * Remove all stations associated with this interface.
 	 *
 	 * This must be done before calling ops->remove_interface()
@@ -408,7 +385,14 @@ static int ieee80211_stop(struct net_device *dev)
 	if (sdata->flags & IEEE80211_SDATA_PROMISC)
 		atomic_dec(&local->iff_promiscs);
 
-	dev_mc_unsync(local->mdev, dev);
+	netif_addr_lock_bh(dev);
+	spin_lock_bh(&local->filter_lock);
+	__dev_addr_unsync(&local->mc_list, &local->mc_count,
+			  &dev->mc_list, &dev->mc_count);
+	ieee80211_configure_filter(local);
+	spin_unlock_bh(&local->filter_lock);
+	netif_addr_unlock_bh(dev);
+
 	del_timer_sync(&local->dynamic_ps_timer);
 	cancel_work_sync(&local->dynamic_ps_enable_work);
 
@@ -457,24 +441,25 @@ static int ieee80211_stop(struct net_device *dev)
 		if (sdata->u.mntr_flags & MONITOR_FLAG_OTHER_BSS)
 			local->fif_other_bss--;
 
-		netif_addr_lock_bh(local->mdev);
+		spin_lock_bh(&local->filter_lock);
 		ieee80211_configure_filter(local);
-		netif_addr_unlock_bh(local->mdev);
+		spin_unlock_bh(&local->filter_lock);
 		break;
 	case NL80211_IFTYPE_STATION:
-		memset(sdata->u.mgd.bssid, 0, ETH_ALEN);
 		del_timer_sync(&sdata->u.mgd.chswitch_timer);
 		del_timer_sync(&sdata->u.mgd.timer);
+		del_timer_sync(&sdata->u.mgd.conn_mon_timer);
+		del_timer_sync(&sdata->u.mgd.bcn_mon_timer);
 		/*
-		 * If the timer fired while we waited for it, it will have
-		 * requeued the work. Now the work will be running again
+		 * If any of the timers fired while we waited for it, it will
+		 * have queued its work. Now the work will be running again
 		 * but will not rearm the timer again because it checks
 		 * whether the interface is running, which, at this point,
 		 * it no longer is.
 		 */
 		cancel_work_sync(&sdata->u.mgd.work);
 		cancel_work_sync(&sdata->u.mgd.chswitch_work);
-
+		cancel_work_sync(&sdata->u.mgd.monitor_work);
 		cancel_work_sync(&sdata->u.mgd.beacon_loss_work);
 
 		/*
@@ -485,12 +470,6 @@ static int ieee80211_stop(struct net_device *dev)
 		 */
 		synchronize_rcu();
 		skb_queue_purge(&sdata->u.mgd.skb_queue);
-
-		sdata->u.mgd.flags &= ~(IEEE80211_STA_PRIVACY_INVOKED |
-					IEEE80211_STA_TKIP_WEP_USED);
-		kfree(sdata->u.mgd.extra_ie);
-		sdata->u.mgd.extra_ie = NULL;
-		sdata->u.mgd.extra_ie_len = 0;
 		/* fall through */
 	case NL80211_IFTYPE_ADHOC:
 		if (sdata->vif.type == NL80211_IFTYPE_ADHOC) {
@@ -507,9 +486,9 @@ static int ieee80211_stop(struct net_device *dev)
 			local->fif_other_bss--;
 			atomic_dec(&local->iff_allmultis);
 
-			netif_addr_lock_bh(local->mdev);
+			spin_lock_bh(&local->filter_lock);
 			ieee80211_configure_filter(local);
-			netif_addr_unlock_bh(local->mdev);
+			spin_unlock_bh(&local->filter_lock);
 
 			ieee80211_stop_mesh(sdata);
 		}
@@ -555,9 +534,6 @@ static int ieee80211_stop(struct net_device *dev)
 	ieee80211_recalc_ps(local, -1);
 
 	if (local->open_count == 0) {
-		if (netif_running(local->mdev))
-			dev_close(local->mdev);
-
 		drv_stop(local);
 
 		ieee80211_led_radio(local, false);
@@ -604,8 +580,11 @@ static void ieee80211_set_multicast_list(struct net_device *dev)
 			atomic_dec(&local->iff_promiscs);
 		sdata->flags ^= IEEE80211_SDATA_PROMISC;
 	}
-
-	dev_mc_sync(local->mdev, dev);
+	spin_lock_bh(&local->filter_lock);
+	__dev_addr_sync(&local->mc_list, &local->mc_count,
+			&dev->mc_list, &dev->mc_count);
+	ieee80211_configure_filter(local);
+	spin_unlock_bh(&local->filter_lock);
 }
 
 /*
@@ -652,11 +631,6 @@ static void ieee80211_teardown_sdata(struct net_device *dev)
 			kfree_skb(sdata->u.ibss.presp);
 		break;
 	case NL80211_IFTYPE_STATION:
-		kfree(sdata->u.mgd.extra_ie);
-		kfree(sdata->u.mgd.assocreq_ies);
-		kfree(sdata->u.mgd.assocresp_ies);
-		kfree(sdata->u.mgd.sme_auth_ie);
-		break;
 	case NL80211_IFTYPE_WDS:
 	case NL80211_IFTYPE_AP_VLAN:
 	case NL80211_IFTYPE_MONITOR:
@@ -939,7 +913,8 @@ u32 __ieee80211_recalc_idle(struct ieee80211_local *local)
 			continue;
 		/* do not count disabled managed interfaces */
 		if (sdata->vif.type == NL80211_IFTYPE_STATION &&
-		    sdata->u.mgd.state == IEEE80211_STA_MLME_DISABLED)
+		    !sdata->u.mgd.associated &&
+		    list_empty(&sdata->u.mgd.work_list))
 			continue;
 		/* do not count unused IBSS interfaces */
 		if (sdata->vif.type == NL80211_IFTYPE_ADHOC &&
