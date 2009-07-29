@@ -97,8 +97,6 @@ source "drivers/staging/mimio/Kconfig"
 
 source "drivers/staging/frontier/Kconfig"
 
-source "drivers/staging/epl/Kconfig"
-
 source "drivers/staging/android/Kconfig"
 
 source "drivers/staging/dst/Kconfig"
