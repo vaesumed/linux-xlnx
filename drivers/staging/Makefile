@@ -45,7 +45,6 @@ obj-$(CONFIG_OCTEON_ETHERNET)	+= octeon/
 obj-$(CONFIG_VT6655)		+= vt6655/
 obj-$(CONFIG_VT6656)		+= vt6656/
 obj-$(CONFIG_USB_CPC)		+= cpc-usb/
-obj-$(CONFIG_RDC_17F3101X)	+= pata_rdc/
 obj-$(CONFIG_FB_UDL)		+= udlfb/
 obj-$(CONFIG_MSM_ADSP)		+= dream/qdsp5/ dream/smd/
 obj-$(CONFIG_MSM_CAMERA)	+= dream/camera/
