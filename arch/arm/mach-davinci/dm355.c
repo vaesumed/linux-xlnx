@@ -30,6 +30,7 @@
 #include <mach/time.h>
 #include <mach/serial.h>
 #include <mach/common.h>
+#include <mach/asp.h>
 
 #include "clock.h"
 #include "mux.h"
@@ -360,8 +361,8 @@ static struct davinci_clk dm355_clks[] = {
 	CLK(NULL, "uart1", &uart1_clk),
 	CLK(NULL, "uart2", &uart2_clk),
 	CLK("i2c_davinci.1", NULL, &i2c_clk),
-	CLK("soc-audio.0", NULL, &asp0_clk),
-	CLK("soc-audio.1", NULL, &asp1_clk),
+	CLK("davinci-asp.0", NULL, &asp0_clk),
+	CLK("davinci-asp.1", NULL, &asp1_clk),
 	CLK("davinci_mmc.0", NULL, &mmcsd0_clk),
 	CLK("davinci_mmc.1", NULL, &mmcsd1_clk),
 	CLK(NULL, "spi0", &spi0_clk),
@@ -558,17 +559,38 @@ static const s8 dma_chan_dm355_no_event[] = {
 	-1
 };
 
-static struct edma_soc_info dm355_edma_info = {
-	.n_channel	= 64,
-	.n_region	= 4,
-	.n_slot		= 128,
-	.n_tc		= 2,
-	.noevent	= dma_chan_dm355_no_event,
+static const s8
+queue_tc_mapping[][2] = {
+	/* {event queue no, TC no} */
+	{0, 0},
+	{1, 1},
+	{-1, -1},
+};
+
+static const s8
+queue_priority_mapping[][2] = {
+	/* {event queue no, Priority} */
+	{0, 3},
+	{1, 7},
+	{-1, -1},
+};
+
+static struct edma_soc_info dm355_edma_info[] = {
+	{
+		.n_channel		= 64,
+		.n_region		= 4,
+		.n_slot			= 128,
+		.n_tc			= 2,
+		.n_cc			= 1,
+		.noevent		= dma_chan_dm355_no_event,
+		.queue_tc_mapping	= queue_tc_mapping,
+		.queue_priority_mapping	= queue_priority_mapping,
+	},
 };
 
 static struct resource edma_resources[] = {
 	{
-		.name	= "edma_cc",
+		.name	= "edma_cc0",
 		.start	= 0x01c00000,
 		.end	= 0x01c00000 + SZ_64K - 1,
 		.flags	= IORESOURCE_MEM,
@@ -586,10 +608,12 @@ static struct resource edma_resources[] = {
 		.flags	= IORESOURCE_MEM,
 	},
 	{
+		.name	= "edma0",
 		.start	= IRQ_CCINT0,
 		.flags	= IORESOURCE_IRQ,
 	},
 	{
+		.name	= "edma0_err",
 		.start	= IRQ_CCERRINT,
 		.flags	= IORESOURCE_IRQ,
 	},
@@ -598,10 +622,35 @@ static struct resource edma_resources[] = {
 
 static struct platform_device dm355_edma_device = {
 	.name			= "edma",
-	.id			= -1,
-	.dev.platform_data	= &dm355_edma_info,
+	.id			= 0,
+	.dev.platform_data	= dm355_edma_info,
 	.num_resources		= ARRAY_SIZE(edma_resources),
 	.resource		= edma_resources,
+};
+
+static struct resource dm355_asp1_resources[] = {
+	{
+		.start	= DAVINCI_ASP1_BASE,
+		.end	= DAVINCI_ASP1_BASE + SZ_8K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= DAVINCI_DMA_ASP1_TX,
+		.end	= DAVINCI_DMA_ASP1_TX,
+		.flags	= IORESOURCE_DMA,
+	},
+	{
+		.start	= DAVINCI_DMA_ASP1_RX,
+		.end	= DAVINCI_DMA_ASP1_RX,
+		.flags	= IORESOURCE_DMA,
+	},
+};
+
+static struct platform_device dm355_asp1_device = {
+	.name		= "davinci-asp",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(dm355_asp1_resources),
+	.resource	= dm355_asp1_resources,
 };
 
 /*----------------------------------------------------------------------*/
@@ -704,7 +753,6 @@ static struct davinci_soc_info davinci_soc_info_dm355 = {
 	.intc_irq_prios		= dm355_default_priorities,
 	.intc_irq_num		= DAVINCI_N_AINTC_IRQ,
 	.timer_info		= &dm355_timer_info,
-	.wdt_base		= IO_ADDRESS(DAVINCI_WDOG_BASE),
 	.gpio_base		= IO_ADDRESS(DAVINCI_GPIO_BASE),
 	.gpio_num		= 104,
 	.gpio_irq		= IRQ_DM355_GPIOBNK0,
@@ -712,6 +760,19 @@ static struct davinci_soc_info davinci_soc_info_dm355 = {
 	.sram_dma		= 0x00010000,
 	.sram_len		= SZ_32K,
 };
+
+void __init dm355_init_asp1(u32 evt_enable, struct snd_platform_data *pdata)
+{
+	/* we don't use ASP1 IRQs, or we'd need to mux them ... */
+	if (evt_enable & ASP1_TX_EVT_EN)
+		davinci_cfg_reg(DM355_EVT8_ASP1_TX);
+
+	if (evt_enable & ASP1_RX_EVT_EN)
+		davinci_cfg_reg(DM355_EVT9_ASP1_RX);
+
+	dm355_asp1_device.dev.platform_data = pdata;
+	platform_device_register(&dm355_asp1_device);
+}
 
 void __init dm355_init(void)
 {
