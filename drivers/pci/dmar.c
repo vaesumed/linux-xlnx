@@ -33,9 +33,9 @@
 #include <linux/timer.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
+#include <linux/dmi.h>
 
-#undef PREFIX
-#define PREFIX "DMAR:"
+#define PREFIX "DMAR: "
 
 /* No locks are needed as DMA remapping hardware unit
  * list is constructed at boot time and hotplug of
