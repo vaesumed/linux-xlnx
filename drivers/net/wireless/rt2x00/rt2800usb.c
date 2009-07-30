@@ -264,7 +264,6 @@ static const struct rt2x00debug rt2800usb_rt2x00debug = {
 };
 #endif /* CONFIG_RT2X00_LIB_DEBUGFS */
 
-#ifdef CONFIG_RT2X00_LIB_RFKILL
 static int rt2800usb_rfkill_poll(struct rt2x00_dev *rt2x00dev)
 {
 	u32 reg;
@@ -272,9 +271,6 @@ static int rt2800usb_rfkill_poll(struct rt2x00_dev *rt2x00dev)
 	rt2x00usb_register_read(rt2x00dev, GPIO_CTRL_CFG, &reg);
 	return rt2x00_get_field32(reg, GPIO_CTRL_CFG_BIT2);
 }
-#else
-#define rt2800usb_rfkill_poll	NULL
-#endif /* CONFIG_RT2X00_LIB_RFKILL */
 
 #ifdef CONFIG_RT2X00_LIB_LEDS
 static void rt2800usb_brightness_set(struct led_classdev *led_cdev,
@@ -1914,7 +1910,7 @@ static int rt2800usb_set_device_state(struct rt2x00_dev *rt2x00dev,
 		/*
 		 * Before the radio can be enabled, the device first has
 		 * to be woken up. After that it needs a bit of time
-		 * to be fully awake and the radio can be enabled.
+		 * to be fully awake and then the radio can be enabled.
 		 */
 		rt2800usb_set_state(rt2x00dev, STATE_AWAKE);
 		msleep(1);
@@ -1922,7 +1918,7 @@ static int rt2800usb_set_device_state(struct rt2x00_dev *rt2x00dev,
 		break;
 	case STATE_RADIO_OFF:
 		/*
-		 * After the radio has been disablee, the device should
+		 * After the radio has been disabled, the device should
 		 * be put to sleep for powersaving.
 		 */
 		rt2800usb_disable_radio(rt2x00dev);
@@ -2224,10 +2220,8 @@ static int rt2800usb_validate_eeprom(struct rt2x00_dev *rt2x00dev)
 	 */
 	mac = rt2x00_eeprom_addr(rt2x00dev, EEPROM_MAC_ADDR_0);
 	if (!is_valid_ether_addr(mac)) {
-		DECLARE_MAC_BUF(macbuf);
-
 		random_ether_addr(mac);
-		EEPROM(rt2x00dev, "MAC: %s\n", print_mac(macbuf, mac));
+		EEPROM(rt2x00dev, "MAC: %pM\n", mac);
 	}
 
 	rt2x00_eeprom_read(rt2x00dev, EEPROM_ANTENNA, &word);
@@ -2385,10 +2379,8 @@ static int rt2800usb_init_eeprom(struct rt2x00_dev *rt2x00dev)
 	/*
 	 * Detect if this device has an hardware controlled radio.
 	 */
-#ifdef CONFIG_RT2X00_LIB_RFKILL
 	if (rt2x00_get_field16(eeprom, EEPROM_NIC_HW_RADIO))
 		__set_bit(CONFIG_SUPPORT_HW_BUTTON, &rt2x00dev->flags);
-#endif /* CONFIG_RT2X00_LIB_RFKILL */
 
 	/*
 	 * Store led settings, for correct led behaviour.
@@ -2792,6 +2784,7 @@ static const struct ieee80211_ops rt2800usb_mac80211_ops = {
 	.remove_interface	= rt2x00mac_remove_interface,
 	.config			= rt2x00mac_config,
 	.configure_filter	= rt2x00mac_configure_filter,
+	.set_tim		= rt2x00mac_set_tim,
 	.set_key		= rt2x00mac_set_key,
 	.get_stats		= rt2x00mac_get_stats,
 	.get_tkip_seq		= rt2800usb_get_tkip_seq,
@@ -2800,6 +2793,7 @@ static const struct ieee80211_ops rt2800usb_mac80211_ops = {
 	.conf_tx		= rt2800usb_conf_tx,
 	.get_tx_stats		= rt2x00mac_get_tx_stats,
 	.get_tsf		= rt2800usb_get_tsf,
+	.rfkill_poll		= rt2x00mac_rfkill_poll,
 };
 
 static const struct rt2x00lib_ops rt2800usb_rt2x00_ops = {

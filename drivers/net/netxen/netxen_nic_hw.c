@@ -706,6 +706,30 @@ int netxen_config_rss(struct netxen_adapter *adapter, int enable)
 	return rv;
 }
 
+int netxen_config_ipaddr(struct netxen_adapter *adapter, u32 ip, int cmd)
+{
+	nx_nic_req_t req;
+	u64 word;
+	int rv;
+
+	memset(&req, 0, sizeof(nx_nic_req_t));
+	req.qhdr = cpu_to_le64(NX_HOST_REQUEST << 23);
+
+	word = NX_NIC_H2C_OPCODE_CONFIG_IPADDR | ((u64)adapter->portnum << 16);
+	req.req_hdr = cpu_to_le64(word);
+
+	req.words[0] = cpu_to_le64(cmd);
+	req.words[1] = cpu_to_le64(ip);
+
+	rv = netxen_send_cmd_descs(adapter, (struct cmd_desc_type0 *)&req, 1);
+	if (rv != 0) {
+		printk(KERN_ERR "%s: could not notify %s IP 0x%x reuqest\n",
+				adapter->netdev->name,
+				(cmd == NX_IP_UP) ? "Add" : "Remove", ip);
+	}
+	return rv;
+}
+
 int netxen_linkevent_request(struct netxen_adapter *adapter, int enable)
 {
 	nx_nic_req_t req;
@@ -2021,7 +2045,6 @@ void netxen_nic_get_firmware_info(struct netxen_adapter *adapter)
 	fw_minor = NXRD32(adapter, NETXEN_FW_VERSION_MINOR);
 	fw_build = NXRD32(adapter, NETXEN_FW_VERSION_SUB);
 
-	adapter->fw_major = fw_major;
 	adapter->fw_version = NETXEN_VERSION_CODE(fw_major, fw_minor, fw_build);
 
 	if (adapter->portnum == 0) {
@@ -2047,6 +2070,9 @@ void netxen_nic_get_firmware_info(struct netxen_adapter *adapter)
 		dev_info(&pdev->dev, "firmware running in %s mode\n",
 		adapter->ahw.cut_through ? "cut-through" : "legacy");
 	}
+
+	if (adapter->fw_version >= NETXEN_VERSION_CODE(4, 0, 222))
+		adapter->capabilities = NXRD32(adapter, CRB_FW_CAPABILITIES_1);
 }
 
 int
