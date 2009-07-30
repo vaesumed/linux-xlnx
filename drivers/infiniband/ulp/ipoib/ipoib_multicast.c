@@ -685,12 +685,7 @@ void ipoib_mcast_send(struct net_device *dev, void *mgid, struct sk_buff *skb)
 	}
 
 	if (!mcast->ah) {
-		if (skb_queue_len(&mcast->pkt_queue) < IPOIB_MAX_MCAST_QUEUE)
-			skb_queue_tail(&mcast->pkt_queue, skb);
-		else {
-			++dev->stats.tx_dropped;
-			dev_kfree_skb_any(skb);
-		}
+		skb_queue_tail(&mcast->pkt_queue, skb);
 
 		if (test_bit(IPOIB_MCAST_FLAG_BUSY, &mcast->flags))
 			ipoib_dbg_mcast(priv, "no address vector, "
