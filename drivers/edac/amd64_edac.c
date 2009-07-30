@@ -2654,9 +2654,9 @@ static int amd64_init_csrows(struct mem_ctl_info *mci)
 static void amd64_enable_ecc_error_reporting(struct mem_ctl_info *mci)
 {
 	struct amd64_pvt *pvt = mci->pvt_info;
-	const struct cpumask *cpumask = cpumask_of_node(pvt->mc_node_id);
+	const struct cpumask *cmsk = topology_cpu_node_cpumask(pvt->mc_node_id);
 	int cpu, idx = 0, err = 0;
-	struct msr msrs[cpumask_weight(cpumask)];
+	struct msr msrs[cpumask_weight(cmsk)];
 	u32 value;
 	u32 mask = K8_NBCTL_CECCEn | K8_NBCTL_UECCEn;
 
@@ -2680,16 +2680,16 @@ static void amd64_enable_ecc_error_reporting(struct mem_ctl_info *mci)
 	value |= mask;
 	pci_write_config_dword(pvt->misc_f3_ctl, K8_NBCTL, value);
 
-	rdmsr_on_cpus(cpumask, K8_MSR_MCGCTL, msrs);
+	rdmsr_on_cpus(cmsk, K8_MSR_MCGCTL, msrs);
 
-	for_each_cpu(cpu, cpumask) {
+	for_each_cpu(cpu, cmsk) {
 		if (msrs[idx].l & K8_MSR_MCGCTL_NBE)
 			set_bit(idx, &pvt->old_mcgctl);
 
 		msrs[idx].l |= K8_MSR_MCGCTL_NBE;
 		idx++;
 	}
-	wrmsr_on_cpus(cpumask, K8_MSR_MCGCTL, msrs);
+	wrmsr_on_cpus(cmsk, K8_MSR_MCGCTL, msrs);
 
 	err = pci_read_config_dword(pvt->misc_f3_ctl, K8_NBCFG, &value);
 	if (err)
@@ -2730,9 +2730,9 @@ static void amd64_enable_ecc_error_reporting(struct mem_ctl_info *mci)
 
 static void amd64_restore_ecc_error_reporting(struct amd64_pvt *pvt)
 {
-	const struct cpumask *cpumask = cpumask_of_node(pvt->mc_node_id);
+	const struct cpumask *cmsk = topology_cpu_node_cpumask(pvt->mc_node_id);
 	int cpu, idx = 0, err = 0;
-	struct msr msrs[cpumask_weight(cpumask)];
+	struct msr msrs[cpumask_weight(cmsk)];
 	u32 value;
 	u32 mask = K8_NBCTL_CECCEn | K8_NBCTL_UECCEn;
 
@@ -2750,16 +2750,16 @@ static void amd64_restore_ecc_error_reporting(struct amd64_pvt *pvt)
 	/* restore the NB Enable MCGCTL bit */
 	pci_write_config_dword(pvt->misc_f3_ctl, K8_NBCTL, value);
 
-	rdmsr_on_cpus(cpumask, K8_MSR_MCGCTL, msrs);
+	rdmsr_on_cpus(cmsk, K8_MSR_MCGCTL, msrs);
 
-	for_each_cpu(cpu, cpumask) {
+	for_each_cpu(cpu, cmsk) {
 		msrs[idx].l &= ~K8_MSR_MCGCTL_NBE;
 		msrs[idx].l |=
 			test_bit(idx, &pvt->old_mcgctl) << K8_MSR_MCGCTL_NBE;
 		idx++;
 	}
 
-	wrmsr_on_cpus(cpumask, K8_MSR_MCGCTL, msrs);
+	wrmsr_on_cpus(cmsk, K8_MSR_MCGCTL, msrs);
 }
 
 static void check_mcg_ctl(void *ret)
