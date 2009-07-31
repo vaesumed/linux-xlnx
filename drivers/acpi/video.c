@@ -40,9 +40,11 @@
 #include <linux/pci.h>
 #include <linux/pci_ids.h>
 #include <asm/uaccess.h>
-
+#include <linux/dmi.h>
 #include <acpi/acpi_bus.h>
 #include <acpi/acpi_drivers.h>
+
+#define PREFIX "ACPI: "
 
 #define ACPI_VIDEO_CLASS		"video"
 #define ACPI_VIDEO_BUS_NAME		"Video Bus"
