@@ -239,6 +239,13 @@ static void iwl5000_nic_config(struct iwl_priv *priv)
 				APMG_PS_CTRL_EARLY_PWR_OFF_RESET_DIS,
 				~APMG_PS_CTRL_EARLY_PWR_OFF_RESET_DIS);
 
+	if ((priv->hw_rev & CSR_HW_REV_TYPE_MSK) == CSR_HW_REV_TYPE_1000) {
+		/* Setting digital SVR for 1000 card to 1.32V */
+		iwl_set_bits_mask_prph(priv, APMG_DIGITAL_SVR_REG,
+					APMG_SVR_DIGITAL_VOLTAGE_1_32,
+					~APMG_SVR_VOLTAGE_CONFIG_BIT_MSK);
+	}
+
 	spin_unlock_irqrestore(&priv->lock, flags);
 }
 
@@ -388,7 +395,7 @@ void iwl5000_rts_tx_cmd_flag(struct ieee80211_tx_info *info,
 
 static struct iwl_sensitivity_ranges iwl5000_sensitivity = {
 	.min_nrg_cck = 95,
-	.max_nrg_cck = 0,
+	.max_nrg_cck = 0, /* not used, set to 0 */
 	.auto_corr_min_ofdm = 90,
 	.auto_corr_min_ofdm_mrc = 170,
 	.auto_corr_min_ofdm_x1 = 120,
@@ -398,6 +405,28 @@ static struct iwl_sensitivity_ranges iwl5000_sensitivity = {
 	.auto_corr_max_ofdm_mrc = 210,
 	.auto_corr_max_ofdm_x1 = 155,
 	.auto_corr_max_ofdm_mrc_x1 = 290,
+
+	.auto_corr_min_cck = 125,
+	.auto_corr_max_cck = 200,
+	.auto_corr_min_cck_mrc = 170,
+	.auto_corr_max_cck_mrc = 400,
+	.nrg_th_cck = 95,
+	.nrg_th_ofdm = 95,
+};
+
+static struct iwl_sensitivity_ranges iwl5150_sensitivity = {
+	.min_nrg_cck = 95,
+	.max_nrg_cck = 0, /* not used, set to 0 */
+	.auto_corr_min_ofdm = 90,
+	.auto_corr_min_ofdm_mrc = 170,
+	.auto_corr_min_ofdm_x1 = 105,
+	.auto_corr_min_ofdm_mrc_x1 = 220,
+
+	.auto_corr_max_ofdm = 120,
+	.auto_corr_max_ofdm_mrc = 210,
+	/* max = min for performance bug in 5150 DSP */
+	.auto_corr_max_ofdm_x1 = 105,
+	.auto_corr_max_ofdm_mrc_x1 = 220,
 
 	.auto_corr_min_cck = 125,
 	.auto_corr_max_cck = 200,
@@ -826,8 +855,6 @@ static int iwl5000_hw_set_hw_params(struct iwl_priv *priv)
 					BIT(IEEE80211_BAND_5GHZ);
 	priv->hw_params.rx_wrt_ptr_reg = FH_RSCSR_CHNL0_WPTR;
 
-	priv->hw_params.sens = &iwl5000_sensitivity;
-
 	priv->hw_params.tx_chains_num = num_of_ant(priv->cfg->valid_tx_ant);
 	priv->hw_params.rx_chains_num = num_of_ant(priv->cfg->valid_rx_ant);
 	priv->hw_params.valid_tx_ant = priv->cfg->valid_tx_ant;
@@ -836,9 +863,11 @@ static int iwl5000_hw_set_hw_params(struct iwl_priv *priv)
 	if (priv->cfg->ops->lib->temp_ops.set_ct_kill)
 		priv->cfg->ops->lib->temp_ops.set_ct_kill(priv);
 
+	/* Set initial sensitivity parameters */
 	/* Set initial calibration set */
 	switch (priv->hw_rev & CSR_HW_REV_TYPE_MSK) {
 	case CSR_HW_REV_TYPE_5150:
+		priv->hw_params.sens = &iwl5150_sensitivity;
 		priv->hw_params.calib_init_cfg =
 			BIT(IWL_CALIB_DC)		|
 			BIT(IWL_CALIB_LO)		|
@@ -847,6 +876,7 @@ static int iwl5000_hw_set_hw_params(struct iwl_priv *priv)
 
 		break;
 	default:
+		priv->hw_params.sens = &iwl5000_sensitivity;
 		priv->hw_params.calib_init_cfg =
 			BIT(IWL_CALIB_XTAL)		|
 			BIT(IWL_CALIB_LO)		|
@@ -1426,6 +1456,44 @@ int iwl5000_calc_rssi(struct iwl_priv *priv,
 	return max_rssi - agc - IWL49_RSSI_OFFSET;
 }
 
+#define IWL5000_UCODE_GET(item)						\
+static u32 iwl5000_ucode_get_##item(const struct iwl_ucode_header *ucode,\
+				    u32 api_ver)			\
+{									\
+	if (api_ver <= 2)						\
+		return le32_to_cpu(ucode->u.v1.item);			\
+	return le32_to_cpu(ucode->u.v2.item);				\
+}
+
+static u32 iwl5000_ucode_get_header_size(u32 api_ver)
+{
+	if (api_ver <= 2)
+		return UCODE_HEADER_SIZE(1);
+	return UCODE_HEADER_SIZE(2);
+}
+
+static u32 iwl5000_ucode_get_build(const struct iwl_ucode_header *ucode,
+				   u32 api_ver)
+{
+	if (api_ver <= 2)
+		return 0;
+	return le32_to_cpu(ucode->u.v2.build);
+}
+
+static u8 *iwl5000_ucode_get_data(const struct iwl_ucode_header *ucode,
+				  u32 api_ver)
+{
+	if (api_ver <= 2)
+		return (u8 *) ucode->u.v1.data;
+	return (u8 *) ucode->u.v2.data;
+}
+
+IWL5000_UCODE_GET(inst_size);
+IWL5000_UCODE_GET(data_size);
+IWL5000_UCODE_GET(init_size);
+IWL5000_UCODE_GET(init_data_size);
+IWL5000_UCODE_GET(boot_size);
+
 struct iwl_hcmd_ops iwl5000_hcmd = {
 	.rxon_assoc = iwl5000_send_rxon_assoc,
 	.commit_rxon = iwl_commit_rxon,
@@ -1439,6 +1507,17 @@ struct iwl_hcmd_utils_ops iwl5000_hcmd_utils = {
 	.chain_noise_reset = iwl5000_chain_noise_reset,
 	.rts_tx_cmd_flag = iwl5000_rts_tx_cmd_flag,
 	.calc_rssi = iwl5000_calc_rssi,
+};
+
+struct iwl_ucode_ops iwl5000_ucode = {
+	.get_header_size = iwl5000_ucode_get_header_size,
+	.get_build = iwl5000_ucode_get_build,
+	.get_inst_size = iwl5000_ucode_get_inst_size,
+	.get_data_size = iwl5000_ucode_get_data_size,
+	.get_init_size = iwl5000_ucode_get_init_size,
+	.get_init_data_size = iwl5000_ucode_get_init_data_size,
+	.get_boot_size = iwl5000_ucode_get_boot_size,
+	.get_data = iwl5000_ucode_get_data,
 };
 
 struct iwl_lib_ops iwl5000_lib = {
@@ -1542,12 +1621,14 @@ static struct iwl_lib_ops iwl5150_lib = {
 };
 
 struct iwl_ops iwl5000_ops = {
+	.ucode = &iwl5000_ucode,
 	.lib = &iwl5000_lib,
 	.hcmd = &iwl5000_hcmd,
 	.utils = &iwl5000_hcmd_utils,
 };
 
 static struct iwl_ops iwl5150_ops = {
+	.ucode = &iwl5000_ucode,
 	.lib = &iwl5150_lib,
 	.hcmd = &iwl5000_hcmd,
 	.utils = &iwl5000_hcmd_utils,
@@ -1664,8 +1745,6 @@ MODULE_FIRMWARE(IWL5150_MODULE_FIRMWARE(IWL5150_UCODE_API_MAX));
 module_param_named(swcrypto50, iwl50_mod_params.sw_crypto, bool, 0444);
 MODULE_PARM_DESC(swcrypto50,
 		  "using software crypto engine (default 0 [hardware])\n");
-module_param_named(debug50, iwl50_mod_params.debug, uint, 0444);
-MODULE_PARM_DESC(debug50, "50XX debug output mask");
 module_param_named(queues_num50, iwl50_mod_params.num_of_queues, int, 0444);
 MODULE_PARM_DESC(queues_num50, "number of hw queues in 50xx series");
 module_param_named(11n_disable50, iwl50_mod_params.disable_11n, int, 0444);

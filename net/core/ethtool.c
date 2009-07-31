@@ -30,10 +30,17 @@ u32 ethtool_op_get_link(struct net_device *dev)
 	return netif_carrier_ok(dev) ? 1 : 0;
 }
 
+u32 ethtool_op_get_rx_csum(struct net_device *dev)
+{
+	return (dev->features & NETIF_F_ALL_CSUM) != 0;
+}
+EXPORT_SYMBOL(ethtool_op_get_rx_csum);
+
 u32 ethtool_op_get_tx_csum(struct net_device *dev)
 {
 	return (dev->features & NETIF_F_ALL_CSUM) != 0;
 }
+EXPORT_SYMBOL(ethtool_op_get_tx_csum);
 
 int ethtool_op_set_tx_csum(struct net_device *dev, u32 data)
 {
@@ -1004,7 +1011,9 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 		break;
 	case ETHTOOL_GRXCSUM:
 		rc = ethtool_get_value(dev, useraddr, ethcmd,
-				       dev->ethtool_ops->get_rx_csum);
+				       (dev->ethtool_ops->get_rx_csum ?
+					dev->ethtool_ops->get_rx_csum :
+					ethtool_op_get_rx_csum));
 		break;
 	case ETHTOOL_SRXCSUM:
 		rc = ethtool_set_rx_csum(dev, useraddr);
@@ -1068,7 +1077,9 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 		break;
 	case ETHTOOL_GFLAGS:
 		rc = ethtool_get_value(dev, useraddr, ethcmd,
-				       dev->ethtool_ops->get_flags);
+				       (dev->ethtool_ops->get_flags ?
+					dev->ethtool_ops->get_flags :
+					ethtool_op_get_flags));
 		break;
 	case ETHTOOL_SFLAGS:
 		rc = ethtool_set_value(dev, useraddr,
@@ -1116,7 +1127,6 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 EXPORT_SYMBOL(ethtool_op_get_link);
 EXPORT_SYMBOL(ethtool_op_get_sg);
 EXPORT_SYMBOL(ethtool_op_get_tso);
-EXPORT_SYMBOL(ethtool_op_get_tx_csum);
 EXPORT_SYMBOL(ethtool_op_set_sg);
 EXPORT_SYMBOL(ethtool_op_set_tso);
 EXPORT_SYMBOL(ethtool_op_set_tx_csum);
