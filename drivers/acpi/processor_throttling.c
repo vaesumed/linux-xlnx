@@ -76,7 +76,7 @@ static int acpi_processor_update_tsd_coord(void)
 	struct acpi_tsd_package *pdomain, *match_pdomain;
 	struct acpi_processor_throttling *pthrottling, *match_pthrottling;
 
-	if (!alloc_cpumask_var(&covered_cpus, GFP_KERNEL))
+	if (!zalloc_cpumask_var(&covered_cpus, GFP_KERNEL))
 		return -ENOMEM;
 
 	/*
@@ -104,7 +104,6 @@ static int acpi_processor_update_tsd_coord(void)
 	if (retval)
 		goto err_ret;
 
-	cpumask_clear(covered_cpus);
 	for_each_possible_cpu(i) {
 		pr = per_cpu(processors, i);
 		if (!pr)
@@ -619,6 +618,8 @@ static int acpi_processor_get_throttling_fadt(struct acpi_processor *pr)
 	u32 duty_mask = 0;
 	u32 duty_value = 0;
 
+	WARN_ON_ONCE(!irqs_disabled());
+
 	if (!pr)
 		return -EINVAL;
 
@@ -630,8 +631,6 @@ static int acpi_processor_get_throttling_fadt(struct acpi_processor *pr)
 	duty_mask = pr->throttling.state_count - 1;
 
 	duty_mask <<= pr->throttling.duty_offset;
-
-	local_irq_disable();
 
 	value = inl(pr->throttling.address);
 
@@ -648,8 +647,6 @@ static int acpi_processor_get_throttling_fadt(struct acpi_processor *pr)
 	}
 
 	pr->throttling.state = state;
-
-	local_irq_enable();
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 			  "Throttling state is T%d (%d%% throttling applied)\n",
@@ -854,10 +851,21 @@ static int acpi_processor_get_throttling_ptc(struct acpi_processor *pr)
 	return 0;
 }
 
+struct get_throttling {
+	struct acpi_processor *pr;
+	int ret;
+};
+
+static void get_throttling(void *_gt)
+{
+	struct get_throttling *gt = _gt;
+
+	gt->ret = gt->pr->throttling.acpi_processor_get_throttling(gt->pr);
+}
+
 static int acpi_processor_get_throttling(struct acpi_processor *pr)
 {
-	cpumask_var_t saved_mask;
-	int ret;
+	struct get_throttling gt;
 
 	if (!pr)
 		return -EINVAL;
@@ -865,21 +873,9 @@ static int acpi_processor_get_throttling(struct acpi_processor *pr)
 	if (!pr->flags.throttling)
 		return -ENODEV;
 
-	if (!alloc_cpumask_var(&saved_mask, GFP_KERNEL))
-		return -ENOMEM;
-
-	/*
-	 * Migrate task to the cpu pointed by pr.
-	 */
-	cpumask_copy(saved_mask, &current->cpus_allowed);
-	/* FIXME: use work_on_cpu() */
-	set_cpus_allowed_ptr(current, cpumask_of(pr->id));
-	ret = pr->throttling.acpi_processor_get_throttling(pr);
-	/* restore the previous state */
-	set_cpus_allowed_ptr(current, saved_mask);
-	free_cpumask_var(saved_mask);
-
-	return ret;
+	gt.pr = pr;
+	smp_call_function_single(pr->id, get_throttling, &gt, 1);
+	return gt.ret;
 }
 
 static int acpi_processor_get_fadt_info(struct acpi_processor *pr)
@@ -923,6 +919,8 @@ static int acpi_processor_set_throttling_fadt(struct acpi_processor *pr,
 	u32 duty_mask = 0;
 	u32 duty_value = 0;
 
+	WARN_ON_ONCE(!irqs_disabled());
+
 	if (!pr)
 		return -EINVAL;
 
@@ -952,8 +950,6 @@ static int acpi_processor_set_throttling_fadt(struct acpi_processor *pr,
 		duty_mask = ~duty_mask;
 	}
 
-	local_irq_disable();
-
 	/*
 	 * Disable throttling by writing a 0 to bit 4.  Note that we must
 	 * turn it off before you can change the duty_value.
@@ -978,8 +974,6 @@ static int acpi_processor_set_throttling_fadt(struct acpi_processor *pr,
 	}
 
 	pr->throttling.state = state;
-
-	local_irq_enable();
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 			  "Throttling state set to T%d (%d%%)\n", state,
@@ -1020,9 +1014,23 @@ static int acpi_processor_set_throttling_ptc(struct acpi_processor *pr,
 	return 0;
 }
 
+struct set_throttling_info {
+	struct acpi_processor *pr;
+	struct acpi_processor_throttling *p_throttling;
+	int target_state;
+	int ret;
+};
+
+static void set_throttling(void *_sti)
+{
+	struct set_throttling_info *s = _sti;
+
+	s->ret = s->p_throttling->acpi_processor_set_throttling(s->pr,
+								s->target_state);
+}
+
 int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 {
-	cpumask_var_t saved_mask;
 	int ret = 0;
 	unsigned int i;
 	struct acpi_processor *match_pr;
@@ -1039,15 +1047,9 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 	if ((state < 0) || (state > (pr->throttling.state_count - 1)))
 		return -EINVAL;
 
-	if (!alloc_cpumask_var(&saved_mask, GFP_KERNEL))
+	if (!alloc_cpumask_var(&online_throttling_cpus, GFP_KERNEL))
 		return -ENOMEM;
 
-	if (!alloc_cpumask_var(&online_throttling_cpus, GFP_KERNEL)) {
-		free_cpumask_var(saved_mask);
-		return -ENOMEM;
-	}
-
-	cpumask_copy(saved_mask, &current->cpus_allowed);
 	t_state.target_state = state;
 	p_throttling = &(pr->throttling);
 	cpumask_and(online_throttling_cpus, cpu_online_mask,
@@ -1069,10 +1071,10 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 	 * it can be called only for the cpu pointed by pr.
 	 */
 	if (p_throttling->shared_type == DOMAIN_COORD_TYPE_SW_ANY) {
-		/* FIXME: use work_on_cpu() */
-		set_cpus_allowed_ptr(current, cpumask_of(pr->id));
-		ret = p_throttling->acpi_processor_set_throttling(pr,
-						t_state.target_state);
+		struct set_throttling_info sti
+			= { pr, p_throttling, t_state.target_state };
+		smp_call_function_single(pr->id, set_throttling, &sti, 1);
+		ret = sti.ret;
 	} else {
 		/*
 		 * When the T-state coordination is SW_ALL or HW_ALL,
@@ -1080,6 +1082,8 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 		 * cpus.
 		 */
 		for_each_cpu(i, online_throttling_cpus) {
+			struct set_throttling_info sti;
+
 			match_pr = per_cpu(processors, i);
 			/*
 			 * If the pointer is invalid, we will report the
@@ -1101,11 +1105,11 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 				continue;
 			}
 			t_state.cpu = i;
-			/* FIXME: use work_on_cpu() */
-			set_cpus_allowed_ptr(current, cpumask_of(i));
-			ret = match_pr->throttling.
-				acpi_processor_set_throttling(
-				match_pr, t_state.target_state);
+			sti.pr = match_pr;
+			sti.p_throttling = &match_pr->throttling;
+			sti.target_state = t_state.target_state;
+			smp_call_function_single(i, set_throttling, &sti, 1);
+			ret = sti.ret;
 		}
 	}
 	/*
@@ -1119,11 +1123,6 @@ int acpi_processor_set_throttling(struct acpi_processor *pr, int state)
 		acpi_processor_throttling_notifier(THROTTLING_POSTCHANGE,
 							&t_state);
 	}
-	/* restore the previous state */
-	/* FIXME: use work_on_cpu() */
-	set_cpus_allowed_ptr(current, saved_mask);
-	free_cpumask_var(online_throttling_cpus);
-	free_cpumask_var(saved_mask);
 	return ret;
 }
 
