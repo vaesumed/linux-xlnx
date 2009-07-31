@@ -70,7 +70,7 @@
 #define IRQ_CIR		PXA_IRQ(34)	/* Consumer IR */
 #define IRQ_TSI		PXA_IRQ(36)	/* Touch Screen Interface (PXA320) */
 #define IRQ_USIM2	PXA_IRQ(38)	/* USIM2 Controller */
-#define IRQ_GRPHICS	PXA_IRQ(39)	/* Graphics Controller */
+#define IRQ_GCU		PXA_IRQ(39)	/* Graphics Controller */
 #define IRQ_MMC2	PXA_IRQ(41)	/* MMC2 Controller */
 #define IRQ_1WIRE	PXA_IRQ(44)	/* 1-Wire Controller */
 #define IRQ_NAND	PXA_IRQ(45)	/* NAND Controller */
@@ -105,6 +105,8 @@
 #define IRQ_BOARD_END		(IRQ_BOARD_START + 70)
 #elif defined(CONFIG_MACH_ZYLONITE)
 #define IRQ_BOARD_END		(IRQ_BOARD_START + 32)
+#elif defined(CONFIG_PXA_EZX)
+#define IRQ_BOARD_END		(IRQ_BOARD_START + 23)
 #else
 #define IRQ_BOARD_END		(IRQ_BOARD_START + 16)
 #endif
