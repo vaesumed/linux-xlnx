@@ -558,7 +558,7 @@ static void p4_setup_ctrs(struct op_x86_model_spec const *model,
 	}
 
 	/* clear the cccrs we will use */
-	for (i = 0 ; i < num_counters ; i++) {
+	for (i = 0; i < num_counters; i++) {
 		if (unlikely(!msrs->controls[i].addr))
 			continue;
 		rdmsr(p4_counters[VIRT_CTR(stag, i)].cccr_address, low, high);
@@ -575,12 +575,12 @@ static void p4_setup_ctrs(struct op_x86_model_spec const *model,
 	}
 
 	/* setup all counters */
-	for (i = 0 ; i < num_counters ; ++i) {
+	for (i = 0; i < num_counters; ++i) {
 		if (counter_config[i].enabled && msrs->controls[i].addr) {
 			reset_value[i] = counter_config[i].count;
 			pmc_setup_one_p4_counter(i);
 			wrmsrl(p4_counters[VIRT_CTR(stag, i)].counter_address,
-			       -(s64)counter_config[i].count);
+			       -(u64)counter_config[i].count);
 		} else {
 			reset_value[i] = 0;
 		}
@@ -625,11 +625,11 @@ static int p4_check_ctrs(struct pt_regs * const regs,
 		if (CCCR_OVF_P(low) || !(ctr & OP_CTR_OVERFLOW)) {
 			oprofile_add_sample(regs, i);
 			wrmsrl(p4_counters[real].counter_address,
-			       -(s64)reset_value[i]);
+			       -(u64)reset_value[i]);
 			CCCR_CLEAR_OVF(low);
 			wrmsr(p4_counters[real].cccr_address, low, high);
 			wrmsrl(p4_counters[real].counter_address,
-			       -(s64)reset_value[i]);
+			       -(u64)reset_value[i]);
 		}
 	}
 
@@ -678,7 +678,7 @@ static void p4_shutdown(struct op_msrs const * const msrs)
 {
 	int i;
 
-	for (i = 0 ; i < num_counters ; ++i) {
+	for (i = 0; i < num_counters; ++i) {
 		if (msrs->counters[i].addr)
 			release_perfctr_nmi(msrs->counters[i].addr);
 	}
@@ -687,7 +687,7 @@ static void p4_shutdown(struct op_msrs const * const msrs)
 	 * conjunction with the counter registers (hence the starting offset).
 	 * This saves a few bits.
 	 */
-	for (i = num_counters ; i < num_controls ; ++i) {
+	for (i = num_counters; i < num_controls; ++i) {
 		if (msrs->controls[i].addr)
 			release_evntsel_nmi(msrs->controls[i].addr);
 	}
@@ -695,7 +695,7 @@ static void p4_shutdown(struct op_msrs const * const msrs)
 
 
 #ifdef CONFIG_SMP
-struct op_x86_model_spec const op_p4_ht2_spec = {
+struct op_x86_model_spec op_p4_ht2_spec = {
 	.num_counters		= NUM_COUNTERS_HT2,
 	.num_controls		= NUM_CONTROLS_HT2,
 	.fill_in_addresses	= &p4_fill_in_addresses,
@@ -707,7 +707,7 @@ struct op_x86_model_spec const op_p4_ht2_spec = {
 };
 #endif
 
-struct op_x86_model_spec const op_p4_spec = {
+struct op_x86_model_spec op_p4_spec = {
 	.num_counters		= NUM_COUNTERS_NON_HT,
 	.num_controls		= NUM_CONTROLS_NON_HT,
 	.fill_in_addresses	= &p4_fill_in_addresses,
