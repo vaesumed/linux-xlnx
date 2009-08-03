@@ -244,7 +244,7 @@ static int serial_open (struct tty_struct *tty, struct file *filp)
 
 		/* only call the device specific open if this
 		 * is the first time the port is opened */
-		retval = serial->type->open(tty, port, filp);
+		retval = serial->type->open(tty, port);
 		if (retval)
 			goto bailout_interface_put;
 		mutex_unlock(&serial->disc_mutex);
@@ -316,16 +316,19 @@ static void serial_do_down(struct usb_serial_port *port)
  *
  *	Do the resource freeing and refcount dropping for the port. We must
  *	be careful about ordering and we must avoid freeing up the console.
+ *
+ *	Called when the last tty kref is dropped.
  */
 
-static void serial_do_free(struct usb_serial_port *port)
+static void serial_do_free(struct tty_struct *tty)
 {
+	struct usb_serial_port *port = tty->driver_data;
 	struct usb_serial *serial;
 	struct module *owner;
 
 	/* The console is magical, do not hang up the console hardware
 	   or there will be tears */
-	if (port->console)
+	if (port == NULL || port->console)
 		return;
 
 	serial = port->serial;
@@ -350,30 +353,12 @@ static void serial_close(struct tty_struct *tty, struct file *filp)
 
 	dbg("%s - port %d", __func__, port->number);
 
-	/* FIXME:
-	   This leaves a very narrow race. Really we should do the
-	   serial_do_free() on tty->shutdown(), but tty->shutdown can
-	   be called from IRQ context and serial_do_free can sleep.
-
-	   The right fix is probably to make the tty free (which is rare)
-	   and thus tty->shutdown() occur via a work queue and simplify all
-	   the drivers that use it.
-	*/
-	if (tty_hung_up_p(filp)) {
-		/* serial_hangup already called serial_down at this point.
-		   Another user may have already reopened the port but
-		   serial_do_free is refcounted */
-		serial_do_free(port);
-		return;
-	}
-
 	if (tty_port_close_start(&port->port, tty, filp) == 0)
 		return;
-
 	serial_do_down(port);		
 	tty_port_close_end(&port->port, tty);
 	tty_port_tty_set(&port->port, NULL);
-	serial_do_free(port);
+
 }
 
 static void serial_hangup(struct tty_struct *tty)
@@ -735,6 +720,41 @@ static const struct tty_port_operations serial_port_ops = {
 	.carrier_raised = serial_carrier_raised,
 	.dtr_rts = serial_dtr_rts,
 };
+
+/**
+ *	serial_install		-	install tty
+ *	@driver: the driver (USB in our case)
+ *	@tty: the tty being created
+ *
+ *	Create the termios objects for this tty. We use the default USB
+ *	serial ones but permit them to be overriddenby serial->type->termios.
+ *	This lets us remove all the ugly hackery
+ */
+
+static int serial_install(struct tty_driver *driver, struct tty_struct *tty)
+{
+	int idx = tty->index;
+	struct usb_serial *serial;
+	int retval;
+
+	/* If the termios setup has yet to be done */
+	if (tty->driver->termios[idx] == NULL) {
+		/* perform the standard setup */
+		retval = tty_init_termios(tty);
+		if (retval)
+			return retval;
+		/* allow the driver to update it */
+		serial = usb_serial_get_by_index(tty->index);
+		if (serial->type->init_termios)
+			serial->type->init_termios(tty);
+		usb_serial_put(serial);
+	}
+	/* Final install (we use the default method) */
+	tty_driver_kref_get(driver);
+	tty->count++;
+	driver->ttys[idx] = tty;
+	return 0;
+}
 
 int usb_serial_probe(struct usb_interface *interface,
 			       const struct usb_device_id *id)
@@ -1161,10 +1181,7 @@ void usb_serial_disconnect(struct usb_interface *interface)
 		if (port) {
 			struct tty_struct *tty = tty_port_tty_get(&port->port);
 			if (tty) {
-				/* The hangup will occur asynchronously but
-				   the object refcounts will sort out all the
-				   cleanup */
-				tty_hangup(tty);
+				tty_vhangup(tty);
 				tty_kref_put(tty);
 			}
 			kill_traffic(port);
@@ -1246,6 +1263,8 @@ static const struct tty_operations serial_ops = {
 	.chars_in_buffer =	serial_chars_in_buffer,
 	.tiocmget =		serial_tiocmget,
 	.tiocmset =		serial_tiocmset,
+	.shutdown = 		serial_do_free,
+	.install = 		serial_install,
 	.proc_fops =		&serial_proc_fops,
 };
 
