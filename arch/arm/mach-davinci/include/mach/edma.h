@@ -139,6 +139,54 @@ struct edmacc_param {
 #define DAVINCI_DMA_PWM1                 53
 #define DAVINCI_DMA_PWM2                 54
 
+/* DA830 specific EDMA3 information */
+#define EDMA_DA830_NUM_DMACH		32
+#define EDMA_DA830_NUM_TCC		32
+#define EDMA_DA830_NUM_PARAMENTRY	128
+#define EDMA_DA830_NUM_EVQUE		2
+#define EDMA_DA830_NUM_TC		2
+#define EDMA_DA830_CHMAP_EXIST		0
+#define EDMA_DA830_NUM_REGIONS		4
+#define DA830_DMACH2EVENT_MAP0		0x000FC03Fu
+#define DA830_DMACH2EVENT_MAP1		0x00000000u
+#define DA830_EDMA_ARM_OWN		0x30FFCCFFu
+
+/* DA830 specific EDMA3 Events Information */
+enum DA830_edma_ch {
+	DA830_DMACH_MCASP0_RX,
+	DA830_DMACH_MCASP0_TX,
+	DA830_DMACH_MCASP1_RX,
+	DA830_DMACH_MCASP1_TX,
+	DA830_DMACH_MCASP2_RX,
+	DA830_DMACH_MCASP2_TX,
+	DA830_DMACH_GPIO_BNK0INT,
+	DA830_DMACH_GPIO_BNK1INT,
+	DA830_DMACH_UART0_RX,
+	DA830_DMACH_UART0_TX,
+	DA830_DMACH_TMR64P0_EVTOUT12,
+	DA830_DMACH_TMR64P0_EVTOUT34,
+	DA830_DMACH_UART1_RX,
+	DA830_DMACH_UART1_TX,
+	DA830_DMACH_SPI0_RX,
+	DA830_DMACH_SPI0_TX,
+	DA830_DMACH_MMCSD_RX,
+	DA830_DMACH_MMCSD_TX,
+	DA830_DMACH_SPI1_RX,
+	DA830_DMACH_SPI1_TX,
+	DA830_DMACH_DMAX_EVTOUT6,
+	DA830_DMACH_DMAX_EVTOUT7,
+	DA830_DMACH_GPIO_BNK2INT,
+	DA830_DMACH_GPIO_BNK3INT,
+	DA830_DMACH_I2C0_RX,
+	DA830_DMACH_I2C0_TX,
+	DA830_DMACH_I2C1_RX,
+	DA830_DMACH_I2C1_TX,
+	DA830_DMACH_GPIO_BNK4INT,
+	DA830_DMACH_GPIO_BNK5INT,
+	DA830_DMACH_UART2_RX,
+	DA830_DMACH_UART2_TX
+};
+
 /*ch_status paramater of callback function possible values*/
 #define DMA_COMPLETE 1
 #define DMA_CC_ERROR 2
@@ -170,6 +218,10 @@ enum sync_dimension {
 	ABSYNC = 1
 };
 
+#define EDMA_CTLR_CHAN(ctlr, chan)	(((ctlr) << 16) | (chan))
+#define EDMA_CTLR(i)			((i) >> 16)
+#define EDMA_CHAN_SLOT(i)		((i) & 0xffff)
+
 #define EDMA_CHANNEL_ANY		-1	/* for edma_alloc_channel() */
 #define EDMA_SLOT_ANY			-1	/* for edma_alloc_slot() */
 
@@ -180,7 +232,7 @@ int edma_alloc_channel(int channel,
 void edma_free_channel(unsigned channel);
 
 /* alloc/free parameter RAM slots */
-int edma_alloc_slot(int slot);
+int edma_alloc_slot(unsigned ctlr, int slot);
 void edma_free_slot(unsigned slot);
 
 /* calls that operate on part of a parameter RAM slot */
@@ -216,9 +268,12 @@ struct edma_soc_info {
 	unsigned	n_region;
 	unsigned	n_slot;
 	unsigned	n_tc;
+	unsigned	n_cc;
 
 	/* list of channels with no even trigger; terminated by "-1" */
 	const s8	*noevent;
+	const s8	(*queue_tc_mapping)[2];
+	const s8	(*queue_priority_mapping)[2];
 };
 
 #endif
