@@ -45,7 +45,7 @@
 // *** If you have a solution for the bug in current version of driver, please mail to me.
 // Otherwise post to forum in ralinktech's web site(www.ralinktech.com) and let all users help you. ***
 MODULE_AUTHOR("Paul Lin <paul_lin@ralinktech.com>");
-MODULE_DESCRIPTION("RT2870 Wireless Lan Linux Driver");
+MODULE_DESCRIPTION(RT28xx_CHIP_NAME " Wireless LAN Linux Driver");
 MODULE_LICENSE("GPL");
 #ifdef MODULE_VERSION
 MODULE_VERSION(STA_DRIVER_VERSION);
@@ -235,7 +235,7 @@ INT MlmeThread(
 	DBGPRINT(RT_DEBUG_TRACE,( "<---%s\n",__func__));
 
 #ifndef RT30xx
-	pObj->MLMEThr_task = NULL;
+	pObj->MLMEThr_pid = THREAD_PID_INIT_VALUE;
 #endif
 #ifdef RT30xx
 	pObj->MLMEThr_pid = NULL;
@@ -348,7 +348,7 @@ INT RTUSBCmdThread(
 	DBGPRINT(RT_DEBUG_TRACE,( "<---RTUSBCmdThread\n"));
 
 #ifndef RT30xx
-	pObj->RTUSBCmdThr_task = NULL;
+	pObj->RTUSBCmdThr_pid = THREAD_PID_INIT_VALUE;
 #endif
 #ifdef RT30xx
 	pObj->RTUSBCmdThr_pid = NULL;
@@ -447,7 +447,7 @@ INT TimerQThread(
 	DBGPRINT(RT_DEBUG_TRACE,( "<---%s\n",__func__));
 
 #ifndef RT30xx
-	pObj->TimerQThr_task = NULL;
+	pObj->TimerQThr_pid = THREAD_PID_INIT_VALUE;
 #endif
 #ifdef RT30xx
 	pObj->TimerQThr_pid = NULL;
@@ -883,46 +883,69 @@ VOID RT28xxThreadTerminate(
 
 	// Terminate Threads
 #ifndef RT30xx
-	BUG_ON(pObj->TimerQThr_task == NULL);
-	CHECK_PID_LEGALITY(task_pid(pObj->TimerQThr_task))
+	CHECK_PID_LEGALITY(pObj->TimerQThr_pid)
 	{
 		POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
 
-		printk(KERN_DEBUG "Terminate the TimerQThr pid=%d!\n",
-			pid_nr(task_pid(pObj->TimerQThr_task)));
+		printk("Terminate the TimerQThr_pid=%d!\n", GET_PID_NUMBER(pObj->TimerQThr_pid));
 		mb();
 		pAd->TimerFunc_kill = 1;
 		mb();
-		kthread_stop(pObj->TimerQThr_task);
-		pObj->TimerQThr_task = NULL;
+		ret = KILL_THREAD_PID(pObj->TimerQThr_pid, SIGTERM, 1);
+		if (ret)
+		{
+			printk(KERN_WARNING "%s: unable to stop TimerQThread, pid=%d, ret=%d!\n",
+					pAd->net_dev->name, GET_PID_NUMBER(pObj->TimerQThr_pid), ret);
+		}
+		else
+		{
+			wait_for_completion(&pAd->TimerQComplete);
+			pObj->TimerQThr_pid = THREAD_PID_INIT_VALUE;
+		}
 	}
 
-	BUG_ON(pObj->MLMEThr_task == NULL);
-	CHECK_PID_LEGALITY(task_pid(pObj->MLMEThr_task))
+	CHECK_PID_LEGALITY(pObj->MLMEThr_pid)
 	{
-		printk(KERN_DEBUG "Terminate the MLMEThr pid=%d!\n",
-			pid_nr(task_pid(pObj->MLMEThr_task)));
+		printk("Terminate the MLMEThr_pid=%d!\n", GET_PID_NUMBER(pObj->MLMEThr_pid));
 		mb();
 		pAd->mlme_kill = 1;
 		//RT28XX_MLME_HANDLER(pAd);
 		mb();
-		kthread_stop(pObj->MLMEThr_task);
-		pObj->MLMEThr_task = NULL;
+		ret = KILL_THREAD_PID(pObj->MLMEThr_pid, SIGTERM, 1);
+		if (ret)
+		{
+			printk (KERN_WARNING "%s: unable to Mlme thread, pid=%d, ret=%d!\n",
+					pAd->net_dev->name, GET_PID_NUMBER(pObj->MLMEThr_pid), ret);
+		}
+		else
+		{
+			//wait_for_completion (&pAd->notify);
+			wait_for_completion (&pAd->mlmeComplete);
+			pObj->MLMEThr_pid = THREAD_PID_INIT_VALUE;
+		}
 	}
 
-	BUG_ON(pObj->RTUSBCmdThr_task == NULL);
-	CHECK_PID_LEGALITY(task_pid(pObj->RTUSBCmdThr_task))
+	CHECK_PID_LEGALITY(pObj->RTUSBCmdThr_pid)
 	{
-		printk(KERN_DEBUG "Terminate the RTUSBCmdThr pid=%d!\n",
-			pid_nr(task_pid(pObj->RTUSBCmdThr_task)));
+		printk("Terminate the RTUSBCmdThr_pid=%d!\n", GET_PID_NUMBER(pObj->RTUSBCmdThr_pid));
 		mb();
 		NdisAcquireSpinLock(&pAd->CmdQLock);
 		pAd->CmdQ.CmdQState = RT2870_THREAD_STOPED;
 		NdisReleaseSpinLock(&pAd->CmdQLock);
 		mb();
 		//RTUSBCMDUp(pAd);
-		kthread_stop(pObj->RTUSBCmdThr_task);
-		pObj->RTUSBCmdThr_task = NULL;
+		ret = KILL_THREAD_PID(pObj->RTUSBCmdThr_pid, SIGTERM, 1);
+		if (ret)
+		{
+			printk(KERN_WARNING "%s: unable to RTUSBCmd thread, pid=%d, ret=%d!\n",
+					pAd->net_dev->name, GET_PID_NUMBER(pObj->RTUSBCmdThr_pid), ret);
+		}
+		else
+		{
+			//wait_for_completion (&pAd->notify);
+			wait_for_completion (&pAd->CmdQComplete);
+			pObj->RTUSBCmdThr_pid = THREAD_PID_INIT_VALUE;
+		}
 	}
 #endif
 #ifdef RT30xx
@@ -1045,7 +1068,7 @@ BOOLEAN RT28XXChipsetCheck(
 			dev_p->descriptor.idProduct == rtusb_usb_id[i].idProduct)
 		{
 #ifndef RT30xx
-			printk(KERN_DEBUG "rt2870: idVendor = 0x%x, idProduct = 0x%x\n",
+			printk("rt2870: idVendor = 0x%x, idProduct = 0x%x\n",
 #endif
 #ifdef RT30xx
 			printk("rt2870: idVendor = 0x%x, idProduct = 0x%x\n",
@@ -1418,7 +1441,7 @@ VOID RT2870_BssBeaconStart(
 		pAd->CommonCfg.BeaconAdjust = 0;
 		pAd->CommonCfg.BeaconFactor = 0xffffffff / (pAd->CommonCfg.BeaconPeriod << 10);
 		pAd->CommonCfg.BeaconRemain = (0xffffffff % (pAd->CommonCfg.BeaconPeriod << 10)) + 1;
-		printk("RT2870_BssBeaconStart:BeaconFactor=%d, BeaconRemain=%d!\n", pAd->CommonCfg.BeaconFactor, pAd->CommonCfg.BeaconRemain);
+		printk(RT28xx_CHIP_NAME "_BssBeaconStart:BeaconFactor=%d, BeaconRemain=%d!\n", pAd->CommonCfg.BeaconFactor, pAd->CommonCfg.BeaconRemain);
 		RTMPSetTimer(&pAd->CommonCfg.BeaconUpdateTimer, pAd->CommonCfg.BeaconPeriod);
 
 	}
