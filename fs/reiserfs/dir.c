@@ -51,6 +51,46 @@ static inline bool is_privroot_deh(struct dentry *dir,
 	        deh->deh_objectid == INODE_PKEY(privroot->d_inode)->k_objectid);
 }
 
+/*
+ * The first entry will be the first one to be copied in the user buffer,
+ * hence the first time it is touched by reiserfs_readdir_dentry(). We assume
+ * the buffer has chances to be swapped out at this time and not after,
+ * unless we switch to another page in further entry.
+ * This assumption lead us to:
+ *
+ * - while the page is swapped in, we want the filesystem to be available
+ *   for others, we then relax the write lock.
+ * - because we relax the lock, the entry from which we have read the name
+ *   may have moved somewhere else, we then copy the name in a temporary buffer
+ */
+static int
+fill_first_entry(void * dirent, const char *d_name, int d_reclen, loff_t d_off,
+		 u64 d_ino, filldir_t filldir, struct super_block *sb)
+{
+	int ret;
+	char *local_buf;
+	char small_buf[32];	/* avoid kmalloc if we can */
+
+	if (d_reclen <= 32) {
+		local_buf = small_buf;
+	} else {
+		local_buf = kmalloc(d_reclen, GFP_NOFS);
+		if (!local_buf)
+			return -ENOMEM;
+	}
+
+	memcpy(local_buf, d_name, d_reclen);
+
+	reiserfs_write_unlock(sb);
+	ret = filldir(dirent, local_buf, d_reclen, d_off, d_ino, DT_UNKNOWN);
+	reiserfs_write_lock(sb);
+
+	if (local_buf != small_buf)
+		kfree(local_buf);
+
+	return ret;
+}
+
 int reiserfs_readdir_dentry(struct dentry *dentry, void *dirent,
 			   filldir_t filldir, loff_t *pos)
 {
@@ -62,9 +102,7 @@ int reiserfs_readdir_dentry(struct dentry *dentry, void *dirent,
 	const struct reiserfs_key *rkey;
 	struct item_head *ih, tmp_ih;
 	int search_res;
-	char *local_buf;
 	loff_t next_pos;
-	char small_buf[32];	/* avoid kmalloc if we can */
 	struct reiserfs_dir_entry de;
 	int ret = 0;
 
@@ -79,6 +117,8 @@ int reiserfs_readdir_dentry(struct dentry *dentry, void *dirent,
 
 	path_to_entry.reada = PATH_READA;
 	while (1) {
+	      bool first_entry = true;
+
 	      research:
 		/* search the directory item, containing entry with specified key */
 		search_res =
@@ -154,43 +194,38 @@ int reiserfs_readdir_dentry(struct dentry *dentry, void *dirent,
 				d_off = deh_offset(deh);
 				*pos = d_off;
 				d_ino = deh_objectid(deh);
-				if (d_reclen <= 32) {
-					local_buf = small_buf;
-				} else {
-					local_buf = kmalloc(d_reclen,
-							    GFP_NOFS);
-					if (!local_buf) {
+
+				/*
+				 * next entry should be looked for with such
+				 * offset
+				 */
+				next_pos = deh_offset(deh) + 1;
+
+				if (first_entry) {
+					int fillret;
+
+					fillret = fill_first_entry(dirent,
+								   d_name,
+								   d_reclen,
+								   d_off, d_ino,
+								   filldir,
+								   inode->i_sb);
+					if (fillret == -ENOMEM) {
 						pathrelse(&path_to_entry);
 						ret = -ENOMEM;
 						goto out;
 					}
-					if (item_moved(&tmp_ih, &path_to_entry)) {
-						kfree(local_buf);
-						goto research;
-					}
-				}
-				// Note, that we copy name to user space via temporary
-				// buffer (local_buf) because filldir will block if
-				// user space buffer is swapped out. At that time
-				// entry can move to somewhere else
-				memcpy(local_buf, d_name, d_reclen);
-				if (filldir
-				    (dirent, local_buf, d_reclen, d_off, d_ino,
-				     DT_UNKNOWN) < 0) {
-					if (local_buf != small_buf) {
-						kfree(local_buf);
-					}
-					goto end;
-				}
-				if (local_buf != small_buf) {
-					kfree(local_buf);
-				}
-				// next entry should be looked for with such offset
-				next_pos = deh_offset(deh) + 1;
+					if (fillret < 0)
+						goto end;
+					first_entry = false;
 
-				if (item_moved(&tmp_ih, &path_to_entry)) {
-					goto research;
+					if (item_moved(&tmp_ih, &path_to_entry))
+						goto research;
+					continue;
 				}
+				if (filldir(dirent, d_name, d_reclen, d_off,
+					    d_ino, DT_UNKNOWN) < 0)
+						goto end;
 			}	/* for */
 		}
 
