@@ -622,22 +622,27 @@ struct em28xx_board em28xx_boards[] = {
 	},
 	[EM2861_BOARD_PLEXTOR_PX_TV100U] = {
 		.name         = "Plextor ConvertX PX-TV100U",
-		.valid        = EM28XX_BOARD_NOT_VALIDATED,
 		.tuner_type   = TUNER_TNF_5335MF,
+		.xclk         = EM28XX_XCLK_I2S_MSB_TIMING |
+				EM28XX_XCLK_FREQUENCY_12MHZ,
 		.tda9887_conf = TDA9887_PRESENT,
 		.decoder      = EM28XX_TVP5150,
+		.has_msp34xx  = 1,
 		.input        = { {
 			.type     = EM28XX_VMUX_TELEVISION,
 			.vmux     = TVP5150_COMPOSITE0,
 			.amux     = EM28XX_AMUX_LINE_IN,
+			.gpio     = pinnacle_hybrid_pro_analog,
 		}, {
 			.type     = EM28XX_VMUX_COMPOSITE1,
 			.vmux     = TVP5150_COMPOSITE1,
 			.amux     = EM28XX_AMUX_LINE_IN,
+			.gpio     = pinnacle_hybrid_pro_analog,
 		}, {
 			.type     = EM28XX_VMUX_SVIDEO,
 			.vmux     = TVP5150_SVIDEO,
 			.amux     = EM28XX_AMUX_LINE_IN,
+			.gpio     = pinnacle_hybrid_pro_analog,
 		} },
 	},
 
@@ -1642,6 +1647,8 @@ struct usb_device_id em28xx_id_table[] = {
 			.driver_info = EM2861_BOARD_PLEXTOR_PX_TV100U },
 	{ USB_DEVICE(0x04bb, 0x0515),
 			.driver_info = EM2820_BOARD_IODATA_GVMVP_SZ },
+	{ USB_DEVICE(0xeb1a, 0x50a6),
+			.driver_info = EM2860_BOARD_GADMEI_UTV330 },
 	{ },
 };
 MODULE_DEVICE_TABLE(usb, em28xx_id_table);
@@ -1771,7 +1778,8 @@ static int em28xx_hint_sensor(struct em28xx *dev)
 	version = be16_to_cpu(version_be);
 
 	switch (version) {
-	case 0x8243:		/* mt9v011 640x480 1.3 Mpix sensor */
+	case 0x8232:		/* mt9v011 640x480 1.3 Mpix sensor */
+	case 0x8243:		/* mt9v011 rev B 640x480 1.3 Mpix sensor */
 		dev->model = EM2820_BOARD_SILVERCREST_WEBCAM;
 		sensor_name = "mt9v011";
 		dev->em28xx_sensor = EM28XX_MT9V011;
@@ -1876,9 +1884,8 @@ void em28xx_pre_card_setup(struct em28xx *dev)
 	/* request some modules */
 	switch (dev->model) {
 	case EM2861_BOARD_PLEXTOR_PX_TV100U:
-		/* FIXME guess */
-		/* Turn on analog audio output */
-		em28xx_write_reg(dev, EM28XX_R08_GPIO, 0xfd);
+		/* Sets the msp34xx I2S speed */
+		dev->i2s_speed = 2048000;
 		break;
 	case EM2861_BOARD_KWORLD_PVRTV_300U:
 	case EM2880_BOARD_KWORLD_DVB_305U:
