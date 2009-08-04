@@ -33,6 +33,35 @@ struct pt_regs {
 	unsigned long ipsw;	/* CR22 */
 };
 
+/* regset as seen by PTRACE_{GET|SET}REGS and coredumps */
+struct user_regset_struct {
+	unsigned long gr[32];
+	unsigned long sr[ 8];
+	unsigned long iaoq[2];
+	unsigned long iasq[2];
+	unsigned long sar;
+	unsigned long iir;
+	unsigned long isr;
+	unsigned long ior;
+	unsigned long cr22;
+	unsigned long  cr0;
+	unsigned long cr24;
+	unsigned long cr25;
+	unsigned long cr26;
+	unsigned long cr27;
+	unsigned long cr28;
+	unsigned long cr29;
+	unsigned long cr30;
+	unsigned long cr31;
+	unsigned long  cr8;
+	unsigned long  cr9;
+	unsigned long cr12;
+	unsigned long cr13;
+	unsigned long cr10;
+	unsigned long cr15;
+	unsigned long __pad0[16];	/* ELF_NGREG is 80, pad it out */
+};
+
 /*
  * The numbers chosen here are somewhat arbitrary but absolutely MUST
  * not overlap with any of the number assigned in <linux/ptrace.h>.
@@ -42,6 +71,10 @@ struct pt_regs {
  * since we have taken branch traps too)
  */
 #define PTRACE_SINGLEBLOCK	12	/* resume execution until next branch */
+#define PTRACE_GETREGS		13
+#define PTRACE_SETREGS		14
+#define PTRACE_GETFPREGS	18
+#define PTRACE_SETFPREGS	19
 
 #ifdef __KERNEL__
 
@@ -59,8 +92,11 @@ void user_enable_block_step(struct task_struct *task);
 #define user_mode(regs)			(((regs)->iaoq[0] & 3) ? 1 : 0)
 #define user_space(regs)		(((regs)->iasq[1] != 0) ? 1 : 0)
 #define instruction_pointer(regs)	((regs)->iaoq[0] & ~3)
+#define user_stack_pointer(regs)	((regs)->gr[30])
 unsigned long profile_pc(struct pt_regs *);
 extern void show_regs(struct pt_regs *);
-#endif
+
+
+#endif /* __KERNEL__ */
 
 #endif
