@@ -42,6 +42,9 @@
 #define AR_SUBVENDOR_ID_NEW_A	0x7065
 #define AR5416_MAGIC		0x19641014
 
+#define AR5416_DEVID_AR9287_PCI  0x002D
+#define AR5416_DEVID_AR9287_PCIE 0x002E
+
 /* Register read/write primitives */
 #define REG_WRITE(_ah, _reg, _val) ath9k_iowrite32((_ah), (_reg), (_val))
 #define REG_READ(_ah, _reg) ath9k_ioread32((_ah), (_reg))
@@ -95,6 +98,7 @@
 
 #define MAX_RATE_POWER              63
 #define AH_WAIT_TIMEOUT             100000 /* (us) */
+#define AH_TSF_WRITE_TIMEOUT        100    /* (us) */
 #define AH_TIME_QUANTUM             10
 #define AR_KEYTABLE_SIZE            128
 #define POWER_UP_TIME               200000
@@ -113,15 +117,14 @@
 
 enum wireless_mode {
 	ATH9K_MODE_11A = 0,
-	ATH9K_MODE_11B = 2,
-	ATH9K_MODE_11G = 3,
-	ATH9K_MODE_11NA_HT20 = 6,
-	ATH9K_MODE_11NG_HT20 = 7,
-	ATH9K_MODE_11NA_HT40PLUS = 8,
-	ATH9K_MODE_11NA_HT40MINUS = 9,
-	ATH9K_MODE_11NG_HT40PLUS = 10,
-	ATH9K_MODE_11NG_HT40MINUS = 11,
-	ATH9K_MODE_MAX
+	ATH9K_MODE_11G,
+	ATH9K_MODE_11NA_HT20,
+	ATH9K_MODE_11NG_HT20,
+	ATH9K_MODE_11NA_HT40PLUS,
+	ATH9K_MODE_11NA_HT40MINUS,
+	ATH9K_MODE_11NG_HT40PLUS,
+	ATH9K_MODE_11NG_HT40MINUS,
+	ATH9K_MODE_MAX,
 };
 
 enum ath9k_hw_caps {
@@ -400,6 +403,7 @@ struct ath_hw {
 	union {
 		struct ar5416_eeprom_def def;
 		struct ar5416_eeprom_4k map4k;
+		struct ar9287_eeprom_t map9287;
 	} eeprom;
 	const struct eeprom_ops *eep_ops;
 	enum ath9k_eep_map eep_map;
@@ -417,7 +421,6 @@ struct ath_hw {
 
 	enum nl80211_iftype opmode;
 	enum ath9k_power_mode power_mode;
-	enum ath9k_power_mode restore_mode;
 
 	struct ath9k_nfcal_hist nfCalHist[NUM_NF_READINGS];
 	struct ar5416Stats stats;

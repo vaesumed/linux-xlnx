@@ -254,9 +254,14 @@ int netxen_alloc_sw_resources(struct netxen_adapter *adapter)
 				rds_ring->skb_size =
 					NX_CT_DEFAULT_RX_BUF_LEN;
 			} else {
-				rds_ring->dma_size = RX_DMA_MAP_LEN;
+				if (NX_IS_REVISION_P3(adapter->ahw.revision_id))
+					rds_ring->dma_size =
+						NX_P3_RX_BUF_MAX_LEN;
+				else
+					rds_ring->dma_size =
+						NX_P2_RX_BUF_MAX_LEN;
 				rds_ring->skb_size =
-					MAX_RX_BUFFER_LENGTH;
+					rds_ring->dma_size + NET_IP_ALIGN;
 			}
 			break;
 
@@ -274,8 +279,8 @@ int netxen_alloc_sw_resources(struct netxen_adapter *adapter)
 
 		case RCV_RING_LRO:
 			rds_ring->num_desc = adapter->num_lro_rxd;
-			rds_ring->dma_size = RX_LRO_DMA_MAP_LEN;
-			rds_ring->skb_size = MAX_RX_LRO_BUFFER_LENGTH;
+			rds_ring->dma_size = NX_RX_LRO_BUFFER_LENGTH;
+			rds_ring->skb_size = rds_ring->dma_size + NET_IP_ALIGN;
 			break;
 
 		}
@@ -887,22 +892,10 @@ netxen_validate_firmware(struct netxen_adapter *adapter, const char *fwname)
 	return 0;
 }
 
-void netxen_request_firmware(struct netxen_adapter *adapter)
+static int
+netxen_p3_has_mn(struct netxen_adapter *adapter)
 {
 	u32 capability, flashed_ver;
-	u8 fw_type;
-	struct pci_dev *pdev = adapter->pdev;
-	int rc = 0;
-
-	if (NX_IS_REVISION_P2(adapter->ahw.revision_id)) {
-		fw_type = NX_P2_MN_ROMIMAGE;
-		goto request_fw;
-	} else {
-		fw_type = NX_P3_CT_ROMIMAGE;
-		goto request_fw;
-	}
-
-request_mn:
 	capability = 0;
 
 	netxen_rom_fast_read(adapter,
@@ -910,23 +903,35 @@ request_mn:
 	flashed_ver = NETXEN_DECODE_VERSION(flashed_ver);
 
 	if (flashed_ver >= NETXEN_VERSION_CODE(4, 0, 220)) {
+
 		capability = NXRD32(adapter, NX_PEG_TUNE_CAPABILITY);
-		if (capability & NX_PEG_TUNE_MN_PRESENT) {
-			fw_type = NX_P3_MN_ROMIMAGE;
-			goto request_fw;
-		}
+		if (capability & NX_PEG_TUNE_MN_PRESENT)
+			return 1;
+	}
+	return 0;
+}
+
+void netxen_request_firmware(struct netxen_adapter *adapter)
+{
+	u8 fw_type;
+	struct pci_dev *pdev = adapter->pdev;
+	int rc = 0;
+
+	if (NX_IS_REVISION_P2(adapter->ahw.revision_id)) {
+		fw_type = NX_P2_MN_ROMIMAGE;
+		goto request_fw;
 	}
 
-	fw_type = NX_FLASH_ROMIMAGE;
-	adapter->fw = NULL;
-	goto done;
+	fw_type = netxen_p3_has_mn(adapter) ?
+		NX_P3_MN_ROMIMAGE : NX_P3_CT_ROMIMAGE;
 
 request_fw:
 	rc = request_firmware(&adapter->fw, fw_name[fw_type], &pdev->dev);
 	if (rc != 0) {
-		if (fw_type == NX_P3_CT_ROMIMAGE) {
+		if (fw_type == NX_P3_MN_ROMIMAGE) {
 			msleep(1);
-			goto request_mn;
+			fw_type = NX_P3_CT_ROMIMAGE;
+			goto request_fw;
 		}
 
 		fw_type = NX_FLASH_ROMIMAGE;
@@ -938,9 +943,10 @@ request_fw:
 	if (rc != 0) {
 		release_firmware(adapter->fw);
 
-		if (fw_type == NX_P3_CT_ROMIMAGE) {
+		if (fw_type == NX_P3_MN_ROMIMAGE) {
 			msleep(1);
-			goto request_mn;
+			fw_type = NX_P3_CT_ROMIMAGE;
+			goto request_fw;
 		}
 
 		fw_type = NX_FLASH_ROMIMAGE;
@@ -960,19 +966,20 @@ netxen_release_firmware(struct netxen_adapter *adapter)
 		release_firmware(adapter->fw);
 }
 
-int netxen_initialize_adapter_offload(struct netxen_adapter *adapter)
+int netxen_init_dummy_dma(struct netxen_adapter *adapter)
 {
-	uint64_t addr;
-	uint32_t hi;
-	uint32_t lo;
+	u64 addr;
+	u32 hi, lo;
 
-	adapter->dummy_dma.addr =
-	    pci_alloc_consistent(adapter->pdev,
+	if (!NX_IS_REVISION_P2(adapter->ahw.revision_id))
+		return 0;
+
+	adapter->dummy_dma.addr = pci_alloc_consistent(adapter->pdev,
 				 NETXEN_HOST_DUMMY_DMA_SIZE,
 				 &adapter->dummy_dma.phys_addr);
 	if (adapter->dummy_dma.addr == NULL) {
-		printk("%s: ERROR: Could not allocate dummy DMA memory\n",
-		       __func__);
+		dev_err(&adapter->pdev->dev,
+			"ERROR: Could not allocate dummy DMA memory\n");
 		return -ENOMEM;
 	}
 
@@ -983,29 +990,41 @@ int netxen_initialize_adapter_offload(struct netxen_adapter *adapter)
 	NXWR32(adapter, CRB_HOST_DUMMY_BUF_ADDR_HI, hi);
 	NXWR32(adapter, CRB_HOST_DUMMY_BUF_ADDR_LO, lo);
 
-	if (NX_IS_REVISION_P3(adapter->ahw.revision_id)) {
-		uint32_t temp = 0;
-		NXWR32(adapter, CRB_HOST_DUMMY_BUF, temp);
-	}
-
 	return 0;
 }
 
-void netxen_free_adapter_offload(struct netxen_adapter *adapter)
+/*
+ * NetXen DMA watchdog control:
+ *
+ *	Bit 0		: enabled => R/O: 1 watchdog active, 0 inactive
+ *	Bit 1		: disable_request => 1 req disable dma watchdog
+ *	Bit 2		: enable_request =>  1 req enable dma watchdog
+ *	Bit 3-31	: unused
+ */
+void netxen_free_dummy_dma(struct netxen_adapter *adapter)
 {
 	int i = 100;
+	u32 ctrl;
+
+	if (!NX_IS_REVISION_P2(adapter->ahw.revision_id))
+		return;
 
 	if (!adapter->dummy_dma.addr)
 		return;
 
-	if (NX_IS_REVISION_P2(adapter->ahw.revision_id)) {
-		do {
-			if (dma_watchdog_shutdown_request(adapter) == 1)
-				break;
+	ctrl = NXRD32(adapter, NETXEN_DMA_WATCHDOG_CTRL);
+	if ((ctrl & 0x1) != 0) {
+		NXWR32(adapter, NETXEN_DMA_WATCHDOG_CTRL, (ctrl | 0x2));
+
+		while ((ctrl & 0x1) != 0) {
+
 			msleep(50);
-			if (dma_watchdog_shutdown_poll_result(adapter) == 1)
+
+			ctrl = NXRD32(adapter, NETXEN_DMA_WATCHDOG_CTRL);
+
+			if (--i == 0)
 				break;
-		} while (--i);
+		};
 	}
 
 	if (i) {
@@ -1014,10 +1033,8 @@ void netxen_free_adapter_offload(struct netxen_adapter *adapter)
 			    adapter->dummy_dma.addr,
 			    adapter->dummy_dma.phys_addr);
 		adapter->dummy_dma.addr = NULL;
-	} else {
-		printk(KERN_ERR "%s: dma_watchdog_shutdown failed\n",
-				adapter->netdev->name);
-	}
+	} else
+		dev_err(&adapter->pdev->dev, "dma_watchdog_shutdown failed\n");
 }
 
 int netxen_phantom_init(struct netxen_adapter *adapter, int pegtune_val)
@@ -1089,10 +1106,6 @@ int netxen_init_firmware(struct netxen_adapter *adapter)
 	NXWR32(adapter, CRB_NIC_MSI_MODE_HOST, MSI_MODE_MULTIFUNC);
 	NXWR32(adapter, CRB_MPORT_MODE, MPORT_MULTI_FUNCTION_MODE);
 	NXWR32(adapter, CRB_CMDPEG_STATE, PHAN_INITIALIZE_ACK);
-
-	if (adapter->fw_version >= NETXEN_VERSION_CODE(4, 0, 222)) {
-		adapter->capabilities = NXRD32(adapter, CRB_FW_CAPABILITIES_1);
-	}
 
 	return err;
 }
@@ -1303,6 +1316,7 @@ netxen_process_rcv_ring(struct nx_host_sds_ring *sds_ring, int max)
 		switch (opcode) {
 		case NETXEN_NIC_RXPKT_DESC:
 		case NETXEN_OLD_RXPKT_DESC:
+		case NETXEN_NIC_SYN_OFFLOAD:
 			break;
 		case NETXEN_NIC_RESPONSE_DESC:
 			netxen_handle_fw_message(desc_cnt, consumer, sds_ring);
@@ -1475,7 +1489,7 @@ netxen_post_rx_buffers(struct netxen_adapter *adapter, u32 ringid,
 		NXWR32(adapter, rds_ring->crb_rcv_producer,
 				(producer-1) & (rds_ring->num_desc-1));
 
-		if (adapter->fw_major < 4) {
+		if (NX_IS_REVISION_P2(adapter->ahw.revision_id)) {
 			/*
 			 * Write a doorbell msg to tell phanmon of change in
 			 * receive ring producer

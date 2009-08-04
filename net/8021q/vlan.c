@@ -225,12 +225,6 @@ int vlan_check_real_dev(struct net_device *real_dev, u16 vlan_id)
 		return -EOPNOTSUPP;
 	}
 
-	/* The real device must be up and operating in order to
-	 * assosciate a VLAN device with it.
-	 */
-	if (!(real_dev->flags & IFF_UP))
-		return -ENETDOWN;
-
 	if (__find_vlan_dev(real_dev, vlan_id) != NULL)
 		return -EEXIST;
 
@@ -465,6 +459,19 @@ static int vlan_device_event(struct notifier_block *unused, unsigned long event,
 				continue;
 
 			vlan_sync_address(dev, vlandev);
+		}
+		break;
+
+	case NETDEV_CHANGEMTU:
+		for (i = 0; i < VLAN_GROUP_ARRAY_LEN; i++) {
+			vlandev = vlan_group_get_device(grp, i);
+			if (!vlandev)
+				continue;
+
+			if (vlandev->mtu <= dev->mtu)
+				continue;
+
+			dev_set_mtu(vlandev, dev->mtu);
 		}
 		break;
 

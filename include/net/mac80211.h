@@ -241,6 +241,11 @@ struct ieee80211_bss_conf {
  *	it can be sent out.
  * @IEEE80211_TX_INTFL_RETRIED: completely internal to mac80211,
  *	used to indicate that a frame was already retried due to PS
+ * @IEEE80211_TX_INTFL_DONT_ENCRYPT: completely internal to mac80211,
+ *	used to indicate frame should not be encrypted
+ * @IEEE80211_TX_CTL_PSPOLL_RESPONSE: (internal?)
+ *	This frame is a response to a PS-poll frame and should be sent
+ *	although the station is in powersave mode.
  */
 enum mac80211_tx_control_flags {
 	IEEE80211_TX_CTL_REQ_TX_STATUS		= BIT(0),
@@ -259,6 +264,8 @@ enum mac80211_tx_control_flags {
 	IEEE80211_TX_INTFL_RCALGO		= BIT(13),
 	IEEE80211_TX_INTFL_NEED_TXPROCESSING	= BIT(14),
 	IEEE80211_TX_INTFL_RETRIED		= BIT(15),
+	IEEE80211_TX_INTFL_DONT_ENCRYPT		= BIT(16),
+	IEEE80211_TX_CTL_PSPOLL_RESPONSE	= BIT(17),
 };
 
 /**
@@ -397,6 +404,11 @@ static inline struct ieee80211_tx_info *IEEE80211_SKB_CB(struct sk_buff *skb)
 	return (struct ieee80211_tx_info *)skb->cb;
 }
 
+static inline struct ieee80211_rx_status *IEEE80211_SKB_RXCB(struct sk_buff *skb)
+{
+	return (struct ieee80211_rx_status *)skb->cb;
+}
+
 /**
  * ieee80211_tx_info_clear_status - clear TX status
  *
@@ -478,7 +490,7 @@ enum mac80211_rx_flags {
  *
  * The low-level driver should provide this information (the subset
  * supported by hardware) to the 802.11 code with each received
- * frame.
+ * frame, in the skb's control buffer (cb).
  *
  * @mactime: value in microseconds of the 64-bit Time Synchronization Function
  * 	(TSF) timer when the first data symbol (MPDU) arrived at the hardware.
@@ -1411,6 +1423,8 @@ enum ieee80211_ampdu_mlme_action {
  * @rfkill_poll: Poll rfkill hardware state. If you need this, you also
  *	need to set wiphy->rfkill_poll to %true before registration,
  *	and need to call wiphy_rfkill_set_hw_state() in the callback.
+ *
+ * @testmode_cmd: Implement a cfg80211 test mode command.
  */
 struct ieee80211_ops {
 	int (*tx)(struct ieee80211_hw *hw, struct sk_buff *skb);
@@ -1461,6 +1475,9 @@ struct ieee80211_ops {
 			    struct ieee80211_sta *sta, u16 tid, u16 *ssn);
 
 	void (*rfkill_poll)(struct ieee80211_hw *hw);
+#ifdef CONFIG_NL80211_TESTMODE
+	int (*testmode_cmd)(struct ieee80211_hw *hw, void *data, int len);
+#endif
 };
 
 /**
@@ -1606,9 +1623,11 @@ void ieee80211_free_hw(struct ieee80211_hw *hw);
  */
 void ieee80211_restart_hw(struct ieee80211_hw *hw);
 
-/* trick to avoid symbol clashes with the ieee80211 subsystem */
-void __ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb,
-		    struct ieee80211_rx_status *status);
+/*
+ * trick to avoid symbol clashes with the ieee80211 subsystem,
+ * use the inline below instead
+ */
+void __ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb);
 
 /**
  * ieee80211_rx - receive frame
@@ -1624,13 +1643,10 @@ void __ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb,
  *
  * @hw: the hardware this frame came in on
  * @skb: the buffer to receive, owned by mac80211 after this call
- * @status: status of this frame; the status pointer need not be valid
- *	after this function returns
  */
-static inline void ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb,
-				struct ieee80211_rx_status *status)
+static inline void ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb)
 {
-	__ieee80211_rx(hw, skb, status);
+	__ieee80211_rx(hw, skb);
 }
 
 /**
@@ -1644,13 +1660,8 @@ static inline void ieee80211_rx(struct ieee80211_hw *hw, struct sk_buff *skb,
  *
  * @hw: the hardware this frame came in on
  * @skb: the buffer to receive, owned by mac80211 after this call
- * @status: status of this frame; the status pointer need not be valid
- *	after this function returns and is not freed by mac80211,
- *	it is recommended that it points to a stack area
  */
-void ieee80211_rx_irqsafe(struct ieee80211_hw *hw,
-			  struct sk_buff *skb,
-			  struct ieee80211_rx_status *status);
+void ieee80211_rx_irqsafe(struct ieee80211_hw *hw, struct sk_buff *skb);
 
 /**
  * ieee80211_tx_status - transmit status callback
@@ -2090,6 +2101,29 @@ static inline int rate_supported(struct ieee80211_sta *sta,
 	return (sta == NULL || sta->supp_rates[band] & BIT(index));
 }
 
+/**
+ * rate_control_send_low - helper for drivers for management/no-ack frames
+ *
+ * Rate control algorithms that agree to use the lowest rate to
+ * send management frames and NO_ACK data with the respective hw
+ * retries should use this in the beginning of their mac80211 get_rate
+ * callback. If true is returned the rate control can simply return.
+ * If false is returned we guarantee that sta and sta and priv_sta is
+ * not null.
+ *
+ * Rate control algorithms wishing to do more intelligent selection of
+ * rate for multicast/broadcast frames may choose to not use this.
+ *
+ * @sta: &struct ieee80211_sta pointer to the target destination. Note
+ * 	that this may be null.
+ * @priv_sta: private rate control structure. This may be null.
+ * @txrc: rate control information we sholud populate for mac80211.
+ */
+bool rate_control_send_low(struct ieee80211_sta *sta,
+			   void *priv_sta,
+			   struct ieee80211_tx_rate_control *txrc);
+
+
 static inline s8
 rate_lowest_index(struct ieee80211_supported_band *sband,
 		  struct ieee80211_sta *sta)
@@ -2106,6 +2140,17 @@ rate_lowest_index(struct ieee80211_supported_band *sband,
 	return 0;
 }
 
+static inline
+bool rate_usable_index_exists(struct ieee80211_supported_band *sband,
+			      struct ieee80211_sta *sta)
+{
+	unsigned int i;
+
+	for (i = 0; i < sband->n_bitrates; i++)
+		if (rate_supported(sta, sband->band, i))
+			return true;
+	return false;
+}
 
 int ieee80211_rate_control_register(struct rate_control_ops *ops);
 void ieee80211_rate_control_unregister(struct rate_control_ops *ops);

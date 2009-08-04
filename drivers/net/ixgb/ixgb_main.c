@@ -1459,7 +1459,7 @@ ixgb_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 
 	if (skb->len <= 0) {
 		dev_kfree_skb(skb);
-		return 0;
+		return NETDEV_TX_OK;
 	}
 
 	if (unlikely(ixgb_maybe_stop_tx(netdev, &adapter->tx_ring,
@@ -2226,6 +2226,11 @@ static pci_ers_result_t ixgb_io_error_detected(struct pci_dev *pdev,
 {
 	struct net_device *netdev = pci_get_drvdata(pdev);
 	struct ixgb_adapter *adapter = netdev_priv(netdev);
+
+	netif_device_detach(netdev);
+
+	if (state == pci_channel_io_perm_failure)
+		return PCI_ERS_RESULT_DISCONNECT;
 
 	if (netif_running(netdev))
 		ixgb_down(adapter, true);
