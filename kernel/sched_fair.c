@@ -79,11 +79,6 @@ static const struct sched_class fair_sched_class;
  * CFS operations on generic schedulable entities:
  */
 
-static inline struct task_struct *task_of(struct sched_entity *se)
-{
-	return container_of(se, struct task_struct, se);
-}
-
 #ifdef CONFIG_FAIR_GROUP_SCHED
 
 /* cpu runqueue to which this cfs_rq is attached */
@@ -94,6 +89,14 @@ static inline struct rq *rq_of(struct cfs_rq *cfs_rq)
 
 /* An entity is a task if it doesn't "own" a runqueue */
 #define entity_is_task(se)	(!se->my_q)
+
+static inline struct task_struct *task_of(struct sched_entity *se)
+{
+#ifdef CONFIG_SCHED_DEBUG
+	WARN_ON_ONCE(!entity_is_task(se));
+#endif
+	return container_of(se, struct task_struct, se);
+}
 
 /* Walk up scheduling entities hierarchy */
 #define for_each_sched_entity(se) \
@@ -186,7 +189,12 @@ find_matching_se(struct sched_entity **se, struct sched_entity **pse)
 	}
 }
 
-#else	/* CONFIG_FAIR_GROUP_SCHED */
+#else	/* !CONFIG_FAIR_GROUP_SCHED */
+
+static inline struct task_struct *task_of(struct sched_entity *se)
+{
+	return container_of(se, struct task_struct, se);
+}
 
 static inline struct rq *rq_of(struct cfs_rq *cfs_rq)
 {
@@ -611,9 +619,13 @@ account_entity_dequeue(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static void enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 #ifdef CONFIG_SCHEDSTATS
+	struct task_struct *tsk = NULL;
+
+	if (entity_is_task(se))
+		tsk = task_of(se);
+
 	if (se->sleep_start) {
 		u64 delta = rq_of(cfs_rq)->clock - se->sleep_start;
-		struct task_struct *tsk = task_of(se);
 
 		if ((s64)delta < 0)
 			delta = 0;
@@ -624,11 +636,11 @@ static void enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		se->sleep_start = 0;
 		se->sum_sleep_runtime += delta;
 
-		account_scheduler_latency(tsk, delta >> 10, 1);
+		if (tsk)
+			account_scheduler_latency(tsk, delta >> 10, 1);
 	}
 	if (se->block_start) {
 		u64 delta = rq_of(cfs_rq)->clock - se->block_start;
-		struct task_struct *tsk = task_of(se);
 
 		if ((s64)delta < 0)
 			delta = 0;
@@ -639,17 +651,19 @@ static void enqueue_sleeper(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		se->block_start = 0;
 		se->sum_sleep_runtime += delta;
 
-		/*
-		 * Blocking time is in units of nanosecs, so shift by 20 to
-		 * get a milliseconds-range estimation of the amount of
-		 * time that the task spent sleeping:
-		 */
-		if (unlikely(prof_on == SLEEP_PROFILING)) {
-
-			profile_hits(SLEEP_PROFILING, (void *)get_wchan(tsk),
-				     delta >> 20);
+		if (tsk) {
+			/*
+			 * Blocking time is in units of nanosecs, so shift by
+			 * 20 to get a milliseconds-range estimation of the
+			 * amount of time that the task spent sleeping:
+			 */
+			if (unlikely(prof_on == SLEEP_PROFILING)) {
+				profile_hits(SLEEP_PROFILING,
+						(void *)get_wchan(tsk),
+						delta >> 20);
+			}
+			account_scheduler_latency(tsk, delta >> 10, 0);
 		}
-		account_scheduler_latency(tsk, delta >> 10, 0);
 	}
 #endif
 }
@@ -1040,17 +1054,21 @@ static void yield_task_fair(struct rq *rq)
  * search starts with cpus closest then further out as needed,
  * so we always favor a closer, idle cpu.
  * Domains may include CPUs that are not usable for migration,
- * hence we need to mask them out (cpu_active_mask)
+ * hence we need to mask them out (rq->rd->online)
  *
  * Returns the CPU we should wake onto.
  */
 #if defined(ARCH_HAS_SCHED_WAKE_IDLE)
+
+#define cpu_rd_active(cpu, rq) cpumask_test_cpu(cpu, rq->rd->online)
+
 static int wake_idle(int cpu, struct task_struct *p)
 {
 	struct sched_domain *sd;
 	int i;
 	unsigned int chosen_wakeup_cpu;
 	int this_cpu;
+	struct rq *task_rq = task_rq(p);
 
 	/*
 	 * At POWERSAVINGS_BALANCE_WAKEUP level, if both this_cpu and prev_cpu
@@ -1083,10 +1101,10 @@ static int wake_idle(int cpu, struct task_struct *p)
 	for_each_domain(cpu, sd) {
 		if ((sd->flags & SD_WAKE_IDLE)
 		    || ((sd->flags & SD_WAKE_IDLE_FAR)
-			&& !task_hot(p, task_rq(p)->clock, sd))) {
+			&& !task_hot(p, task_rq->clock, sd))) {
 			for_each_cpu_and(i, sched_domain_span(sd),
 					 &p->cpus_allowed) {
-				if (cpu_active(i) && idle_cpu(i)) {
+				if (cpu_rd_active(i, task_rq) && idle_cpu(i)) {
 					if (i != task_cpu(p)) {
 						schedstat_inc(p,
 						       se.nr_wakeups_idle);

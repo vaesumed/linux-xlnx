@@ -17,6 +17,8 @@
 #include <linux/ctype.h>
 #include <linux/delay.h>
 
+#include <asm/setup.h>
+
 #include "trace_output.h"
 
 #define TRACE_SYSTEM "TRACE_SYSTEM"
@@ -849,8 +851,10 @@ event_subsystem_dir(const char *name, struct dentry *d_events)
 
 	/* First see if we did not already create this dir */
 	list_for_each_entry(system, &event_subsystems, list) {
-		if (strcmp(system->name, name) == 0)
+		if (strcmp(system->name, name) == 0) {
+			system->nr_events++;
 			return system->entry;
+		}
 	}
 
 	/* need to create new entry */
@@ -869,6 +873,7 @@ event_subsystem_dir(const char *name, struct dentry *d_events)
 		return d_events;
 	}
 
+	system->nr_events = 1;
 	system->name = kstrdup(name, GFP_KERNEL);
 	if (!system->name) {
 		debugfs_remove(system->entry);
@@ -901,6 +906,32 @@ event_subsystem_dir(const char *name, struct dentry *d_events)
 				  &ftrace_system_enable_fops);
 
 	return system->entry;
+}
+
+static void remove_subsystem_dir(const char *name)
+{
+	struct event_subsystem *system;
+
+	if (strcmp(name, TRACE_SYSTEM) == 0)
+		return;
+
+	list_for_each_entry(system, &event_subsystems, list) {
+		if (strcmp(system->name, name) == 0) {
+			if (!--system->nr_events) {
+				struct event_filter *filter = system->filter;
+
+				debugfs_remove_recursive(system->entry);
+				list_del(&system->list);
+				if (filter) {
+					kfree(filter->filter_string);
+					kfree(filter);
+				}
+				kfree(system->name);
+				kfree(system);
+			}
+			break;
+		}
+	}
 }
 
 static int
@@ -1077,6 +1108,7 @@ static void trace_module_remove_events(struct module *mod)
 			list_del(&call->list);
 			trace_destroy_fields(call);
 			destroy_preds(call);
+			remove_subsystem_dir(call->system);
 		}
 	}
 
@@ -1133,6 +1165,18 @@ struct notifier_block trace_module_nb = {
 extern struct ftrace_event_call __start_ftrace_events[];
 extern struct ftrace_event_call __stop_ftrace_events[];
 
+static char bootup_event_buf[COMMAND_LINE_SIZE] __initdata;
+
+static __init int setup_trace_event(char *str)
+{
+	strlcpy(bootup_event_buf, str, COMMAND_LINE_SIZE);
+	ring_buffer_expanded = 1;
+	tracing_selftest_disabled = 1;
+
+	return 1;
+}
+__setup("trace_event=", setup_trace_event);
+
 static __init int event_trace_init(void)
 {
 	struct ftrace_event_call *call;
@@ -1140,6 +1184,8 @@ static __init int event_trace_init(void)
 	struct dentry *entry;
 	struct dentry *d_events;
 	int ret;
+	char *buf = bootup_event_buf;
+	char *token;
 
 	d_tracer = tracing_init_dentry();
 	if (!d_tracer)
@@ -1183,6 +1229,19 @@ static __init int event_trace_init(void)
 		event_create_dir(call, d_events, &ftrace_event_id_fops,
 				 &ftrace_enable_fops, &ftrace_event_filter_fops,
 				 &ftrace_event_format_fops);
+	}
+
+	while (true) {
+		token = strsep(&buf, ",");
+
+		if (!token)
+			break;
+		if (!*token)
+			continue;
+
+		ret = ftrace_set_clr_event(token, 1);
+		if (ret)
+			pr_warning("Failed to enable trace event: %s\n", token);
 	}
 
 	ret = register_module_notifier(&trace_module_nb);
@@ -1392,10 +1451,10 @@ static __init void event_trace_self_test_with_function(void)
 
 static __init int event_trace_self_tests_init(void)
 {
-
-	event_trace_self_tests();
-
-	event_trace_self_test_with_function();
+	if (!tracing_selftest_disabled) {
+		event_trace_self_tests();
+		event_trace_self_test_with_function();
+	}
 
 	return 0;
 }

@@ -63,6 +63,7 @@
 #include <linux/magic.h>
 #include <linux/perf_counter.h>
 #include <linux/kmemleak.h>
+#include <linux/posix-timers.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -795,10 +796,10 @@ static void posix_cpu_timers_init_group(struct signal_struct *sig)
 	thread_group_cputime_init(sig);
 
 	/* Expiration times and increments. */
-	sig->it_virt_expires = cputime_zero;
-	sig->it_virt_incr = cputime_zero;
-	sig->it_prof_expires = cputime_zero;
-	sig->it_prof_incr = cputime_zero;
+	sig->it[CPUCLOCK_PROF].expires = cputime_zero;
+	sig->it[CPUCLOCK_PROF].incr = cputime_zero;
+	sig->it[CPUCLOCK_VIRT].expires = cputime_zero;
+	sig->it[CPUCLOCK_VIRT].incr = cputime_zero;
 
 	/* Cached expiration times. */
 	sig->cputime_expires.prof_exp = cputime_zero;
@@ -1274,6 +1275,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	write_unlock_irq(&tasklist_lock);
 	proc_fork_connector(p);
 	cgroup_post_fork(p);
+	perf_counter_fork(p);
 	return p;
 
 bad_fork_free_pid:
@@ -1414,9 +1416,6 @@ long do_fork(unsigned long clone_flags,
 			p->vfork_done = &vfork;
 			init_completion(&vfork);
 		}
-
-		if (!(clone_flags & CLONE_THREAD))
-			perf_counter_fork(p);
 
 		audit_finish_fork(p);
 		tracehook_report_clone(regs, clone_flags, nr, p);
