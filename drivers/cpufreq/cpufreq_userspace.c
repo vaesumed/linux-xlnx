@@ -40,6 +40,33 @@ static int cpus_using_userspace_governor;
 #define dprintk(msg...) \
 	cpufreq_debug_printk(CPUFREQ_DEBUG_GOVERNOR, "userspace", msg)
 
+static ssize_t show_speed(struct cpufreq_policy *policy, char *buf);
+static int cpufreq_set(struct cpufreq_policy *policy, unsigned int freq);
+
+static ssize_t store_scaling_setspeed(struct cpufreq_policy *policy,
+					const char *buf, size_t count)
+{
+	unsigned int freq = 0;
+	unsigned int ret;
+
+	ret = sscanf(buf, "%u", &freq);
+	if (ret != 1)
+		return -EINVAL;
+
+	cpufreq_set(policy, freq);
+
+	return count;
+}
+
+static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
+{
+	return show_speed(policy, buf);
+}
+
+static struct freq_attr scaling_setspeed =
+	__ATTR(scaling_setspeed, 0644, show_scaling_setspeed,
+	       store_scaling_setspeed);
+
 /* keep track of frequency transitions */
 static int
 userspace_cpufreq_notifier(struct notifier_block *nb, unsigned long val,
@@ -120,6 +147,10 @@ static int cpufreq_governor_userspace(struct cpufreq_policy *policy,
 		if (!cpu_online(cpu))
 			return -EINVAL;
 		BUG_ON(!policy->cur);
+		rc = sysfs_create_file(&policy->kobj, &scaling_setspeed.attr);
+		if (rc)
+			return rc;
+
 		mutex_lock(&userspace_mutex);
 
 		if (cpus_using_userspace_governor == 0) {
@@ -144,6 +175,7 @@ static int cpufreq_governor_userspace(struct cpufreq_policy *policy,
 		mutex_unlock(&userspace_mutex);
 		break;
 	case CPUFREQ_GOV_STOP:
+		sysfs_remove_file(&policy->kobj, &scaling_setspeed.attr);
 		mutex_lock(&userspace_mutex);
 		cpus_using_userspace_governor--;
 		if (cpus_using_userspace_governor == 0) {
@@ -193,8 +225,6 @@ static
 struct cpufreq_governor cpufreq_gov_userspace = {
 	.name		= "userspace",
 	.governor	= cpufreq_governor_userspace,
-	.store_setspeed	= cpufreq_set,
-	.show_setspeed	= show_speed,
 	.owner		= THIS_MODULE,
 };
 
