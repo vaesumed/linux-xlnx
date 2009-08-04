@@ -289,10 +289,12 @@ sysc_leave:
 sysc_done:
 
 #ifdef CONFIG_TRACE_IRQFLAGS
+	.section .data,"aw",@progbits
 	.align	8
 	.globl	sysc_restore_trace_psw
 sysc_restore_trace_psw:
 	.long	0, sysc_restore_trace + 0x80000000
+	.previous
 #endif
 
 #
@@ -617,10 +619,12 @@ io_leave:
 io_done:
 
 #ifdef CONFIG_TRACE_IRQFLAGS
+	.section .data,"aw",@progbits
 	.align	8
 	.globl	io_restore_trace_psw
 io_restore_trace_psw:
 	.long	0, io_restore_trace + 0x80000000
+	.previous
 #endif
 
 #

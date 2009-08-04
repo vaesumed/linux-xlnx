@@ -535,7 +535,7 @@ startup:basr	%r13,0			# get base
 	b	0(%r13)
 	.align	4
 4:	.long	startup_continue
-5:	.long	sched_clock_base_cc
+5:	.long	sched_clock_base
 	.align	8
 6:	.long	0x7fffffff,0xffffffff
 
