@@ -69,6 +69,7 @@ static void ocfs2_global_mem2diskdqb(void *dp, struct dquot *dquot)
 	d->dqb_curspace = cpu_to_le64(m->dqb_curspace);
 	d->dqb_btime = cpu_to_le64(m->dqb_btime);
 	d->dqb_itime = cpu_to_le64(m->dqb_itime);
+	d->dqb_pad1 = d->dqb_pad2 = 0;
 }
 
 static int ocfs2_global_is_id(void *dp, struct dquot *dquot)
@@ -211,14 +212,17 @@ ssize_t ocfs2_quota_write(struct super_block *sb, int type,
 
 	mutex_lock_nested(&gqinode->i_mutex, I_MUTEX_QUOTA);
 	if (gqinode->i_size < off + len) {
+		loff_t rounded_end =
+				ocfs2_align_bytes_to_blocks(sb, off + len);
+
 		down_write(&OCFS2_I(gqinode)->ip_alloc_sem);
-		err = ocfs2_extend_no_holes(gqinode, off + len, off);
+		err = ocfs2_extend_no_holes(gqinode, rounded_end, off);
 		up_write(&OCFS2_I(gqinode)->ip_alloc_sem);
 		if (err < 0)
 			goto out;
 		err = ocfs2_simple_size_update(gqinode,
 					       oinfo->dqi_gqi_bh,
-					       off + len);
+					       rounded_end);
 		if (err < 0)
 			goto out;
 		new = 1;
@@ -234,7 +238,7 @@ ssize_t ocfs2_quota_write(struct super_block *sb, int type,
 	}
 	if (err) {
 		mlog_errno(err);
-		return err;
+		goto out;
 	}
 	lock_buffer(bh);
 	if (new)
@@ -342,7 +346,6 @@ int ocfs2_global_read_info(struct super_block *sb, int type)
 	info->dqi_bgrace = le32_to_cpu(dinfo.dqi_bgrace);
 	info->dqi_igrace = le32_to_cpu(dinfo.dqi_igrace);
 	oinfo->dqi_syncms = le32_to_cpu(dinfo.dqi_syncms);
-	oinfo->dqi_syncjiff = msecs_to_jiffies(oinfo->dqi_syncms);
 	oinfo->dqi_gi.dqi_blocks = le32_to_cpu(dinfo.dqi_blocks);
 	oinfo->dqi_gi.dqi_free_blk = le32_to_cpu(dinfo.dqi_free_blk);
 	oinfo->dqi_gi.dqi_free_entry = le32_to_cpu(dinfo.dqi_free_entry);
@@ -352,7 +355,7 @@ int ocfs2_global_read_info(struct super_block *sb, int type)
 	oinfo->dqi_gi.dqi_qtree_depth = qtree_depth(&oinfo->dqi_gi);
 	INIT_DELAYED_WORK(&oinfo->dqi_sync_work, qsync_work_fn);
 	queue_delayed_work(ocfs2_quota_wq, &oinfo->dqi_sync_work,
-			   oinfo->dqi_syncjiff);
+			   msecs_to_jiffies(oinfo->dqi_syncms));
 
 out_err:
 	mlog_exit(status);
@@ -607,7 +610,7 @@ static void qsync_work_fn(struct work_struct *work)
 
 	dquot_scan_active(sb, ocfs2_sync_dquot_helper, oinfo->dqi_type);
 	queue_delayed_work(ocfs2_quota_wq, &oinfo->dqi_sync_work,
-			   oinfo->dqi_syncjiff);
+			   msecs_to_jiffies(oinfo->dqi_syncms));
 }
 
 /*
@@ -645,10 +648,15 @@ int ocfs2_calc_qdel_credits(struct super_block *sb, int type)
 		return 0;
 
 	oinfo = sb_dqinfo(sb, type)->dqi_priv;
-	/* We modify tree, leaf block, global info, local chunk header,
-	 * global and local inode */
-	return oinfo->dqi_gi.dqi_qtree_depth + 2 + 1 +
-	       2 * OCFS2_INODE_UPDATE_CREDITS;
+	/*
+	 * We modify tree, leaf block, global info, local chunk header,
+	 * global and local inode; OCFS2_QINFO_WRITE_CREDITS already
+	 * accounts for inode update
+	 */
+	return oinfo->dqi_gi.dqi_qtree_depth +
+	       OCFS2_QINFO_WRITE_CREDITS +
+	       2 * OCFS2_QUOTA_BLOCK_UPDATE_CREDITS +
+	       OCFS2_INODE_UPDATE_CREDITS;
 }
 
 static int ocfs2_release_dquot(struct dquot *dquot)
@@ -698,7 +706,10 @@ int ocfs2_calc_qinit_credits(struct super_block *sb, int type)
 	 * global file we can modify info, tree and leaf block */
 	return ocfs2_calc_extend_credits(sb, &lfe->id2.i_list, 0) +
 	       ocfs2_calc_extend_credits(sb, &gfe->id2.i_list, 0) +
-	       3 + oinfo->dqi_gi.dqi_qtree_depth + 2;
+	       OCFS2_LOCAL_QINFO_WRITE_CREDITS +
+	       2 * OCFS2_QUOTA_BLOCK_UPDATE_CREDITS +
+	       oinfo->dqi_gi.dqi_qtree_depth +
+	       2 * OCFS2_QUOTA_BLOCK_UPDATE_CREDITS;
 }
 
 static int ocfs2_acquire_dquot(struct dquot *dquot)
