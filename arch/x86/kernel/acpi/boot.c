@@ -892,7 +892,7 @@ void __init mp_register_ioapic(int id, u32 address, u32 gsi_base)
 	mp_ioapics[idx].apicaddr = address;
 
 	set_fixmap_nocache(FIX_IO_APIC_BASE_0 + idx, address);
-	mp_ioapics[idx].apicid = uniq_ioapic_id(id);
+	mp_ioapics[idx].apicid = unique_ioapic_id(id);
 	mp_ioapics[idx].apicver = io_apic_get_version(idx);
 
 	/*
