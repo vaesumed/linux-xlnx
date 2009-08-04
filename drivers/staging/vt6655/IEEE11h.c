@@ -120,13 +120,13 @@ typedef struct _WLAN_FRAME_TPCREP {
 /*---------------------  Static Functions  --------------------------*/
 static BOOL s_bRxMSRReq(PSMgmtObject pMgmt, PWLAN_FRAME_MSRREQ pMSRReq, UINT uLength)
 {
-    UINT    uNumOfEIDs = 0;
+    size_t    uNumOfEIDs = 0;
     BOOL    bResult = TRUE;
 
     if (uLength <= WLAN_A3FR_MAXLEN) {
         MEMvCopy(pMgmt->abyCurrentMSRReq, pMSRReq, uLength);
     }
-    uNumOfEIDs = ((uLength - OFFSET(WLAN_FRAME_MSRREQ, sMSRReqEIDs))/ (sizeof(WLAN_IE_MEASURE_REQ)));
+    uNumOfEIDs = ((uLength - offsetof(WLAN_FRAME_MSRREQ, sMSRReqEIDs))/ (sizeof(WLAN_IE_MEASURE_REQ)));
     pMgmt->pCurrMeasureEIDRep = &(((PWLAN_FRAME_MSRREP) (pMgmt->abyCurrentMSRRep))->sMSRRepEIDs[0]);
     pMgmt->uLengthOfRepEIDs = 0;
     bResult = CARDbStartMeasure(pMgmt->pAdapter,
@@ -271,11 +271,11 @@ IEEE11hbMgrRxAction (
                 }
                 break;
             default:
-                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Unknown Action = %d\n", pAction->byAction);
+                DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Unknown Action = %d\n", pAction->byAction);
                 break;
         }
     } else {
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Unknown Category = %d\n", pAction->byCategory);
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Unknown Category = %d\n", pAction->byCategory);
         pAction->byCategory |= 0x80;
 
        //return (CARDbSendPacket(pMgmt->pAdapter, pAction, PKT_TYPE_802_11_MNG, uLength));
@@ -291,7 +291,7 @@ BOOL IEEE11hbMSRRepTx (
 {
     PSMgmtObject            pMgmt = (PSMgmtObject) pMgmtHandle;
     PWLAN_FRAME_MSRREP      pMSRRep = (PWLAN_FRAME_MSRREP) (pMgmt->abyCurrentMSRRep + sizeof(STxMgmtPacket));
-    UINT                    uLength = 0;
+    size_t                    uLength = 0;
     PSTxMgmtPacket          pTxPacket = NULL;
 
     pTxPacket = (PSTxMgmtPacket)pMgmt->abyCurrentMSRRep;
@@ -311,7 +311,7 @@ BOOL IEEE11hbMSRRepTx (
     pMSRRep->byAction = 1;
     pMSRRep->byDialogToken = ((PWLAN_FRAME_MSRREQ) (pMgmt->abyCurrentMSRReq))->byDialogToken;
 
-    uLength = pMgmt->uLengthOfRepEIDs + OFFSET(WLAN_FRAME_MSRREP, sMSRRepEIDs);
+    uLength = pMgmt->uLengthOfRepEIDs + offsetof(WLAN_FRAME_MSRREP, sMSRRepEIDs);
 
     pTxPacket->cbMPDULen = uLength;
     pTxPacket->cbPayloadLen = uLength - WLAN_HDR_ADDR3_LEN;
