@@ -48,11 +48,63 @@
 #include <mach/mmc.h>
 #include <mach/emac.h>
 
+#if defined(CONFIG_BLK_DEV_PALMCHIP_BK3710) || \
+    defined(CONFIG_BLK_DEV_PALMCHIP_BK3710_MODULE)
+#define HAS_ATA 1
+#else
+#define HAS_ATA 0
+#endif
+
+/* CPLD Register 0 bits to control ATA */
+#define DM646X_EVM_ATA_RST		BIT(0)
+#define DM646X_EVM_ATA_PWD		BIT(1)
+
 #define DM646X_EVM_PHY_MASK		(0x2)
 #define DM646X_EVM_MDIO_FREQUENCY	(2200000) /* PHY bus frequency */
 
 static struct davinci_uart_config uart_config __initdata = {
 	.enabled_uarts = (1 << 0),
+};
+
+/* CPLD Register 0 Client: used for I/O Control */
+static int cpld_reg0_probe(struct i2c_client *client,
+			   const struct i2c_device_id *id)
+{
+	if (HAS_ATA) {
+		u8 data;
+		struct i2c_msg msg[2] = {
+			{
+				.addr = client->addr,
+				.flags = I2C_M_RD,
+				.len = 1,
+				.buf = &data,
+			},
+			{
+				.addr = client->addr,
+				.flags = 0,
+				.len = 1,
+				.buf = &data,
+			},
+		};
+
+		/* Clear ATA_RSTn and ATA_PWD bits to enable ATA operation. */
+		i2c_transfer(client->adapter, msg, 1);
+		data &= ~(DM646X_EVM_ATA_RST | DM646X_EVM_ATA_PWD);
+		i2c_transfer(client->adapter, msg + 1, 1);
+	}
+
+	return 0;
+}
+
+static const struct i2c_device_id cpld_reg_ids[] = {
+	{ "cpld_reg0", 0, },
+	{ },
+};
+
+static struct i2c_driver dm6467evm_cpld_driver = {
+	.driver.name	= "cpld_reg0",
+	.id_table	= cpld_reg_ids,
+	.probe		= cpld_reg0_probe,
 };
 
 /* LEDS */
@@ -206,6 +258,35 @@ static struct at24_platform_data eeprom_info = {
 	.context	= (void *)0x7f00,
 };
 
+static u8 dm646x_iis_serializer_direction[] = {
+       TX_MODE, RX_MODE, INACTIVE_MODE, INACTIVE_MODE,
+};
+
+static u8 dm646x_dit_serializer_direction[] = {
+       TX_MODE,
+};
+
+static struct snd_platform_data dm646x_evm_snd_data[] = {
+	{
+		.tx_dma_offset  = 0x400,
+		.rx_dma_offset  = 0x400,
+		.op_mode        = DAVINCI_MCASP_IIS_MODE,
+		.num_serializer = ARRAY_SIZE(dm646x_iis_serializer_direction),
+		.tdm_slots      = 2,
+		.serial_dir     = dm646x_iis_serializer_direction,
+		.eventq_no      = EVENTQ_0,
+	},
+	{
+		.tx_dma_offset  = 0x400,
+		.rx_dma_offset  = 0,
+		.op_mode        = DAVINCI_MCASP_DIT_MODE,
+		.num_serializer = ARRAY_SIZE(dm646x_dit_serializer_direction),
+		.tdm_slots      = 32,
+		.serial_dir     = dm646x_dit_serializer_direction,
+		.eventq_no      = EVENTQ_0,
+	},
+};
+
 static struct i2c_board_info __initdata i2c_info[] =  {
 	{
 		I2C_BOARD_INFO("24c256", 0x50),
@@ -214,6 +295,9 @@ static struct i2c_board_info __initdata i2c_info[] =  {
 	{
 		I2C_BOARD_INFO("pcf8574a", 0x38),
 		.platform_data	= &pcf_data,
+	},
+	{
+		I2C_BOARD_INFO("cpld_reg0", 0x3a),
 	},
 };
 
@@ -225,6 +309,7 @@ static struct davinci_i2c_platform_data i2c_pdata = {
 static void __init evm_init_i2c(void)
 {
 	davinci_init_i2c(&i2c_pdata);
+	i2c_add_driver(&dm6467evm_cpld_driver);
 	i2c_register_board_info(1, i2c_info, ARRAY_SIZE(i2c_info));
 }
 
@@ -239,6 +324,11 @@ static __init void evm_init(void)
 
 	evm_init_i2c();
 	davinci_serial_init(&uart_config);
+	dm646x_init_mcasp0(&dm646x_evm_snd_data[0]);
+	dm646x_init_mcasp1(&dm646x_evm_snd_data[1]);
+
+	if (HAS_ATA)
+		dm646x_init_ide();
 
 	soc_info->emac_pdata->phy_mask = DM646X_EVM_PHY_MASK;
 	soc_info->emac_pdata->mdio_max_freq = DM646X_EVM_MDIO_FREQUENCY;
