@@ -79,6 +79,14 @@ void touch_softlockup_watchdog(void)
 }
 EXPORT_SYMBOL(touch_softlockup_watchdog);
 
+static int softlock_touch_sync[NR_CPUS];
+
+void touch_softlockup_watchdog_sync(void)
+{
+	softlock_touch_sync[raw_smp_processor_id()] = 1;
+	__raw_get_cpu_var(touch_timestamp) = 0;
+}
+
 void touch_all_softlockup_watchdogs(void)
 {
 	int cpu;
@@ -118,6 +126,14 @@ void softlockup_tick(void)
 	}
 
 	if (touch_timestamp == 0) {
+		if (unlikely(softlock_touch_sync[this_cpu])) {
+			/*
+			 * If the time stamp was touched atomically
+			 * make sure the scheduler tick is up to date.
+			 */
+			softlock_touch_sync[this_cpu] = 0;
+			sched_clock_tick();
+		}
 		__touch_softlockup_watchdog();
 		return;
 	}

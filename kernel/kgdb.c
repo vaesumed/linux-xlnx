@@ -129,6 +129,7 @@ struct task_struct		*kgdb_usethread;
 struct task_struct		*kgdb_contthread;
 
 int				kgdb_single_step;
+pid_t				kgdb_sstep_pid;
 
 /* Our I/O buffers. */
 static char			remcom_in_buffer[BUFMAX];
@@ -541,11 +542,16 @@ static struct task_struct *getthread(struct pt_regs *regs, int tid)
 	 */
 	if (tid == 0 || tid == -1)
 		tid = -atomic_read(&kgdb_active) - 2;
-	if (tid < 0) {
+	if (tid < -1 && tid > -NR_CPUS - 2) {
 		if (kgdb_info[-tid - 2].task)
 			return kgdb_info[-tid - 2].task;
 		else
 			return idle_task(-tid - 2);
+	}
+	if (tid <= 0) {
+		printk(KERN_ERR "KGDB: Internal thread select error\n");
+		dump_stack();
+		return NULL;
 	}
 
 	/*
@@ -590,7 +596,7 @@ static void kgdb_wait(struct pt_regs *regs)
 
 	/* Signal the primary CPU that we are done: */
 	atomic_set(&cpu_in_kgdb[cpu], 0);
-	touch_softlockup_watchdog();
+	touch_softlockup_watchdog_sync();
 	clocksource_touch_watchdog();
 	local_irq_restore(flags);
 }
@@ -1204,8 +1210,10 @@ static int gdb_cmd_exception_pass(struct kgdb_state *ks)
 		return 1;
 
 	} else {
-		error_packet(remcom_out_buffer, -EINVAL);
-		return 0;
+		kgdb_msg_write("KGDB only knows signal 9 (pass)"
+			" and 15 (pass and disconnect)\n"
+			"Executing a continue without signal passing\n", 0);
+		remcom_in_buffer[0] = 'c';
 	}
 
 	/* Indicate fall through */
@@ -1430,10 +1438,10 @@ acquirelock:
 	 * debugger on a different CPU via a single step
 	 */
 	if (atomic_read(&kgdb_cpu_doing_single_step) != -1 &&
-	    atomic_read(&kgdb_cpu_doing_single_step) != cpu) {
-
+	    kgdb_info[cpu].task &&
+	    kgdb_info[cpu].task->pid != kgdb_sstep_pid) {
 		atomic_set(&kgdb_active, -1);
-		touch_softlockup_watchdog();
+		touch_softlockup_watchdog_sync();
 		clocksource_touch_watchdog();
 		local_irq_restore(flags);
 
@@ -1524,9 +1532,16 @@ acquirelock:
 	}
 
 kgdb_restore:
+	if (atomic_read(&kgdb_cpu_doing_single_step) != -1) {
+		int sstep_cpu = atomic_read(&kgdb_cpu_doing_single_step);
+		if (kgdb_info[sstep_cpu].task)
+			kgdb_sstep_pid = kgdb_info[sstep_cpu].task->pid;
+		else
+			kgdb_sstep_pid = 0;
+	}
 	/* Free kgdb_active */
 	atomic_set(&kgdb_active, -1);
-	touch_softlockup_watchdog();
+	touch_softlockup_watchdog_sync();
 	clocksource_touch_watchdog();
 	local_irq_restore(flags);
 
