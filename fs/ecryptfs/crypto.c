@@ -245,13 +245,11 @@ void ecryptfs_destroy_crypt_stat(struct ecryptfs_crypt_stat *crypt_stat)
 		crypto_free_blkcipher(crypt_stat->tfm);
 	if (crypt_stat->hash_tfm)
 		crypto_free_hash(crypt_stat->hash_tfm);
-	mutex_lock(&crypt_stat->keysig_list_mutex);
 	list_for_each_entry_safe(key_sig, key_sig_tmp,
 				 &crypt_stat->keysig_list, crypt_stat_list) {
 		list_del(&key_sig->crypt_stat_list);
 		kmem_cache_free(ecryptfs_key_sig_cache, key_sig);
 	}
-	mutex_unlock(&crypt_stat->keysig_list_mutex);
 	memset(crypt_stat, 0, sizeof(struct ecryptfs_crypt_stat));
 }
 
@@ -925,7 +923,9 @@ static int ecryptfs_copy_mount_wide_sigs_to_inode_sigs(
 	struct ecryptfs_global_auth_tok *global_auth_tok;
 	int rc = 0;
 
+	mutex_lock(&crypt_stat->keysig_list_mutex);
 	mutex_lock(&mount_crypt_stat->global_auth_tok_list_mutex);
+
 	list_for_each_entry(global_auth_tok,
 			    &mount_crypt_stat->global_auth_tok_list,
 			    mount_crypt_stat_list) {
@@ -934,13 +934,13 @@ static int ecryptfs_copy_mount_wide_sigs_to_inode_sigs(
 		rc = ecryptfs_add_keysig(crypt_stat, global_auth_tok->sig);
 		if (rc) {
 			printk(KERN_ERR "Error adding keysig; rc = [%d]\n", rc);
-			mutex_unlock(
-				&mount_crypt_stat->global_auth_tok_list_mutex);
 			goto out;
 		}
 	}
-	mutex_unlock(&mount_crypt_stat->global_auth_tok_list_mutex);
+
 out:
+	mutex_unlock(&mount_crypt_stat->global_auth_tok_list_mutex);
+	mutex_unlock(&crypt_stat->keysig_list_mutex);
 	return rc;
 }
 
