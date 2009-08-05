@@ -3881,7 +3881,7 @@ int io_apic_set_pci_routing(struct device *dev, int irq,
 	return __io_apic_set_pci_routing(dev, irq, irq_attr);
 }
 
-u8 __init uniq_ioapic_id(u8 id)
+u8 __init unique_ioapic_id(u8 id)
 {
 #ifdef CONFIG_X86_32
 	if ((boot_cpu_data.x86_vendor == X86_VENDOR_INTEL) &&
@@ -3892,6 +3892,7 @@ u8 __init uniq_ioapic_id(u8 id)
 #else
 	int i;
 	DECLARE_BITMAP(used, 256);
+
 	bitmap_zero(used, 256);
 	for (i = 0; i < nr_ioapics; i++) {
 		struct mpc_ioapic *ia = &mp_ioapics[i];
