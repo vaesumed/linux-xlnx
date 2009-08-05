@@ -103,12 +103,19 @@ static ssize_t show_##name##_list(struct sys_device *dev,		\
 define_id_show_func(physical_package_id);
 define_one_ro(physical_package_id);
 
+define_id_show_func(cpu_node_id);
+define_one_ro(cpu_node_id);
+
 define_id_show_func(core_id);
 define_one_ro(core_id);
 
 define_siblings_show_func(thread_cpumask);
 define_one_ro_named(thread_siblings, show_thread_cpumask);
 define_one_ro_named(thread_siblings_list, show_thread_cpumask_list);
+
+define_siblings_show_func(cpu_node_cpumask);
+define_one_ro_named(cpu_node_siblings, show_cpu_node_cpumask);
+define_one_ro_named(cpu_node_siblings_list, show_cpu_node_cpumask_list);
 
 define_siblings_show_func(core_cpumask);
 define_one_ro_named(core_siblings, show_core_cpumask);
@@ -119,6 +126,9 @@ static struct attribute *default_attrs[] = {
 	&attr_core_id.attr,
 	&attr_thread_siblings.attr,
 	&attr_thread_siblings_list.attr,
+	&attr_cpu_node_id.attr,
+	&attr_cpu_node_siblings.attr,
+	&attr_cpu_node_siblings_list.attr,
 	&attr_core_siblings.attr,
 	&attr_core_siblings_list.attr,
 	NULL
