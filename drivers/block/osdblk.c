@@ -442,7 +442,7 @@ static int osdblk_init_disk(struct osdblk_device *osdev)
 	 * sleep when allocating a lower-request and therefore cannot be
 	 * bouncing.
 	 */
-	blk_queue_stack_limits(q, osd_request_queue(osdev->osd));
+	blk_stack_limits(&q->limits, &osd_request_queue(osdev->osd)->limits, 0);
 
 	blk_queue_prep_rq(q, blk_queue_start_tag);
 	blk_queue_ordered(q, QUEUE_ORDERED_DRAIN_FLUSH, osdblk_prepare_flush);
