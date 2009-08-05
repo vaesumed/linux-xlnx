@@ -162,7 +162,12 @@ struct thread_info {
 #define __HAVE_ARCH_THREAD_INFO_ALLOCATOR
 
 #define alloc_thread_info(tsk)						\
-	((struct thread_info *)__get_free_pages(THREAD_FLAGS, THREAD_ORDER))
+({									\
+	struct thread_info *ti = (struct thread_info *)			\
+		__get_free_pages(THREAD_FLAGS, THREAD_ORDER);		\
+	kmemleak_alloc(ti, THREAD_SIZE, 1, THREAD_FLAGS);		\
+	ti;								\
+})
 
 #ifdef CONFIG_X86_32
 
