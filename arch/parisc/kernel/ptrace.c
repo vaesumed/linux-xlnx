@@ -5,6 +5,7 @@
  * Copyright (C) 2000 Matthew Wilcox <matthew@wil.cx>
  * Copyright (C) 2000 David Huggins-Daines <dhd@debian.org>
  * Copyright (C) 2008 Helge Deller <deller@gmx.de>
+ * Copyright (C) 2009 Kyle McMartin <kyle@redhat.com>
  */
 
 #include <linux/kernel.h>
@@ -13,11 +14,14 @@
 #include <linux/smp.h>
 #include <linux/errno.h>
 #include <linux/ptrace.h>
+#include <linux/tracehook.h>
 #include <linux/user.h>
 #include <linux/personality.h>
 #include <linux/security.h>
 #include <linux/compat.h>
 #include <linux/signal.h>
+#include <linux/regset.h>
+#include <linux/elf.h>
 
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
@@ -35,7 +39,7 @@
  */
 void ptrace_disable(struct task_struct *task)
 {
-	task->ptrace &= ~(PT_SINGLESTEP|PT_BLOCKSTEP);
+	clear_tsk_thread_flag(task, TIF_SINGLESTEP|TIF_BLOCKSTEP);
 
 	/* make sure the trap bits are not set */
 	pa_psw(task)->r = 0;
@@ -55,8 +59,8 @@ void user_disable_single_step(struct task_struct *task)
 
 void user_enable_single_step(struct task_struct *task)
 {
-	task->ptrace &= ~PT_BLOCKSTEP;
-	task->ptrace |= PT_SINGLESTEP;
+	clear_tsk_thread_flag(task, TIF_BLOCKSTEP);
+	set_tsk_thread_flag(task, TIF_SINGLESTEP);
 
 	if (pa_psw(task)->n) {
 		struct siginfo si;
@@ -98,14 +102,401 @@ void user_enable_single_step(struct task_struct *task)
 
 void user_enable_block_step(struct task_struct *task)
 {
-	task->ptrace &= ~PT_SINGLESTEP;
-	task->ptrace |= PT_BLOCKSTEP;
+	clear_tsk_thread_flag(task, TIF_SINGLESTEP);
+	set_tsk_thread_flag(task, TIF_BLOCKSTEP);
 
 	/* Enable taken branch trap. */
 	pa_psw(task)->r = 0;
 	pa_psw(task)->t = 1;
 	pa_psw(task)->h = 0;
 	pa_psw(task)->l = 0;
+}
+
+/* extra regs not saved in pt_regs, written when ejecting core */
+static inline void fill_specials(unsigned long *regs)
+{
+	int i = 0;
+#define SAVE_CR(cr)	regs[i++] = mfctl(cr)
+	SAVE_CR(22);	SAVE_CR( 0);
+	SAVE_CR(24);	SAVE_CR(25);
+	SAVE_CR(26);	SAVE_CR(27);
+	SAVE_CR(28);	SAVE_CR(29);
+	SAVE_CR(30);	SAVE_CR(31);
+	SAVE_CR( 8);	SAVE_CR( 9);
+	SAVE_CR(12);	SAVE_CR(13);
+	SAVE_CR(10);	SAVE_CR(15);
+#undef SAVE_CR
+}
+
+/* save thread state in regset. this does extra work compared to the gr_set
+ * function since we save extra magic in coredumps, that we don't let
+ * userspace play with. (protection registers and the like.)
+ */
+static int gr_get(struct task_struct *tsk, const struct user_regset *regset,
+	unsigned int pos, unsigned int count, void *kbuf, void __user *ubuf)
+{
+	const struct pt_regs *regs = task_pt_regs(tsk);
+	unsigned long cr[16];
+	unsigned long *kbuf_reg = kbuf, *ubuf_reg = ubuf;	/* register view */
+	int ret;
+
+	/* 32 gprs, %r0 ... %r31 */
+	ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf, &regs->gr[0],
+		0, 32 * sizeof(unsigned long));
+	if (ret)
+		goto out;
+
+	/* %sr0 ... %sr7 */
+	ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf, &regs->sr[0],
+		0, 8 * sizeof(unsigned long));
+	if (ret)
+		goto out;
+
+	/* extra magic stuff we need for coredumps
+	 * sadly we can't just chunk through pt_regs... sigh.
+	 */
+#define SAVE_REG(r)	({	\
+				if (count <= 0)	\
+					goto out;	\
+				if (kbuf)	\
+					*kbuf_reg++ = (r);	\
+				else	\
+					ret = __put_user((r), ubuf_reg++);	\
+					if (ret < 0)	\
+						goto out;	\
+				++pos, --count;	\
+			})
+
+	SAVE_REG(regs->iaoq[0]);	SAVE_REG(regs->iaoq[1]);
+	SAVE_REG(regs->iasq[0]);	SAVE_REG(regs->iasq[1]);
+	SAVE_REG(regs->sar);		SAVE_REG(regs->iir);
+	SAVE_REG(regs->isr);		SAVE_REG(regs->ior);
+#undef SAVE_REG
+	ubuf = ubuf_reg, kbuf = kbuf_reg;
+
+	fill_specials(cr);
+	ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf, &cr,
+		0, ARRAY_SIZE(cr));
+
+out:
+	return ret;
+}
+
+/* fill in struct pt_regs from a regset. */
+static int gr_set(struct task_struct *tsk, const struct user_regset *regset,
+	unsigned int pos, unsigned int count,
+	const void *kbuf, const void __user *ubuf)
+{
+	struct pt_regs *regs = task_pt_regs(tsk);
+	unsigned long psw;
+	const unsigned long *ubuf_reg = ubuf, *kbuf_reg = kbuf;
+	int ret;
+
+	/* spirit away our PSW, which is in %r0. and only let the user update
+	 * USER_PSW_BITS.
+	 */
+	psw = regs->gr[0];
+	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &regs->gr[0],
+		0, 32 * sizeof(long));
+	if (regs->gr[0] != psw)
+		regs->gr[0] = (psw & ~USER_PSW_BITS) | (regs->gr[0] & USER_PSW_BITS);
+	if (ret || count <= 0)
+		goto out;
+
+	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &regs->sr[0],
+		0, 8 * sizeof(long));
+	if (ret || count <= 0)
+		goto out;
+
+	/* additional magics (iaoq, iasq, ior, etc.) */
+#define RESTORE_REG(r)	({	\
+				if (count <= 0)	\
+					goto out;	\
+				if (kbuf)	\
+					(r) = *kbuf_reg++;	\
+				else {	\
+					ret = __get_user((r), ubuf_reg++);	\
+					if (ret < 0)	\
+						goto out;	\
+				}	\
+				++pos, --count;	\
+			})
+
+	RESTORE_REG(regs->iaoq[0]);	RESTORE_REG(regs->iaoq[1]);
+	RESTORE_REG(regs->iasq[0]);	RESTORE_REG(regs->iasq[1]);
+	RESTORE_REG(regs->sar);		RESTORE_REG(regs->iir);
+	RESTORE_REG(regs->isr);		RESTORE_REG(regs->ior);
+#undef RESTORE_REG
+	ubuf = ubuf_reg, kbuf = kbuf_reg;
+
+out:
+	return ret;
+}
+
+/* thankfully our floating point is sensible. */
+static int fr_get(struct task_struct *tsk, const struct user_regset *regset,
+	unsigned int pos, unsigned int count, void *kbuf, void __user *ubuf)
+{
+	struct pt_regs *regs = task_pt_regs(tsk);
+	int ret;
+
+	ret = user_regset_copyout(&pos, &count, &kbuf, &ubuf, &regs->fr[0],
+		0, ELF_NFPREG * sizeof(double));
+
+	return ret;
+}
+
+static int fr_set(struct task_struct *tsk, const struct user_regset *regset,
+	unsigned int pos, unsigned int count,
+	const void *kbuf, const void __user *ubuf)
+{
+	struct pt_regs *regs = task_pt_regs(tsk);
+	int ret;
+
+	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &regs->fr[0],
+		0, ELF_NFPREG * sizeof(double));
+
+	return ret;
+}
+
+enum pa_regset {
+	REGSET_GR,
+	REGSET_FR,
+};
+
+static const struct user_regset pa_regsets[] = {
+	[REGSET_GR] = {
+		.core_note_type	=	NT_PRSTATUS,
+		.n		=	ELF_NGREG,
+		.size		=	sizeof(long),
+		.align		=	sizeof(long),
+		.get		=	gr_get,
+		.set		=	gr_set,
+	},
+	[REGSET_FR] = {
+		.core_note_type	=	NT_PRFPREG,
+		.n		=	ELF_NFPREG,
+		.size		=	sizeof(double),
+		.align		=	sizeof(double),
+		.get		=	fr_get,
+		.set		=	fr_set,
+	},
+};
+
+static const struct user_regset_view user_parisc_native_view = {
+	.name		= "parisc",
+	.e_machine	= EM_PARISC,
+	.ei_osabi	= ELFOSABI_LINUX,
+	.regsets	= pa_regsets,
+	.n		= ARRAY_SIZE(pa_regsets),
+};
+
+#ifdef CONFIG_COMPAT
+
+/* unmitigated bullshit abounds */
+static int gr_get_compat(struct task_struct *tsk,
+	const struct user_regset *regset,
+	unsigned int pos, unsigned int count,
+	void *_kbuf, void __user *_ubuf)
+{
+	struct pt_regs *regs = task_pt_regs(tsk);
+	compat_ulong_t *kbuf = _kbuf;
+	compat_ulong_t __user *ubuf = _ubuf;
+	compat_ulong_t psw, reg;
+	unsigned long cr[16];
+	int i, ret = 0;
+
+	pos /= sizeof(reg);
+	count /= sizeof(reg);
+
+	/* gprs, with some evil */
+	psw = regs->gr[0];
+	if (kbuf)
+		for (i = 0; count > 0 && i < 32; count--, pos++)
+			*kbuf++ = (compat_ulong_t)(regs->gr[i++]);
+	else
+		for (i = 0; count > 0 && i < 32; count--, pos++) {
+			ret = __put_user((compat_ulong_t)regs->gr[i++], ubuf++);
+			if (ret < 0)
+				goto out;
+		}
+	if (regs->gr[0] != psw)
+		regs->gr[0] = (psw & ~USER_PSW_BITS) | (regs->gr[0] & USER_PSW_BITS);
+
+	/* space registers */
+	if (kbuf)
+		for (i = 0; count > 0 && i < 8; count--, pos++)
+			*kbuf++ = (compat_ulong_t)(regs->sr[i++]);
+	else
+		for (i = 0; count > 0 && i < 8; count--, pos++) {
+			ret = __put_user((compat_ulong_t)regs->sr[i++], ubuf++);
+			if (ret < 0)
+				goto out;
+		}
+
+	/* all the other bollocks we need in our coredump */
+#define SAVE_REG(r)	({	\
+				if (count <= 0)	\
+					goto out;	\
+				if (kbuf)	\
+					*kbuf++ = (compat_ulong_t)((r));	\
+				else	\
+					ret = __put_user((compat_ulong_t)(r), ubuf++);	\
+					if (ret < 0)	\
+						goto out;	\
+				++pos, --count;	\
+			})
+
+	SAVE_REG(regs->iaoq[0]);	SAVE_REG(regs->iaoq[1]);
+	SAVE_REG(regs->iasq[0]);	SAVE_REG(regs->iasq[1]);
+	SAVE_REG(regs->sar);		SAVE_REG(regs->iir);
+	SAVE_REG(regs->isr);		SAVE_REG(regs->ior);
+
+	fill_specials(cr);
+	for (i = 0; i < 16; count--, pos++)
+		SAVE_REG(cr[i++]);
+#undef SAVE_REG
+	/* that should bring us up to 64*sizeof(ulong_t || compat_ulong_t) */
+
+	_kbuf = kbuf;
+	_ubuf = ubuf;
+	pos *= sizeof(reg);
+	count *= sizeof(reg);
+
+	ret = user_regset_copyout_zero(&pos, &count, &_kbuf, &_ubuf,
+		64 * sizeof(reg), -1);
+out:
+	return ret;
+}
+
+/* thankfully we get to avoid the %cr saving we do in _get, since
+ * ptrace doesn't need to touch it.
+ */
+static int gr_set_compat(struct task_struct *tsk,
+	const struct user_regset *regset,
+	unsigned int pos, unsigned int count,
+	const void *_kbuf, const void __user *_ubuf)
+{
+	struct pt_regs *regs = task_pt_regs(tsk);
+	const compat_ulong_t *kbuf = _kbuf;
+	const compat_ulong_t __user *ubuf = _ubuf;
+	compat_ulong_t reg;
+	int ret = 0;
+
+	/* if i can't smoke and swear, i'm *fucked* */
+	pos /= sizeof(reg);
+	count /= sizeof(reg);
+
+	/* 32 gprs @ 4-bytes a piece */
+        if (kbuf)
+                for (; count > 0 && pos < 32; --count)
+                        regs->gr[pos++] = *kbuf++;
+        else
+                for (; count > 0 && pos < 32; --count) {
+			ret = __get_user(reg, ubuf++);
+			if (ret < 0)
+                                goto out;
+                        regs->gr[pos++] = reg;
+                }
+
+	/* 8 space registers */
+	if (kbuf)
+		for (; count > 0 && pos < 8; --count)
+			regs->sr[pos++] = *kbuf++;
+	else
+		for (; count > 0 && pos < 8; --count) {
+			ret = __get_user(reg, ubuf++);
+			if (ret < 0)
+				goto out;
+			regs->sr[pos++] = reg;
+		}
+
+	/* additional magics (iaoq, iasq, ior, etc.) */
+#define RESTORE_REG(r)	({	\
+				if (count <= 0)	\
+					goto out;	\
+				if (kbuf)	\
+					(r) = *kbuf++;	\
+				else {	\
+					ret = __get_user(reg, ubuf++);	\
+					if (ret < 0)	\
+						goto out;	\
+					(r) = reg;	\
+				}	\
+				++pos, --count;	\
+			})
+
+	RESTORE_REG(regs->iaoq[0]);	RESTORE_REG(regs->iaoq[1]);
+	RESTORE_REG(regs->iasq[0]);	RESTORE_REG(regs->iasq[1]);
+	RESTORE_REG(regs->sar);		RESTORE_REG(regs->iir);
+	RESTORE_REG(regs->isr);		RESTORE_REG(regs->ior);
+#undef RESTORE_REG
+
+	/* update our position */
+	_kbuf = kbuf;
+	_ubuf = ubuf;
+
+out:
+	return ret;
+}
+
+static const struct user_regset pa_regsets_compat[] = {
+	[REGSET_GR] = {
+		.core_note_type	=	NT_PRSTATUS,
+		.n		=	ELF_NGREG,
+		.size		=	sizeof(compat_long_t),
+		.align		=	sizeof(compat_long_t),
+		.get		=	gr_get_compat,
+		.set		=	gr_set_compat,
+	},
+	/* no need, fpr are fortunately always 64-bit */
+	[REGSET_FR] = {
+		.core_note_type	=	NT_PRFPREG,
+		.n		=	ELF_NFPREG,
+		.size		=	sizeof(double),
+		.align		=	sizeof(double),
+		.get		=	fr_get,
+		.set		=	fr_set,
+	},
+};
+
+static const struct user_regset_view user_parisc_compat_view = {
+	.name		= "parisc",
+	.e_machine	= EM_PARISC,
+	.ei_osabi	= ELFOSABI_LINUX,
+	.regsets	= pa_regsets_compat,
+	.n		= ARRAY_SIZE(pa_regsets_compat),
+};
+
+#endif /* CONFIG_COMPAT */
+
+const struct user_regset_view *task_user_regset_view(struct task_struct *t)
+{
+#ifdef CONFIG_COMPAT
+	if (__is_compat_task(t))
+		return &user_parisc_compat_view;
+#endif
+	return &user_parisc_native_view;
+}
+
+static inline int regset_size(struct task_struct *t, enum pa_regset r)
+{
+#ifdef CONFIG_COMPAT
+	if (__is_compat_task(t))
+		return user_parisc_compat_view.regsets[r].n *
+			user_parisc_compat_view.regsets[r].size;
+#endif
+	return user_parisc_native_view.regsets[r].n *
+		user_parisc_native_view.regsets[r].size;
+}
+
+static inline void __user *regset_ptr(struct task_struct *t, long data)
+{
+#ifdef CONFIG_COMPAT
+	if (__is_compat_task(t))
+		return (void __user *)compat_ptr(data);
+#endif
+	return (void *)data;
 }
 
 long arch_ptrace(struct task_struct *child, long request, long addr, long data)
@@ -160,6 +551,26 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 			ret = 0;
 		}
 		break;
+
+	case PTRACE_GETREGS:
+		return copy_regset_to_user(child, task_user_regset_view(child),
+			REGSET_GR, 0, regset_size(child, REGSET_GR),
+			regset_ptr(child, data));
+
+	case PTRACE_SETREGS:
+		return copy_regset_from_user(child, task_user_regset_view(child),
+			REGSET_GR, 0, regset_size(child, REGSET_GR),
+			(const void __user *)regset_ptr(child, data));
+
+	case PTRACE_GETFPREGS:
+		return copy_regset_to_user(child, task_user_regset_view(child),
+			REGSET_FR, 0, regset_size(child, REGSET_FR),
+			regset_ptr(child, data));
+
+	case PTRACE_SETFPREGS:
+		return copy_regset_from_user(child, task_user_regset_view(child),
+			REGSET_FR, 0, regset_size(child, REGSET_FR),
+			(const void __user *)regset_ptr(child, data));
 
 	default:
 		ret = ptrace_request(child, request, addr, data);
@@ -254,6 +665,13 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 		}
 		break;
 
+	case PTRACE_GETREGS:
+	case PTRACE_SETREGS:
+	case PTRACE_GETFPREGS:
+	case PTRACE_SETFPREGS:
+		ret = arch_ptrace(child, request, addr, data);
+		break;
+
 	default:
 		ret = compat_ptrace_request(child, request, addr, data);
 		break;
@@ -263,22 +681,19 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 }
 #endif
 
-
-void syscall_trace(void)
+long do_syscall_trace_enter(struct pt_regs *regs)
 {
-	if (!test_thread_flag(TIF_SYSCALL_TRACE))
-		return;
-	if (!(current->ptrace & PT_PTRACED))
-		return;
-	ptrace_notify(SIGTRAP | ((current->ptrace & PT_TRACESYSGOOD)
-				 ? 0x80 : 0));
-	/*
-	 * this isn't the same as continuing with a signal, but it will do
-	 * for normal use.  strace only continues with a signal if the
-	 * stopping signal is not SIGTRAP.  -brl
-	 */
-	if (current->exit_code) {
-		send_sig(current->exit_code, current, 1);
-		current->exit_code = 0;
-	}
+	if (test_thread_flag(TIF_SYSCALL_TRACE) &&
+	    tracehook_report_syscall_entry(regs))
+		return -1L;
+
+	return regs->gr[20];
+}
+
+void do_syscall_trace_exit(struct pt_regs *regs)
+{
+	int stepping = test_thread_flag(TIF_SINGLESTEP|TIF_BLOCKSTEP);
+
+	if (stepping || test_thread_flag(TIF_SYSCALL_TRACE))
+		tracehook_report_syscall_exit(regs, stepping);
 }
