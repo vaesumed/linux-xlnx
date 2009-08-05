@@ -51,55 +51,53 @@ do {								\
 		do {						\
 			CMD;					\
 		} while (0);					\
-} while (0);
+} while (0)
 
 #define FC_LIBFC_DBG(fmt, args...)					\
 	FC_CHECK_LOGGING(FC_LIBFC_LOGGING,				\
-			 printk(KERN_INFO "libfc: " fmt, ##args);)
+			 printk(KERN_INFO "libfc: " fmt, ##args))
 
 #define FC_LPORT_DBG(lport, fmt, args...)				\
 	FC_CHECK_LOGGING(FC_LPORT_LOGGING,				\
-			 printk(KERN_INFO "lport: %6x: " fmt,		\
-				fc_host_port_id(lport->host), ##args);)
+			 printk(KERN_INFO "host%u: lport %6x: " fmt,	\
+				(lport)->host->host_no,			\
+				fc_host_port_id((lport)->host), ##args))
 
 #define FC_DISC_DBG(disc, fmt, args...)					\
 	FC_CHECK_LOGGING(FC_DISC_LOGGING,				\
-			 printk(KERN_INFO "disc: %6x: " fmt,		\
-				fc_host_port_id(disc->lport->host),	\
-				##args);)
+			 printk(KERN_INFO "host%u: disc: " fmt,		\
+				(disc)->lport->host->host_no,		\
+				##args))
+
+#define FC_RPORT_ID_DBG(lport, port_id, fmt, args...)			\
+	FC_CHECK_LOGGING(FC_RPORT_LOGGING,				\
+			 printk(KERN_INFO "host%u: rport %6x: " fmt,	\
+				(lport)->host->host_no,			\
+				(port_id), ##args))
 
 #define FC_RPORT_DBG(rport, fmt, args...)				\
 do {									\
 	struct fc_rport_libfc_priv *rdata = rport->dd_data;		\
 	struct fc_lport *lport = rdata->local_port;			\
-	FC_CHECK_LOGGING(FC_RPORT_LOGGING,				\
-			 printk(KERN_INFO "rport: %6x: %6x: " fmt,	\
-				fc_host_port_id(lport->host),		\
-				rport->port_id, ##args);)		\
-} while (0);
+	FC_RPORT_ID_DBG(lport, rport->port_id, fmt, ##args);		\
+} while (0)
 
 #define FC_FCP_DBG(pkt, fmt, args...)					\
 	FC_CHECK_LOGGING(FC_FCP_LOGGING,				\
-			 printk(KERN_INFO "fcp: %6x: %6x: " fmt,	\
-				fc_host_port_id(pkt->lp->host),		\
-				pkt->rport->port_id, ##args);)
-
-#define FC_EM_DBG(em, fmt, args...)					\
-	FC_CHECK_LOGGING(FC_EM_LOGGING,					\
-			 printk(KERN_INFO "em: %6x: " fmt,		\
-				fc_host_port_id(em->lp->host),		\
-				##args);)
+			 printk(KERN_INFO "host%u: fcp: %6x: " fmt,	\
+				(pkt)->lp->host->host_no,		\
+				pkt->rport->port_id, ##args))
 
 #define FC_EXCH_DBG(exch, fmt, args...)					\
 	FC_CHECK_LOGGING(FC_EXCH_LOGGING,				\
-			 printk(KERN_INFO "exch: %6x: %4x: " fmt,	\
-				fc_host_port_id(exch->lp->host),	\
-				exch->xid, ##args);)
+			 printk(KERN_INFO "host%u: xid %4x: " fmt,	\
+				(exch)->lp->host->host_no,		\
+				exch->xid, ##args))
 
 #define FC_SCSI_DBG(lport, fmt, args...)				\
 	FC_CHECK_LOGGING(FC_SCSI_LOGGING,                               \
-			 printk(KERN_INFO "scsi: %6x: " fmt,		\
-				fc_host_port_id(lport->host), ##args);)
+			 printk(KERN_INFO "host%u: scsi: " fmt,		\
+				(lport)->host->host_no,	##args))
 
 /*
  * libfc error codes
@@ -125,7 +123,7 @@ do {									\
  * FC HBA status
  */
 enum fc_lport_state {
-	LPORT_ST_NONE = 0,
+	LPORT_ST_DISABLED = 0,
 	LPORT_ST_FLOGI,
 	LPORT_ST_DNS,
 	LPORT_ST_RPN_ID,
@@ -143,13 +141,13 @@ enum fc_disc_event {
 };
 
 enum fc_rport_state {
-	RPORT_ST_NONE = 0,
 	RPORT_ST_INIT,		/* initialized */
 	RPORT_ST_PLOGI,		/* waiting for PLOGI completion */
 	RPORT_ST_PRLI,		/* waiting for PRLI completion */
 	RPORT_ST_RTV,		/* waiting for RTV completion */
 	RPORT_ST_READY,		/* ready for use */
 	RPORT_ST_LOGO,		/* port logout sent */
+	RPORT_ST_DELETE,	/* port being deleted */
 };
 
 enum fc_rport_trans_state {
@@ -344,6 +342,7 @@ static inline bool fc_fcp_is_read(const struct fc_fcp_pkt *fsp)
  */
 
 struct fc_exch_mgr;
+struct fc_exch_mgr_anchor;
 
 /*
  * Sequence.
@@ -519,25 +518,6 @@ struct libfc_function_template {
 	void (*exch_done)(struct fc_seq *sp);
 
 	/*
-	 * Assigns a EM and a free XID for an new exchange and then
-	 * allocates a new exchange and sequence pair.
-	 * The fp can be used to determine free XID.
-	 *
-	 * STATUS: OPTIONAL
-	 */
-	struct fc_exch *(*exch_get)(struct fc_lport *lp, struct fc_frame *fp);
-
-	/*
-	 * Release previously assigned XID by exch_get API.
-	 * The LLD may implement this if XID is assigned by LLD
-	 * in exch_get().
-	 *
-	 * STATUS: OPTIONAL
-	 */
-	void (*exch_put)(struct fc_lport *lp, struct fc_exch_mgr *mp,
-			 u16 ex_id);
-
-	/*
 	 * Start a new sequence on the same exchange/sequence tuple.
 	 *
 	 * STATUS: OPTIONAL
@@ -704,7 +684,7 @@ struct fc_lport {
 
 	/* Associations */
 	struct Scsi_Host	*host;
-	struct fc_exch_mgr	*emp;
+	struct list_head	ema_list;
 	struct fc_rport		*dns_rp;
 	struct fc_rport		*ptp_rp;
 	void			*scsi_priv;
@@ -960,6 +940,28 @@ int fc_elsct_init(struct fc_lport *lp);
 int fc_exch_init(struct fc_lport *lp);
 
 /*
+ * Adds Exchange Manager (EM) mp to lport.
+ *
+ * Adds specified mp to lport using struct fc_exch_mgr_anchor,
+ * the struct fc_exch_mgr_anchor allows same EM sharing by
+ * more than one lport with their specified match function,
+ * the match function is used in allocating exchange from
+ * added mp.
+ */
+struct fc_exch_mgr_anchor *fc_exch_mgr_add(struct fc_lport *lport,
+					   struct fc_exch_mgr *mp,
+					   bool (*match)(struct fc_frame *));
+
+/*
+ * Deletes Exchange Manager (EM) from lport by removing
+ * its anchor ema from lport.
+ *
+ * If removed anchor ema was the last user of its associated EM
+ * then also destroys associated EM.
+ */
+void fc_exch_mgr_del(struct fc_exch_mgr_anchor *ema);
+
+/*
  * Allocates an Exchange Manager (EM).
  *
  * The EM manages exchanges for their allocation and
@@ -974,27 +976,25 @@ int fc_exch_init(struct fc_lport *lp);
  * a new exchange.
  * The LLD may choose to have multiple EMs,
  * e.g. one EM instance per CPU receive thread in LLD.
- * The LLD can use exch_get() of struct libfc_function_template
- * to specify XID for a new exchange within
- * a specified EM instance.
  *
- * The em_idx to uniquely identify an EM instance.
+ * Specified match function is used in allocating exchanges
+ * from newly allocated EM.
  */
 struct fc_exch_mgr *fc_exch_mgr_alloc(struct fc_lport *lp,
 				      enum fc_class class,
 				      u16 min_xid,
-				      u16 max_xid);
+				      u16 max_xid,
+				      bool (*match)(struct fc_frame *));
 
 /*
- * Free an exchange manager.
+ * Free all exchange managers of a lport.
  */
-void fc_exch_mgr_free(struct fc_exch_mgr *mp);
+void fc_exch_mgr_free(struct fc_lport *lport);
 
 /*
  * Receive a frame on specified local port and exchange manager.
  */
-void fc_exch_recv(struct fc_lport *lp, struct fc_exch_mgr *mp,
-		  struct fc_frame *fp);
+void fc_exch_recv(struct fc_lport *lp, struct fc_frame *fp);
 
 /*
  * This function is for exch_seq_send function pointer in
@@ -1036,19 +1036,9 @@ int fc_seq_exch_abort(const struct fc_seq *req_sp, unsigned int timer_msec);
 void fc_exch_done(struct fc_seq *sp);
 
 /*
- * Assigns a EM and XID for a frame and then allocates
- * a new exchange and sequence pair.
- * The fp can be used to determine free XID.
- */
-struct fc_exch *fc_exch_get(struct fc_lport *lp, struct fc_frame *fp);
-
-/*
  * Allocate a new exchange and sequence pair.
- * if ex_id is zero then next free exchange id
- * from specified exchange manger mp will be assigned.
  */
-struct fc_exch *fc_exch_alloc(struct fc_exch_mgr *mp,
-			      struct fc_frame *fp, u16 ex_id);
+struct fc_exch *fc_exch_alloc(struct fc_lport *lport, struct fc_frame *fp);
 /*
  * Start a new sequence on the same exchange as the supplied sequence.
  */

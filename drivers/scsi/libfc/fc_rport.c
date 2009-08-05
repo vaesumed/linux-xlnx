@@ -77,13 +77,13 @@ static void fc_rport_error_retry(struct fc_rport *, struct fc_frame *);
 static void fc_rport_work(struct work_struct *);
 
 static const char *fc_rport_state_names[] = {
-	[RPORT_ST_NONE] = "None",
 	[RPORT_ST_INIT] = "Init",
 	[RPORT_ST_PLOGI] = "PLOGI",
 	[RPORT_ST_PRLI] = "PRLI",
 	[RPORT_ST_RTV] = "RTV",
 	[RPORT_ST_READY] = "Ready",
 	[RPORT_ST_LOGO] = "LOGO",
+	[RPORT_ST_DELETE] = "Delete",
 };
 
 static void fc_rport_rogue_destroy(struct device *dev)
@@ -230,6 +230,7 @@ static void fc_rport_work(struct work_struct *work)
 		ids.port_name = rport->port_name;
 		ids.node_name = rport->node_name;
 
+		rdata->event = RPORT_EV_NONE;
 		mutex_unlock(&rdata->rp_mutex);
 
 		new_rport = fc_remote_port_add(lport->host, 0, &ids);
@@ -275,6 +276,7 @@ static void fc_rport_work(struct work_struct *work)
 		mutex_unlock(&rdata->rp_mutex);
 		if (rport_ops->event_callback)
 			rport_ops->event_callback(lport, rport, event);
+		cancel_delayed_work_sync(&rdata->retry_work);
 		if (trans_state == FC_PORTSTATE_ROGUE)
 			put_device(&rport->dev);
 		else {
@@ -311,6 +313,37 @@ int fc_rport_login(struct fc_rport *rport)
 }
 
 /**
+ * fc_rport_enter_delete() - schedule a remote port to be deleted.
+ * @rport: Fibre Channel remote port
+ * @event: event to report as the reason for deletion
+ *
+ * Locking Note: Called with the rport lock held.
+ *
+ * Allow state change into DELETE only once.
+ *
+ * Call queue_work only if there's no event already pending.
+ * Set the new event so that the old pending event will not occur.
+ * Since we have the mutex, even if fc_rport_work() is already started,
+ * it'll see the new event.
+ */
+static void fc_rport_enter_delete(struct fc_rport *rport,
+				  enum fc_rport_event event)
+{
+	struct fc_rport_libfc_priv *rdata = rport->dd_data;
+
+	if (rdata->rp_state == RPORT_ST_DELETE)
+		return;
+
+	FC_RPORT_DBG(rport, "Delete port\n");
+
+	fc_rport_state_enter(rport, RPORT_ST_DELETE);
+
+	if (rdata->event == RPORT_EV_NONE)
+		queue_work(rport_event_queue, &rdata->event_work);
+	rdata->event = event;
+}
+
+/**
  * fc_rport_logoff() - Logoff and remove an rport
  * @rport: Fibre Channel remote port to be removed
  *
@@ -326,8 +359,8 @@ int fc_rport_logoff(struct fc_rport *rport)
 
 	FC_RPORT_DBG(rport, "Remove port\n");
 
-	if (rdata->rp_state == RPORT_ST_NONE) {
-		FC_RPORT_DBG(rport, "Port in NONE state, not removing\n");
+	if (rdata->rp_state == RPORT_ST_DELETE) {
+		FC_RPORT_DBG(rport, "Port in Delete state, not removing\n");
 		mutex_unlock(&rdata->rp_mutex);
 		goto out;
 	}
@@ -335,20 +368,10 @@ int fc_rport_logoff(struct fc_rport *rport)
 	fc_rport_enter_logo(rport);
 
 	/*
-	 * Change the state to NONE so that we discard
+	 * Change the state to Delete so that we discard
 	 * the response.
 	 */
-	fc_rport_state_enter(rport, RPORT_ST_NONE);
-
-	mutex_unlock(&rdata->rp_mutex);
-
-	cancel_delayed_work_sync(&rdata->retry_work);
-
-	mutex_lock(&rdata->rp_mutex);
-
-	rdata->event = RPORT_EV_STOP;
-	queue_work(rport_event_queue, &rdata->event_work);
-
+	fc_rport_enter_delete(rport, RPORT_EV_STOP);
 	mutex_unlock(&rdata->rp_mutex);
 
 out:
@@ -370,8 +393,9 @@ static void fc_rport_enter_ready(struct fc_rport *rport)
 
 	FC_RPORT_DBG(rport, "Port is Ready\n");
 
+	if (rdata->event == RPORT_EV_NONE)
+		queue_work(rport_event_queue, &rdata->event_work);
 	rdata->event = RPORT_EV_CREATED;
-	queue_work(rport_event_queue, &rdata->event_work);
 }
 
 /**
@@ -405,12 +429,11 @@ static void fc_rport_timeout(struct work_struct *work)
 		break;
 	case RPORT_ST_READY:
 	case RPORT_ST_INIT:
-	case RPORT_ST_NONE:
+	case RPORT_ST_DELETE:
 		break;
 	}
 
 	mutex_unlock(&rdata->rp_mutex);
-	put_device(&rport->dev);
 }
 
 /**
@@ -432,15 +455,12 @@ static void fc_rport_error(struct fc_rport *rport, struct fc_frame *fp)
 	case RPORT_ST_PLOGI:
 	case RPORT_ST_PRLI:
 	case RPORT_ST_LOGO:
-		rdata->event = RPORT_EV_FAILED;
-		fc_rport_state_enter(rport, RPORT_ST_NONE);
-		queue_work(rport_event_queue,
-			   &rdata->event_work);
+		fc_rport_enter_delete(rport, RPORT_EV_FAILED);
 		break;
 	case RPORT_ST_RTV:
 		fc_rport_enter_ready(rport);
 		break;
-	case RPORT_ST_NONE:
+	case RPORT_ST_DELETE:
 	case RPORT_ST_READY:
 	case RPORT_ST_INIT:
 		break;
@@ -474,7 +494,6 @@ static void fc_rport_error_retry(struct fc_rport *rport, struct fc_frame *fp)
 		/* no additional delay on exchange timeouts */
 		if (PTR_ERR(fp) == -FC_EX_TIMEOUT)
 			delay = 0;
-		get_device(&rport->dev);
 		schedule_delayed_work(&rdata->retry_work, delay);
 		return;
 	}
@@ -651,9 +670,7 @@ static void fc_rport_prli_resp(struct fc_seq *sp, struct fc_frame *fp,
 
 	} else {
 		FC_RPORT_DBG(rport, "Bad ELS response for PRLI command\n");
-		rdata->event = RPORT_EV_FAILED;
-		fc_rport_state_enter(rport, RPORT_ST_NONE);
-		queue_work(rport_event_queue, &rdata->event_work);
+		fc_rport_enter_delete(rport, RPORT_EV_FAILED);
 	}
 
 out:
@@ -702,9 +719,7 @@ static void fc_rport_logo_resp(struct fc_seq *sp, struct fc_frame *fp,
 		fc_rport_enter_rtv(rport);
 	} else {
 		FC_RPORT_DBG(rport, "Bad ELS response for LOGO command\n");
-		rdata->event = RPORT_EV_LOGO;
-		fc_rport_state_enter(rport, RPORT_ST_NONE);
-		queue_work(rport_event_queue, &rdata->event_work);
+		fc_rport_enter_delete(rport, RPORT_EV_LOGO);
 	}
 
 out:
@@ -1012,7 +1027,7 @@ static void fc_rport_recv_plogi_req(struct fc_rport *rport,
 			     "- ignored for now\n", rdata->rp_state);
 		/* XXX TBD - should reset */
 		break;
-	case RPORT_ST_NONE:
+	case RPORT_ST_DELETE:
 	default:
 		FC_RPORT_DBG(rport, "Received PLOGI in unexpected "
 			     "state %d\n", rdata->rp_state);
@@ -1238,7 +1253,7 @@ static void fc_rport_recv_prlo_req(struct fc_rport *rport, struct fc_seq *sp,
 	FC_RPORT_DBG(rport, "Received PRLO request while in state %s\n",
 		     fc_rport_state(rport));
 
-	if (rdata->rp_state == RPORT_ST_NONE) {
+	if (rdata->rp_state == RPORT_ST_DELETE) {
 		fc_frame_free(fp);
 		return;
 	}
@@ -1271,13 +1286,13 @@ static void fc_rport_recv_logo_req(struct fc_rport *rport, struct fc_seq *sp,
 	FC_RPORT_DBG(rport, "Received LOGO request while in state %s\n",
 		     fc_rport_state(rport));
 
-	if (rdata->rp_state == RPORT_ST_NONE) {
+	if (rdata->rp_state == RPORT_ST_DELETE) {
 		fc_frame_free(fp);
 		return;
 	}
 
 	rdata->event = RPORT_EV_LOGO;
-	fc_rport_state_enter(rport, RPORT_ST_NONE);
+	fc_rport_state_enter(rport, RPORT_ST_DELETE);
 	queue_work(rport_event_queue, &rdata->event_work);
 
 	lport->tt.seq_els_rsp_send(sp, ELS_LS_ACC, NULL);
