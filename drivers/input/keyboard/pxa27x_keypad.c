@@ -25,6 +25,7 @@
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/input/matrix_keypad.h>
 
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
@@ -107,7 +108,7 @@ struct pxa27x_keypad {
 	int irq;
 
 	/* matrix key code map */
-	unsigned int matrix_keycodes[MAX_MATRIX_KEY_NUM];
+	unsigned short matrix_keycodes[MAX_MATRIX_KEY_NUM];
 
 	/* state row bits of each column scan */
 	uint32_t matrix_key_state[MAX_MATRIX_KEY_COLS];
@@ -124,21 +125,21 @@ static void pxa27x_keypad_build_keycode(struct pxa27x_keypad *keypad)
 {
 	struct pxa27x_keypad_platform_data *pdata = keypad->pdata;
 	struct input_dev *input_dev = keypad->input_dev;
-	unsigned int *key;
 	int i;
 
-	key = &pdata->matrix_key_map[0];
-	for (i = 0; i < pdata->matrix_key_map_size; i++, key++) {
-		int row = ((*key) >> 28) & 0xf;
-		int col = ((*key) >> 24) & 0xf;
-		int code = (*key) & 0xffffff;
+	for (i = 0; i < pdata->matrix_key_map_size; i++) {
+		unsigned int key = pdata->matrix_key_map[i];
+		unsigned int row = KEY_ROW(key);
+		unsigned int col = KEY_COL(key);
+		unsigned short code = KEY_VAL(key);
 
 		keypad->matrix_keycodes[(row << 3) + col] = code;
-		set_bit(code, input_dev->keybit);
+		__set_bit(code, input_dev->keybit);
 	}
+	__clear_bit(KEY_RESERVED, input_dev->keybit);
 
 	for (i = 0; i < pdata->direct_key_num; i++)
-		set_bit(pdata->direct_key_map[i], input_dev->keybit);
+		__set_bit(pdata->direct_key_map[i], input_dev->keybit);
 
 	keypad->rotary_up_key[0] = pdata->rotary0_up_key;
 	keypad->rotary_up_key[1] = pdata->rotary1_up_key;
@@ -149,18 +150,18 @@ static void pxa27x_keypad_build_keycode(struct pxa27x_keypad *keypad)
 
 	if (pdata->enable_rotary0) {
 		if (pdata->rotary0_up_key && pdata->rotary0_down_key) {
-			set_bit(pdata->rotary0_up_key, input_dev->keybit);
-			set_bit(pdata->rotary0_down_key, input_dev->keybit);
+			__set_bit(pdata->rotary0_up_key, input_dev->keybit);
+			__set_bit(pdata->rotary0_down_key, input_dev->keybit);
 		} else
-			set_bit(pdata->rotary0_rel_code, input_dev->relbit);
+			__set_bit(pdata->rotary0_rel_code, input_dev->relbit);
 	}
 
 	if (pdata->enable_rotary1) {
 		if (pdata->rotary1_up_key && pdata->rotary1_down_key) {
-			set_bit(pdata->rotary1_up_key, input_dev->keybit);
-			set_bit(pdata->rotary1_down_key, input_dev->keybit);
+			__set_bit(pdata->rotary1_up_key, input_dev->keybit);
+			__set_bit(pdata->rotary1_down_key, input_dev->keybit);
 		} else
-			set_bit(pdata->rotary1_rel_code, input_dev->relbit);
+			__set_bit(pdata->rotary1_rel_code, input_dev->relbit);
 	}
 }
 
@@ -388,8 +389,9 @@ static void pxa27x_keypad_close(struct input_dev *dev)
 }
 
 #ifdef CONFIG_PM
-static int pxa27x_keypad_suspend(struct platform_device *pdev, pm_message_t state)
+static int pxa27x_keypad_suspend(struct device *dev)
 {
+	struct platform_device *pdev = to_platform_device(dev);
 	struct pxa27x_keypad *keypad = platform_get_drvdata(pdev);
 
 	clk_disable(keypad->clk);
@@ -400,8 +402,9 @@ static int pxa27x_keypad_suspend(struct platform_device *pdev, pm_message_t stat
 	return 0;
 }
 
-static int pxa27x_keypad_resume(struct platform_device *pdev)
+static int pxa27x_keypad_resume(struct device *dev)
 {
+	struct platform_device *pdev = to_platform_device(dev);
 	struct pxa27x_keypad *keypad = platform_get_drvdata(pdev);
 	struct input_dev *input_dev = keypad->input_dev;
 
@@ -420,12 +423,12 @@ static int pxa27x_keypad_resume(struct platform_device *pdev)
 
 	return 0;
 }
-#else
-#define pxa27x_keypad_suspend	NULL
-#define pxa27x_keypad_resume	NULL
-#endif
 
-#define res_size(res)	((res)->end - (res)->start + 1)
+static const struct dev_pm_ops pxa27x_keypad_pm_ops = {
+	.suspend	= pxa27x_keypad_suspend,
+	.resume		= pxa27x_keypad_resume,
+};
+#endif
 
 static int __devinit pxa27x_keypad_probe(struct platform_device *pdev)
 {
@@ -461,14 +464,14 @@ static int __devinit pxa27x_keypad_probe(struct platform_device *pdev)
 		goto failed_free;
 	}
 
-	res = request_mem_region(res->start, res_size(res), pdev->name);
+	res = request_mem_region(res->start, resource_size(res), pdev->name);
 	if (res == NULL) {
 		dev_err(&pdev->dev, "failed to request I/O memory\n");
 		error = -EBUSY;
 		goto failed_free;
 	}
 
-	keypad->mmio_base = ioremap(res->start, res_size(res));
+	keypad->mmio_base = ioremap(res->start, resource_size(res));
 	if (keypad->mmio_base == NULL) {
 		dev_err(&pdev->dev, "failed to remap I/O memory\n");
 		error = -ENXIO;
@@ -540,7 +543,7 @@ failed_put_clk:
 failed_free_io:
 	iounmap(keypad->mmio_base);
 failed_free_mem:
-	release_mem_region(res->start, res_size(res));
+	release_mem_region(res->start, resource_size(res));
 failed_free:
 	kfree(keypad);
 	return error;
@@ -552,8 +555,6 @@ static int __devexit pxa27x_keypad_remove(struct platform_device *pdev)
 	struct resource *res;
 
 	free_irq(keypad->irq, pdev);
-
-	clk_disable(keypad->clk);
 	clk_put(keypad->clk);
 
 	input_unregister_device(keypad->input_dev);
@@ -562,7 +563,7 @@ static int __devexit pxa27x_keypad_remove(struct platform_device *pdev)
 	iounmap(keypad->mmio_base);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	release_mem_region(res->start, res_size(res));
+	release_mem_region(res->start, resource_size(res));
 
 	platform_set_drvdata(pdev, NULL);
 	kfree(keypad);
@@ -575,11 +576,12 @@ MODULE_ALIAS("platform:pxa27x-keypad");
 static struct platform_driver pxa27x_keypad_driver = {
 	.probe		= pxa27x_keypad_probe,
 	.remove		= __devexit_p(pxa27x_keypad_remove),
-	.suspend	= pxa27x_keypad_suspend,
-	.resume		= pxa27x_keypad_resume,
 	.driver		= {
 		.name	= "pxa27x-keypad",
 		.owner	= THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm	= &pxa27x_keypad_pm_ops,
+#endif
 	},
 };
 
