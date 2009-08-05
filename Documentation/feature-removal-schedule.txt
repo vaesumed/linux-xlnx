@@ -376,15 +376,6 @@ Who:	Thomas Gleixner <tglx@linutronix.de>
 
 -----------------------------
 
-What:	obsolete generic irq defines and typedefs
-When:	2.6.30
-Why:	The defines and typedefs (hw_interrupt_type, no_irq_type, irq_desc_t)
-	have been kept around for migration reasons. After more than two years
-	it's time to remove them finally
-Who:	Thomas Gleixner <tglx@linutronix.de>
-
----------------------------
-
 What:	fakephp and associated sysfs files in /sys/bus/pci/slots/
 When:	2011
 Why:	In 2.6.27, the semantics of /sys/bus/pci/slots was redefined to
@@ -437,16 +428,6 @@ What:	CONFIG_INOTIFY
 When:	2.6.33
 Why:	No known users, fsnotify more generic and more easily maintained.
 Who:	Eric Paris <eparis@redhat.com>
-
-----------------------------
-
-What:	CONFIG_X86_OLD_MCE
-When:	2.6.32
-Why:	Remove the old legacy 32bit machine check code. This has been
-	superseded by the newer machine check code from the 64bit port,
-	but the old version has been kept around for easier testing. Note this
-	doesn't impact the old P5 and WinChip machine check handlers.
-Who:	Andi Kleen <andi@firstfloor.org>
 
 ----------------------------
 

@@ -9,7 +9,7 @@
  */
 
 #define MCG_BANKCNT_MASK	0xff         /* Number of Banks */
-#define MCG_CTL_P		(1ULL<<8)    /* MCG_CAP register available */
+#define MCG_CTL_P		(1ULL<<8)    /* MCG_CTL register available */
 #define MCG_EXT_P		(1ULL<<9)    /* Extended registers available */
 #define MCG_CMCI_P		(1ULL<<10)   /* CMCI supported */
 #define MCG_EXT_CNT_MASK	0xff0000     /* Number of Extended registers */
@@ -115,13 +115,6 @@ void mcheck_init(struct cpuinfo_x86 *c);
 static inline void mcheck_init(struct cpuinfo_x86 *c) {}
 #endif
 
-#ifdef CONFIG_X86_OLD_MCE
-extern int nr_mce_banks;
-void amd_mcheck_init(struct cpuinfo_x86 *c);
-void intel_p4_mcheck_init(struct cpuinfo_x86 *c);
-void intel_p6_mcheck_init(struct cpuinfo_x86 *c);
-#endif
-
 #ifdef CONFIG_X86_ANCIENT_MCE
 void intel_p5_mcheck_init(struct cpuinfo_x86 *c);
 void winchip_mcheck_init(struct cpuinfo_x86 *c);
@@ -137,10 +130,11 @@ void mce_log(struct mce *m);
 DECLARE_PER_CPU(struct sys_device, mce_dev);
 
 /*
- * To support more than 128 would need to escape the predefined
- * Linux defined extended banks first.
+ * Maximum banks number.
+ * This is the limit of the current register layout on
+ * Intel CPUs.
  */
-#define MAX_NR_BANKS (MCE_EXTENDED_BANK - 1)
+#define MAX_NR_BANKS 32
 
 #ifdef CONFIG_X86_MCE_INTEL
 extern int mce_cmci_disabled;
@@ -208,11 +202,7 @@ extern void (*threshold_cpu_callback)(unsigned long action, unsigned int cpu);
 
 void intel_init_thermal(struct cpuinfo_x86 *c);
 
-#ifdef CONFIG_X86_NEW_MCE
 void mce_log_therm_throt_event(__u64 status);
-#else
-static inline void mce_log_therm_throt_event(__u64 status) {}
-#endif
 
 #endif /* __KERNEL__ */
 #endif /* _ASM_X86_MCE_H */

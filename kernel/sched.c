@@ -616,6 +616,7 @@ struct rq {
 
 	unsigned char idle_at_tick;
 	/* For active balancing */
+	int post_schedule;
 	int active_balance;
 	int push_cpu;
 	/* cpu of this runqueue: */
@@ -693,6 +694,7 @@ static inline int cpu_of(struct rq *rq)
 #define this_rq()		(&__get_cpu_var(runqueues))
 #define task_rq(p)		cpu_rq(task_cpu(p))
 #define cpu_curr(cpu)		(cpu_rq(cpu)->curr)
+#define raw_rq()		(&__raw_get_cpu_var(runqueues))
 
 inline void update_rq_clock(struct rq *rq)
 {
@@ -1522,13 +1524,18 @@ static void
 update_group_shares_cpu(struct task_group *tg, int cpu,
 			unsigned long sd_shares, unsigned long sd_rq_weight)
 {
-	unsigned long shares;
 	unsigned long rq_weight;
+	unsigned long shares;
+	int boost = 0;
 
 	if (!tg->se[cpu])
 		return;
 
 	rq_weight = tg->cfs_rq[cpu]->rq_weight;
+	if (!rq_weight) {
+		boost = 1;
+		rq_weight = NICE_0_LOAD;
+	}
 
 	/*
 	 *           \Sum shares * rq_weight
@@ -1545,8 +1552,7 @@ update_group_shares_cpu(struct task_group *tg, int cpu,
 		unsigned long flags;
 
 		spin_lock_irqsave(&rq->lock, flags);
-		tg->cfs_rq[cpu]->shares = shares;
-
+		tg->cfs_rq[cpu]->shares = boost ? 0 : shares;
 		__set_se_shares(tg->se[cpu], shares);
 		spin_unlock_irqrestore(&rq->lock, flags);
 	}
@@ -1559,7 +1565,7 @@ update_group_shares_cpu(struct task_group *tg, int cpu,
  */
 static int tg_shares_up(struct task_group *tg, void *data)
 {
-	unsigned long weight, rq_weight = 0;
+	unsigned long weight, rq_weight = 0, eff_weight = 0;
 	unsigned long shares = 0;
 	struct sched_domain *sd = data;
 	int i;
@@ -1571,11 +1577,13 @@ static int tg_shares_up(struct task_group *tg, void *data)
 		 * run here it will not get delayed by group starvation.
 		 */
 		weight = tg->cfs_rq[i]->load.weight;
+		tg->cfs_rq[i]->rq_weight = weight;
+		rq_weight += weight;
+
 		if (!weight)
 			weight = NICE_0_LOAD;
 
-		tg->cfs_rq[i]->rq_weight = weight;
-		rq_weight += weight;
+		eff_weight += weight;
 		shares += tg->cfs_rq[i]->shares;
 	}
 
@@ -1585,8 +1593,14 @@ static int tg_shares_up(struct task_group *tg, void *data)
 	if (!sd->parent || !(sd->parent->flags & SD_LOAD_BALANCE))
 		shares = tg->shares;
 
-	for_each_cpu(i, sched_domain_span(sd))
-		update_group_shares_cpu(tg, i, shares, rq_weight);
+	for_each_cpu(i, sched_domain_span(sd)) {
+		unsigned long sd_rq_weight = rq_weight;
+
+		if (!tg->cfs_rq[i]->rq_weight)
+			sd_rq_weight = eff_weight;
+
+		update_group_shares_cpu(tg, i, shares, sd_rq_weight);
+	}
 
 	return 0;
 }
@@ -1616,8 +1630,14 @@ static int tg_load_down(struct task_group *tg, void *data)
 
 static void update_shares(struct sched_domain *sd)
 {
-	u64 now = cpu_clock(raw_smp_processor_id());
-	s64 elapsed = now - sd->last_update;
+	s64 elapsed;
+	u64 now;
+
+	if (root_task_group_empty())
+		return;
+
+	now = cpu_clock(raw_smp_processor_id());
+	elapsed = now - sd->last_update;
 
 	if (elapsed >= (s64)(u64)sysctl_sched_shares_ratelimit) {
 		sd->last_update = now;
@@ -1627,6 +1647,9 @@ static void update_shares(struct sched_domain *sd)
 
 static void update_shares_locked(struct rq *rq, struct sched_domain *sd)
 {
+	if (root_task_group_empty())
+		return;
+
 	spin_unlock(&rq->lock);
 	update_shares(sd);
 	spin_lock(&rq->lock);
@@ -1634,6 +1657,9 @@ static void update_shares_locked(struct rq *rq, struct sched_domain *sd)
 
 static void update_h_load(long cpu)
 {
+	if (root_task_group_empty())
+		return;
+
 	walk_tg_tree(tg_load_down, tg_nop, (void *)cpu);
 }
 
@@ -2637,9 +2663,32 @@ void sched_fork(struct task_struct *p, int clone_flags)
 	set_task_cpu(p, cpu);
 
 	/*
-	 * Make sure we do not leak PI boosting priority to the child:
+	 * Make sure we do not leak PI boosting priority to the child.
 	 */
 	p->prio = current->normal_prio;
+
+	/*
+	 * Revert to default priority/policy on fork if requested.
+	 */
+	if (unlikely(p->sched_reset_on_fork)) {
+		if (p->policy == SCHED_FIFO || p->policy == SCHED_RR)
+			p->policy = SCHED_NORMAL;
+
+		if (p->normal_prio < DEFAULT_PRIO)
+			p->prio = DEFAULT_PRIO;
+
+		if (PRIO_TO_NICE(p->static_prio) < 0) {
+			p->static_prio = NICE_TO_PRIO(0);
+			set_load_weight(p);
+		}
+
+		/*
+		 * We don't need the reset flag anymore after the fork. It has
+		 * fulfilled its duty:
+		 */
+		p->sched_reset_on_fork = 0;
+	}
+
 	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
 
@@ -2796,12 +2845,6 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 {
 	struct mm_struct *mm = rq->prev_mm;
 	long prev_state;
-#ifdef CONFIG_SMP
-	int post_schedule = 0;
-
-	if (current->sched_class->needs_post_schedule)
-		post_schedule = current->sched_class->needs_post_schedule(rq);
-#endif
 
 	rq->prev_mm = NULL;
 
@@ -2820,10 +2863,6 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	finish_arch_switch(prev);
 	perf_counter_task_sched_in(current, cpu_of(rq));
 	finish_lock_switch(rq, prev);
-#ifdef CONFIG_SMP
-	if (post_schedule)
-		current->sched_class->post_schedule(rq);
-#endif
 
 	fire_sched_in_preempt_notifiers(current);
 	if (mm)
@@ -2838,6 +2877,42 @@ static void finish_task_switch(struct rq *rq, struct task_struct *prev)
 	}
 }
 
+#ifdef CONFIG_SMP
+
+/* assumes rq->lock is held */
+static inline void pre_schedule(struct rq *rq, struct task_struct *prev)
+{
+	if (prev->sched_class->pre_schedule)
+		prev->sched_class->pre_schedule(rq, prev);
+}
+
+/* rq->lock is NOT held, but preemption is disabled */
+static inline void post_schedule(struct rq *rq)
+{
+	if (rq->post_schedule) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&rq->lock, flags);
+		if (rq->curr->sched_class->post_schedule)
+			rq->curr->sched_class->post_schedule(rq);
+		spin_unlock_irqrestore(&rq->lock, flags);
+
+		rq->post_schedule = 0;
+	}
+}
+
+#else
+
+static inline void pre_schedule(struct rq *rq, struct task_struct *p)
+{
+}
+
+static inline void post_schedule(struct rq *rq)
+{
+}
+
+#endif
+
 /**
  * schedule_tail - first thing a freshly forked thread must call.
  * @prev: the thread we just switched away from.
@@ -2848,6 +2923,13 @@ asmlinkage void schedule_tail(struct task_struct *prev)
 	struct rq *rq = this_rq();
 
 	finish_task_switch(rq, prev);
+
+	/*
+	 * FIXME: do we need to worry about rq being invalidated by the
+	 * task_switch?
+	 */
+	post_schedule(rq);
+
 #ifdef __ARCH_WANT_UNLOCKED_CTXSW
 	/* In this case, finish_task_switch does not reenable preemption */
 	preempt_enable();
@@ -5031,17 +5113,16 @@ void account_idle_time(cputime_t cputime)
  */
 void account_process_tick(struct task_struct *p, int user_tick)
 {
-	cputime_t one_jiffy = jiffies_to_cputime(1);
-	cputime_t one_jiffy_scaled = cputime_to_scaled(one_jiffy);
+	cputime_t one_jiffy_scaled = cputime_to_scaled(cputime_one_jiffy);
 	struct rq *rq = this_rq();
 
 	if (user_tick)
-		account_user_time(p, one_jiffy, one_jiffy_scaled);
+		account_user_time(p, cputime_one_jiffy, one_jiffy_scaled);
 	else if ((p != rq->idle) || (irq_count() != HARDIRQ_OFFSET))
-		account_system_time(p, HARDIRQ_OFFSET, one_jiffy,
+		account_system_time(p, HARDIRQ_OFFSET, cputime_one_jiffy,
 				    one_jiffy_scaled);
 	else
-		account_idle_time(one_jiffy);
+		account_idle_time(cputime_one_jiffy);
 }
 
 /*
@@ -5349,10 +5430,7 @@ need_resched_nonpreemptible:
 		switch_count = &prev->nvcsw;
 	}
 
-#ifdef CONFIG_SMP
-	if (prev->sched_class->pre_schedule)
-		prev->sched_class->pre_schedule(rq, prev);
-#endif
+	pre_schedule(rq, prev);
 
 	if (unlikely(!rq->nr_running))
 		idle_balance(cpu, rq);
@@ -5377,6 +5455,8 @@ need_resched_nonpreemptible:
 		rq = cpu_rq(cpu);
 	} else
 		spin_unlock_irq(&rq->lock);
+
+	post_schedule(rq);
 
 	if (unlikely(reacquire_kernel_lock(current) < 0))
 		goto need_resched_nonpreemptible;
@@ -6123,17 +6203,25 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	unsigned long flags;
 	const struct sched_class *prev_class = p->sched_class;
 	struct rq *rq;
+	int reset_on_fork;
 
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
 recheck:
 	/* double check policy once rq lock held */
-	if (policy < 0)
+	if (policy < 0) {
+		reset_on_fork = p->sched_reset_on_fork;
 		policy = oldpolicy = p->policy;
-	else if (policy != SCHED_FIFO && policy != SCHED_RR &&
-			policy != SCHED_NORMAL && policy != SCHED_BATCH &&
-			policy != SCHED_IDLE)
-		return -EINVAL;
+	} else {
+		reset_on_fork = !!(policy & SCHED_RESET_ON_FORK);
+		policy &= ~SCHED_RESET_ON_FORK;
+
+		if (policy != SCHED_FIFO && policy != SCHED_RR &&
+				policy != SCHED_NORMAL && policy != SCHED_BATCH &&
+				policy != SCHED_IDLE)
+			return -EINVAL;
+	}
+
 	/*
 	 * Valid priorities for SCHED_FIFO and SCHED_RR are
 	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
@@ -6177,6 +6265,10 @@ recheck:
 		/* can't change other user's priorities */
 		if (!check_same_owner(p))
 			return -EPERM;
+
+		/* Normal users shall not reset the sched_reset_on_fork flag */
+		if (p->sched_reset_on_fork && !reset_on_fork)
+			return -EPERM;
 	}
 
 	if (user) {
@@ -6219,6 +6311,8 @@ recheck:
 		deactivate_task(rq, p, 0);
 	if (running)
 		p->sched_class->put_prev_task(rq, p);
+
+	p->sched_reset_on_fork = reset_on_fork;
 
 	oldprio = p->prio;
 	__setscheduler(rq, p, policy, param->sched_priority);
@@ -6336,14 +6430,15 @@ SYSCALL_DEFINE1(sched_getscheduler, pid_t, pid)
 	if (p) {
 		retval = security_task_getscheduler(p);
 		if (!retval)
-			retval = p->policy;
+			retval = p->policy
+				| (p->sched_reset_on_fork ? SCHED_RESET_ON_FORK : 0);
 	}
 	read_unlock(&tasklist_lock);
 	return retval;
 }
 
 /**
- * sys_sched_getscheduler - get the RT priority of a thread
+ * sys_sched_getparam - get the RT priority of a thread
  * @pid: the pid in question.
  * @param: structure containing the RT priority.
  */
@@ -6571,19 +6666,9 @@ static inline int should_resched(void)
 
 static void __cond_resched(void)
 {
-#ifdef CONFIG_DEBUG_SPINLOCK_SLEEP
-	__might_sleep(__FILE__, __LINE__);
-#endif
-	/*
-	 * The BKS might be reacquired before we have dropped
-	 * PREEMPT_ACTIVE, which could trigger a second
-	 * cond_resched() call.
-	 */
-	do {
-		add_preempt_count(PREEMPT_ACTIVE);
-		schedule();
-		sub_preempt_count(PREEMPT_ACTIVE);
-	} while (need_resched());
+	add_preempt_count(PREEMPT_ACTIVE);
+	schedule();
+	sub_preempt_count(PREEMPT_ACTIVE);
 }
 
 int __sched _cond_resched(void)
@@ -6597,17 +6682,19 @@ int __sched _cond_resched(void)
 EXPORT_SYMBOL(_cond_resched);
 
 /*
- * cond_resched_lock() - if a reschedule is pending, drop the given lock,
+ * __cond_resched_lock() - if a reschedule is pending, drop the given lock,
  * call schedule, and on return reacquire the lock.
  *
  * This works OK both with and without CONFIG_PREEMPT. We do strange low-level
  * operations here to prevent schedule() from being called twice (once via
  * spin_unlock(), once by hand).
  */
-int cond_resched_lock(spinlock_t *lock)
+int __cond_resched_lock(spinlock_t *lock)
 {
 	int resched = should_resched();
 	int ret = 0;
+
+	lockdep_assert_held(lock);
 
 	if (spin_needbreak(lock) || resched) {
 		spin_unlock(lock);
@@ -6620,9 +6707,9 @@ int cond_resched_lock(spinlock_t *lock)
 	}
 	return ret;
 }
-EXPORT_SYMBOL(cond_resched_lock);
+EXPORT_SYMBOL(__cond_resched_lock);
 
-int __sched cond_resched_softirq(void)
+int __sched __cond_resched_softirq(void)
 {
 	BUG_ON(!in_softirq());
 
@@ -6634,7 +6721,7 @@ int __sched cond_resched_softirq(void)
 	}
 	return 0;
 }
-EXPORT_SYMBOL(cond_resched_softirq);
+EXPORT_SYMBOL(__cond_resched_softirq);
 
 /**
  * yield - yield the current processor to other threads.
@@ -6658,7 +6745,7 @@ EXPORT_SYMBOL(yield);
  */
 void __sched io_schedule(void)
 {
-	struct rq *rq = &__raw_get_cpu_var(runqueues);
+	struct rq *rq = raw_rq();
 
 	delayacct_blkio_start();
 	atomic_inc(&rq->nr_iowait);
@@ -6670,7 +6757,7 @@ EXPORT_SYMBOL(io_schedule);
 
 long __sched io_schedule_timeout(long timeout)
 {
-	struct rq *rq = &__raw_get_cpu_var(runqueues);
+	struct rq *rq = raw_rq();
 	long ret;
 
 	delayacct_blkio_start();
@@ -6992,8 +7079,12 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
 
 	if (migrate_task(p, cpumask_any_and(cpu_online_mask, new_mask), &req)) {
 		/* Need help from migration thread: drop lock and wait. */
+		struct task_struct *mt = rq->migration_thread;
+
+		get_task_struct(mt);
 		task_rq_unlock(rq, &flags);
 		wake_up_process(rq->migration_thread);
+		put_task_struct(mt);
 		wait_for_completion(&req.done);
 		tlb_migrate_finish(p->mm);
 		return 0;
@@ -7051,6 +7142,11 @@ fail:
 	return ret;
 }
 
+#define RCU_MIGRATION_IDLE	0
+#define RCU_MIGRATION_NEED_QS	1
+#define RCU_MIGRATION_GOT_QS	2
+#define RCU_MIGRATION_MUST_SYNC	3
+
 /*
  * migration_thread - this is a highprio system thread that performs
  * thread migration by bumping thread off CPU then 'pushing' onto
@@ -7058,6 +7154,7 @@ fail:
  */
 static int migration_thread(void *data)
 {
+	int badcpu;
 	int cpu = (long)data;
 	struct rq *rq;
 
@@ -7092,8 +7189,17 @@ static int migration_thread(void *data)
 		req = list_entry(head->next, struct migration_req, list);
 		list_del_init(head->next);
 
-		spin_unlock(&rq->lock);
-		__migrate_task(req->task, cpu, req->dest_cpu);
+		if (req->task != NULL) {
+			spin_unlock(&rq->lock);
+			__migrate_task(req->task, cpu, req->dest_cpu);
+		} else if (likely(cpu == (badcpu = smp_processor_id()))) {
+			req->dest_cpu = RCU_MIGRATION_GOT_QS;
+			spin_unlock(&rq->lock);
+		} else {
+			req->dest_cpu = RCU_MIGRATION_MUST_SYNC;
+			spin_unlock(&rq->lock);
+			WARN_ONCE(1, "migration_thread() on CPU %d, expected %d\n", badcpu, cpu);
+		}
 		local_irq_enable();
 
 		complete(&req->done);
@@ -7625,7 +7731,7 @@ static int __init migration_init(void)
 	migration_call(&migration_notifier, CPU_ONLINE, cpu);
 	register_cpu_notifier(&migration_notifier);
 
-	return err;
+	return 0;
 }
 early_initcall(migration_init);
 #endif
@@ -7841,7 +7947,7 @@ static void rq_attach_root(struct rq *rq, struct root_domain *rd)
 	rq->rd = rd;
 
 	cpumask_set_cpu(rq->cpu, rd->span);
-	if (cpumask_test_cpu(rq->cpu, cpu_online_mask))
+	if (cpumask_test_cpu(rq->cpu, cpu_active_mask))
 		set_rq_online(rq);
 
 	spin_unlock_irqrestore(&rq->lock, flags);
@@ -9334,6 +9440,7 @@ void __init sched_init(void)
 #ifdef CONFIG_SMP
 		rq->sd = NULL;
 		rq->rd = NULL;
+		rq->post_schedule = 0;
 		rq->active_balance = 0;
 		rq->next_balance = jiffies;
 		rq->push_cpu = 0;
@@ -9398,13 +9505,20 @@ void __init sched_init(void)
 }
 
 #ifdef CONFIG_DEBUG_SPINLOCK_SLEEP
-void __might_sleep(char *file, int line)
+static inline int preempt_count_equals(int preempt_offset)
+{
+	int nested = preempt_count() & ~PREEMPT_ACTIVE;
+
+	return (nested == PREEMPT_INATOMIC_BASE + preempt_offset);
+}
+
+void __might_sleep(char *file, int line, int preempt_offset)
 {
 #ifdef in_atomic
 	static unsigned long prev_jiffy;	/* ratelimiting */
 
-	if ((!in_atomic() && !irqs_disabled()) ||
-		    system_state != SYSTEM_RUNNING || oops_in_progress)
+	if ((preempt_count_equals(preempt_offset) && !irqs_disabled()) ||
+	    system_state != SYSTEM_RUNNING || oops_in_progress)
 		return;
 	if (time_before(jiffies, prev_jiffy + HZ) && prev_jiffy)
 		return;
@@ -10581,3 +10695,113 @@ struct cgroup_subsys cpuacct_subsys = {
 	.subsys_id = cpuacct_subsys_id,
 };
 #endif	/* CONFIG_CGROUP_CPUACCT */
+
+#ifndef CONFIG_SMP
+
+int rcu_expedited_torture_stats(char *page)
+{
+	return 0;
+}
+EXPORT_SYMBOL_GPL(rcu_expedited_torture_stats);
+
+void synchronize_sched_expedited(void)
+{
+}
+EXPORT_SYMBOL_GPL(synchronize_sched_expedited);
+
+#else /* #ifndef CONFIG_SMP */
+
+static DEFINE_PER_CPU(struct migration_req, rcu_migration_req);
+static DEFINE_MUTEX(rcu_sched_expedited_mutex);
+
+#define RCU_EXPEDITED_STATE_POST -2
+#define RCU_EXPEDITED_STATE_IDLE -1
+
+static int rcu_expedited_state = RCU_EXPEDITED_STATE_IDLE;
+
+int rcu_expedited_torture_stats(char *page)
+{
+	int cnt = 0;
+	int cpu;
+
+	cnt += sprintf(&page[cnt], "state: %d /", rcu_expedited_state);
+	for_each_online_cpu(cpu) {
+		 cnt += sprintf(&page[cnt], " %d:%d",
+				cpu, per_cpu(rcu_migration_req, cpu).dest_cpu);
+	}
+	cnt += sprintf(&page[cnt], "\n");
+	return cnt;
+}
+EXPORT_SYMBOL_GPL(rcu_expedited_torture_stats);
+
+static long synchronize_sched_expedited_count;
+
+/*
+ * Wait for an rcu-sched grace period to elapse, but use "big hammer"
+ * approach to force grace period to end quickly.  This consumes
+ * significant time on all CPUs, and is thus not recommended for
+ * any sort of common-case code.
+ *
+ * Note that it is illegal to call this function while holding any
+ * lock that is acquired by a CPU-hotplug notifier.  Failing to
+ * observe this restriction will result in deadlock.
+ */
+void synchronize_sched_expedited(void)
+{
+	int cpu;
+	unsigned long flags;
+	bool need_full_sync = 0;
+	struct rq *rq;
+	struct migration_req *req;
+	long snap;
+	int trycount = 0;
+
+	smp_mb();  /* ensure prior mod happens before capturing snap. */
+	snap = ACCESS_ONCE(synchronize_sched_expedited_count) + 1;
+	get_online_cpus();
+	while (!mutex_trylock(&rcu_sched_expedited_mutex)) {
+		put_online_cpus();
+		if (trycount++ < 10)
+			udelay(trycount * num_online_cpus());
+		else {
+			synchronize_sched();
+			return;
+		}
+		if (ACCESS_ONCE(synchronize_sched_expedited_count) - snap > 0) {
+			smp_mb(); /* ensure test happens before caller kfree */
+			return;
+		}
+		get_online_cpus();
+	}
+	rcu_expedited_state = RCU_EXPEDITED_STATE_POST;
+	for_each_online_cpu(cpu) {
+		rq = cpu_rq(cpu);
+		req = &per_cpu(rcu_migration_req, cpu);
+		init_completion(&req->done);
+		req->task = NULL;
+		req->dest_cpu = RCU_MIGRATION_NEED_QS;
+		spin_lock_irqsave(&rq->lock, flags);
+		list_add(&req->list, &rq->migration_queue);
+		spin_unlock_irqrestore(&rq->lock, flags);
+		wake_up_process(rq->migration_thread);
+	}
+	for_each_online_cpu(cpu) {
+		rcu_expedited_state = cpu;
+		req = &per_cpu(rcu_migration_req, cpu);
+		rq = cpu_rq(cpu);
+		wait_for_completion(&req->done);
+		spin_lock_irqsave(&rq->lock, flags);
+		if (unlikely(req->dest_cpu == RCU_MIGRATION_MUST_SYNC))
+			need_full_sync = 1;
+		req->dest_cpu = RCU_MIGRATION_IDLE;
+		spin_unlock_irqrestore(&rq->lock, flags);
+	}
+	rcu_expedited_state = RCU_EXPEDITED_STATE_IDLE;
+	mutex_unlock(&rcu_sched_expedited_mutex);
+	put_online_cpus();
+	if (need_full_sync)
+		synchronize_sched();
+}
+EXPORT_SYMBOL_GPL(synchronize_sched_expedited);
+
+#endif /* #else #ifndef CONFIG_SMP */

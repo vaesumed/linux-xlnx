@@ -38,6 +38,8 @@
 #define SCHED_BATCH		3
 /* SCHED_ISO: reserved but not implemented yet */
 #define SCHED_IDLE		5
+/* Can be ORed in to make sure the process is reverted back to SCHED_NORMAL on fork */
+#define SCHED_RESET_ON_FORK     0x40000000
 
 #ifdef __KERNEL__
 
@@ -474,6 +476,13 @@ struct pacct_struct {
 	unsigned long		ac_minflt, ac_majflt;
 };
 
+struct cpu_itimer {
+	cputime_t expires;
+	cputime_t incr;
+	u32 error;
+	u32 incr_error;
+};
+
 /**
  * struct task_cputime - collected CPU time counts
  * @utime:		time spent in user mode, in &cputime_t units
@@ -568,9 +577,12 @@ struct signal_struct {
 	struct pid *leader_pid;
 	ktime_t it_real_incr;
 
-	/* ITIMER_PROF and ITIMER_VIRTUAL timers for the process */
-	cputime_t it_prof_expires, it_virt_expires;
-	cputime_t it_prof_incr, it_virt_incr;
+	/*
+	 * ITIMER_PROF and ITIMER_VIRTUAL timers for the process, we use
+	 * CPUCLOCK_PROF and CPUCLOCK_VIRT for indexing array as these
+	 * values are defined to 0 and 1 respectively
+	 */
+	struct cpu_itimer it[2];
 
 	/*
 	 * Thread group totals for process CPU timers.
@@ -1049,7 +1061,6 @@ struct sched_class {
 			      struct rq *busiest, struct sched_domain *sd,
 			      enum cpu_idle_type idle);
 	void (*pre_schedule) (struct rq *this_rq, struct task_struct *task);
-	int (*needs_post_schedule) (struct rq *this_rq);
 	void (*post_schedule) (struct rq *this_rq);
 	void (*task_wake_up) (struct rq *this_rq, struct task_struct *task);
 
@@ -1233,6 +1244,10 @@ struct task_struct {
 	unsigned did_exec:1;
 	unsigned in_execve:1;	/* Tell the LSMs that the process is doing an
 				 * execve */
+
+	/* Revert to default priority/policy when forking */
+	unsigned sched_reset_on_fork:1;
+
 	pid_t pid;
 	pid_t tgid;
 
@@ -2284,23 +2299,31 @@ static inline int need_resched(void)
  * cond_resched_softirq() will enable bhs before scheduling.
  */
 extern int _cond_resched(void);
-#ifdef CONFIG_PREEMPT_BKL
-static inline int cond_resched(void)
-{
-	return 0;
-}
+
+#define cond_resched() ({			\
+	__might_sleep(__FILE__, __LINE__, 0);	\
+	_cond_resched();			\
+})
+
+extern int __cond_resched_lock(spinlock_t *lock);
+
+#ifdef CONFIG_PREEMPT
+#define PREEMPT_LOCK_OFFSET	PREEMPT_OFFSET
 #else
-static inline int cond_resched(void)
-{
-	return _cond_resched();
-}
+#define PREEMPT_LOCK_OFFSET	0
 #endif
-extern int cond_resched_lock(spinlock_t * lock);
-extern int cond_resched_softirq(void);
-static inline int cond_resched_bkl(void)
-{
-	return _cond_resched();
-}
+
+#define cond_resched_lock(lock) ({				\
+	__might_sleep(__FILE__, __LINE__, PREEMPT_LOCK_OFFSET);	\
+	__cond_resched_lock(lock);				\
+})
+
+extern int __cond_resched_softirq(void);
+
+#define cond_resched_softirq() ({				\
+	__might_sleep(__FILE__, __LINE__, SOFTIRQ_OFFSET);	\
+	__cond_resched_softirq();				\
+})
 
 /*
  * Does a critical section need to be broken due to another

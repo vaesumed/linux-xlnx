@@ -50,7 +50,7 @@ unsigned long __read_mostly	tracing_thresh;
  * On boot up, the ring buffer is set to the minimum size, so that
  * we do not waste memory on systems that are not using tracing.
  */
-static int ring_buffer_expanded;
+int ring_buffer_expanded;
 
 /*
  * We need to change this state when a selftest is running.
@@ -64,7 +64,7 @@ static bool __read_mostly tracing_selftest_running;
 /*
  * If a tracer is running, we do not want to run SELFTEST.
  */
-static bool __read_mostly tracing_selftest_disabled;
+bool __read_mostly tracing_selftest_disabled;
 
 /* For tracers that don't implement custom flags */
 static struct tracer_opt dummy_tracer_opt[] = {
@@ -3630,9 +3630,6 @@ tracing_stats_read(struct file *filp, char __user *ubuf,
 	cnt = ring_buffer_commit_overrun_cpu(tr->buffer, cpu);
 	trace_seq_printf(s, "commit overrun: %ld\n", cnt);
 
-	cnt = ring_buffer_nmi_dropped_cpu(tr->buffer, cpu);
-	trace_seq_printf(s, "nmi dropped: %ld\n", cnt);
-
 	count = simple_read_from_buffer(ubuf, count, ppos, s->buffer, s->len);
 
 	kfree(s);
@@ -4270,7 +4267,6 @@ void ftrace_dump(void)
 
 __init static int tracer_alloc_buffers(void)
 {
-	struct trace_array_cpu *data;
 	int ring_buf_size;
 	int i;
 	int ret = -ENOMEM;
@@ -4319,7 +4315,7 @@ __init static int tracer_alloc_buffers(void)
 
 	/* Allocate the first page for all buffers */
 	for_each_tracing_cpu(i) {
-		data = global_trace.data[i] = &per_cpu(global_trace_cpu, i);
+		global_trace.data[i] = &per_cpu(global_trace_cpu, i);
 		max_tr.data[i] = &per_cpu(max_data, i);
 	}
 
