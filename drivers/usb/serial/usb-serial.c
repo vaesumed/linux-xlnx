@@ -292,8 +292,6 @@ bailout_serial_put:
 static void serial_do_down(struct usb_serial_port *port)
 {
 	struct usb_serial_driver *drv = port->serial->type;
-	struct usb_serial *serial;
-	struct module *owner;
 
 	/* The console is magical, do not hang up the console hardware
 	   or there will be tears */
@@ -301,12 +299,8 @@ static void serial_do_down(struct usb_serial_port *port)
 		return;
 
 	mutex_lock(&port->mutex);
-	serial = port->serial;
-	owner = serial->type->driver.owner;
-
 	if (drv->close)
 		drv->close(port);
-
 	mutex_unlock(&port->mutex);
 }
 
@@ -1221,15 +1215,19 @@ int usb_serial_suspend(struct usb_interface *intf, pm_message_t message)
 
 	serial->suspending = 1;
 
+	if (serial->type->suspend) {
+		r = serial->type->suspend(serial, message);
+		if (r < 0)
+			goto err_out;
+	}
+
 	for (i = 0; i < serial->num_ports; ++i) {
 		port = serial->port[i];
 		if (port)
 			kill_traffic(port);
 	}
 
-	if (serial->type->suspend)
-		r = serial->type->suspend(serial, message);
-
+err_out:
 	return r;
 }
 EXPORT_SYMBOL(usb_serial_suspend);

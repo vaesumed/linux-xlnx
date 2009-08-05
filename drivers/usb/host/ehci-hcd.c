@@ -30,7 +30,6 @@
 #include <linux/timer.h>
 #include <linux/list.h>
 #include <linux/interrupt.h>
-#include <linux/reboot.h>
 #include <linux/usb.h>
 #include <linux/moduleparam.h>
 #include <linux/dma-mapping.h>
@@ -127,6 +126,8 @@ timer_action(struct ehci_hcd *ehci, enum ehci_timer_action action)
 
 		switch (action) {
 		case TIMER_IO_WATCHDOG:
+			if (!ehci->need_io_watchdog)
+				return;
 			t = EHCI_IO_JIFFIES;
 			break;
 		case TIMER_ASYNC_OFF:
@@ -247,6 +248,12 @@ static int ehci_reset (struct ehci_hcd *ehci)
 	retval = handshake (ehci, &ehci->regs->command,
 			    CMD_RESET, 0, 250 * 1000);
 
+	if (ehci->has_hostpc) {
+		ehci_writel(ehci, USBMODE_EX_HC | USBMODE_EX_VBPS,
+			(u32 __iomem *)(((u8 *)ehci->regs) + USBMODE_EX));
+		ehci_writel(ehci, TXFIFO_DEFAULT,
+			(u32 __iomem *)(((u8 *)ehci->regs) + TXFILLTUNING));
+	}
 	if (retval)
 		return retval;
 
@@ -505,9 +512,14 @@ static int ehci_init(struct usb_hcd *hcd)
 	u32			temp;
 	int			retval;
 	u32			hcc_params;
+	struct ehci_qh_hw	*hw;
 
 	spin_lock_init(&ehci->lock);
 
+	/*
+	 * keep io watchdog by default, those good HCDs could turn off it later
+	 */
+	ehci->need_io_watchdog = 1;
 	init_timer(&ehci->watchdog);
 	ehci->watchdog.function = ehci_watchdog;
 	ehci->watchdog.data = (unsigned long) ehci;
@@ -544,12 +556,13 @@ static int ehci_init(struct usb_hcd *hcd)
 	 * from automatically advancing to the next td after short reads.
 	 */
 	ehci->async->qh_next.qh = NULL;
-	ehci->async->hw_next = QH_NEXT(ehci, ehci->async->qh_dma);
-	ehci->async->hw_info1 = cpu_to_hc32(ehci, QH_HEAD);
-	ehci->async->hw_token = cpu_to_hc32(ehci, QTD_STS_HALT);
-	ehci->async->hw_qtd_next = EHCI_LIST_END(ehci);
+	hw = ehci->async->hw;
+	hw->hw_next = QH_NEXT(ehci, ehci->async->qh_dma);
+	hw->hw_info1 = cpu_to_hc32(ehci, QH_HEAD);
+	hw->hw_token = cpu_to_hc32(ehci, QTD_STS_HALT);
+	hw->hw_qtd_next = EHCI_LIST_END(ehci);
 	ehci->async->qh_state = QH_STATE_LINKED;
-	ehci->async->hw_alt_next = QTD_NEXT(ehci, ehci->async->dummy->qtd_dma);
+	hw->hw_alt_next = QTD_NEXT(ehci, ehci->async->dummy->qtd_dma);
 
 	/* clear interrupt enables, set irq latency */
 	if (log2_irq_thresh < 0 || log2_irq_thresh > 6)
@@ -979,7 +992,7 @@ rescan:
 	/* endpoints can be iso streams.  for now, we don't
 	 * accelerate iso completions ... so spin a while.
 	 */
-	if (qh->hw_info1 == 0) {
+	if (qh->hw->hw_info1 == 0) {
 		ehci_vdbg (ehci, "iso delay\n");
 		goto idle_timeout;
 	}
@@ -1115,6 +1128,16 @@ MODULE_LICENSE ("GPL");
 #ifdef CONFIG_ARCH_IXP4XX
 #include "ehci-ixp4xx.c"
 #define	PLATFORM_DRIVER		ixp4xx_ehci_driver
+#endif
+
+#ifdef CONFIG_USB_W90X900_EHCI
+#include "ehci-w90x900.c"
+#define	PLATFORM_DRIVER		ehci_hcd_w90x900_driver
+#endif
+
+#ifdef CONFIG_ARCH_AT91
+#include "ehci-atmel.c"
+#define	PLATFORM_DRIVER		ehci_atmel_driver
 #endif
 
 #if !defined(PCI_DRIVER) && !defined(PLATFORM_DRIVER) && \

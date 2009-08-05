@@ -177,9 +177,13 @@ static inline void pxa27x_setup_hc(struct pxa27x_ohci *ohci,
 
 	if (inf->flags & NO_OC_PROTECTION)
 		uhcrhda |= UHCRHDA_NOCP;
+	else
+		uhcrhda &= ~UHCRHDA_NOCP;
 
 	if (inf->flags & OC_MODE_PERPORT)
 		uhcrhda |= UHCRHDA_OCPM;
+	else
+		uhcrhda &= ~UHCRHDA_OCPM;
 
 	if (inf->power_on_delay) {
 		uhcrhda &= ~UHCRHDA_POTPGT(0xff);
@@ -498,6 +502,9 @@ static int ohci_hcd_pxa27x_drv_resume(struct device *dev)
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct pxa27x_ohci *ohci = to_pxa27x_ohci(hcd);
 	int status;
+	struct pxaohci_platform_data *inf;
+
+	inf = pdev->dev.platform_data;
 
 	if (time_before(jiffies, ohci->ohci.next_statechange))
 		msleep(5);
@@ -505,6 +512,13 @@ static int ohci_hcd_pxa27x_drv_resume(struct device *dev)
 
 	if ((status = pxa27x_start_hc(ohci, dev)) < 0)
 		return status;
+
+	if (inf) {
+		/* Select Power Management Mode */
+		pxa27x_ohci_select_pmm(ohci, inf->port_mode);
+	} else {
+		pr_err("No platform info on resume");
+	}
 
 	ohci_finish_controller_resume(hcd);
 	return 0;

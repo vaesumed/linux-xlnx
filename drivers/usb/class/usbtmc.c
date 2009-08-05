@@ -86,6 +86,8 @@ struct usbtmc_device_data {
 	bool TermCharEnabled;
 	bool auto_abort;
 
+	bool zombie; /* fd of disconnected device */
+
 	struct usbtmc_dev_capabilities	capabilities;
 	struct kref kref;
 	struct mutex io_mutex;	/* only one i/o function running at a time */
@@ -367,13 +369,13 @@ static ssize_t usbtmc_read(struct file *filp, char __user *buf,
 {
 	struct usbtmc_device_data *data;
 	struct device *dev;
-	unsigned long int n_characters;
+	u32 n_characters;
 	u8 *buffer;
 	int actual;
-	int done;
-	int remaining;
+	size_t done;
+	size_t remaining;
 	int retval;
-	int this_part;
+	size_t this_part;
 
 	/* Get pointer to private data structure */
 	data = filp->private_data;
@@ -384,6 +386,10 @@ static ssize_t usbtmc_read(struct file *filp, char __user *buf,
 		return -ENOMEM;
 
 	mutex_lock(&data->io_mutex);
+	if (data->zombie) {
+		retval = -ENODEV;
+		goto exit;
+	}
 
 	remaining = count;
 	done = 0;
@@ -455,6 +461,18 @@ static ssize_t usbtmc_read(struct file *filp, char __user *buf,
 			       (buffer[6] << 16) +
 			       (buffer[7] << 24);
 
+		/* Ensure the instrument doesn't lie about it */
+		if(n_characters > actual - 12) {
+			dev_err(dev, "Device lies about message size: %u > %d\n", n_characters, actual - 12);
+			n_characters = actual - 12;
+		}
+
+		/* Ensure the instrument doesn't send more back than requested */
+		if(n_characters > this_part) {
+			dev_err(dev, "Device returns more than requested: %zu > %zu\n", done + n_characters, done + this_part);
+			n_characters = this_part;
+		}
+
 		/* Copy buffer to user space */
 		if (copy_to_user(buf + done, &buffer[12], n_characters)) {
 			/* There must have been an addressing problem */
@@ -465,6 +483,8 @@ static ssize_t usbtmc_read(struct file *filp, char __user *buf,
 		done += n_characters;
 		if (n_characters < USBTMC_SIZE_IOBUFFER)
 			remaining = 0;
+		else
+			remaining -= n_characters;
 	}
 
 	/* Update file position value */
@@ -496,6 +516,10 @@ static ssize_t usbtmc_write(struct file *filp, const char __user *buf,
 		return -ENOMEM;
 
 	mutex_lock(&data->io_mutex);
+	if (data->zombie) {
+		retval = -ENODEV;
+		goto exit;
+	}
 
 	remaining = count;
 	done = 0;
@@ -925,6 +949,10 @@ static long usbtmc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	data = file->private_data;
 	mutex_lock(&data->io_mutex);
+	if (data->zombie) {
+		retval = -ENODEV;
+		goto skip_io_on_zombie;
+	}
 
 	switch (cmd) {
 	case USBTMC_IOCTL_CLEAR_OUT_HALT:
@@ -952,6 +980,7 @@ static long usbtmc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	}
 
+skip_io_on_zombie:
 	mutex_unlock(&data->io_mutex);
 	return retval;
 }
@@ -995,6 +1024,7 @@ static int usbtmc_probe(struct usb_interface *intf,
 	usb_set_intfdata(intf, data);
 	kref_init(&data->kref);
 	mutex_init(&data->io_mutex);
+	data->zombie = 0;
 
 	/* Initialize USBTMC bTag and other fields */
 	data->bTag	= 1;
@@ -1065,14 +1095,30 @@ static void usbtmc_disconnect(struct usb_interface *intf)
 	usb_deregister_dev(intf, &usbtmc_class);
 	sysfs_remove_group(&intf->dev.kobj, &capability_attr_grp);
 	sysfs_remove_group(&intf->dev.kobj, &data_attr_grp);
+	mutex_lock(&data->io_mutex);
+	data->zombie = 1;
+	mutex_unlock(&data->io_mutex);
 	kref_put(&data->kref, usbtmc_delete);
+}
+
+static int usbtmc_suspend (struct usb_interface *intf, pm_message_t message)
+{
+	/* this driver does not have pending URBs */
+	return 0;
+}
+
+static int usbtmc_resume (struct usb_interface *intf)
+{
+	return 0;
 }
 
 static struct usb_driver usbtmc_driver = {
 	.name		= "usbtmc",
 	.id_table	= usbtmc_devices,
 	.probe		= usbtmc_probe,
-	.disconnect	= usbtmc_disconnect
+	.disconnect	= usbtmc_disconnect,
+	.suspend	= usbtmc_suspend,
+	.resume		= usbtmc_resume,
 };
 
 static int __init usbtmc_init(void)
