@@ -132,16 +132,8 @@
 
 #include <linux/delay.h>
 #include <linux/kthread.h>
-// #ifdef PRIVATE_OBJ
-//#if !defined(__DEVICE_EXP_H)
-//#include "device_exp.h"
-//#endif
-//#if !defined(__DEVICE_MODULE_H)
-//#include "device_module.h"
-//#endif
 
 
-// #endif
 //#define	DEBUG
 /*---------------------  Static Definitions -------------------------*/
 //static int          msglevel                =MSG_LEVEL_DEBUG;
@@ -151,11 +143,9 @@ static int          msglevel                =   MSG_LEVEL_INFO;
 //
 // Define module options
 //
-#ifndef PRIVATE_OBJ
 MODULE_AUTHOR("VIA Networking Technologies, Inc., <lyndonchen@vntek.com.tw>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("VIA Networking Solomon-A/B/G Wireless LAN Adapter Driver");
-#endif
 
 //PLICE_DEBUG ->
 	static int mlme_kill;
@@ -332,7 +322,6 @@ DEVICE_PARAM(bDiversityANTEnable, "ANT diversity mode");
 //
 
 
-#ifndef PRIVATE_OBJ
 static int          device_nics             =0;
 static PSDevice     pDevice_Infos           =NULL;
 static struct net_device *root_device_dev = NULL;
@@ -343,15 +332,13 @@ static CHIP_INFO chip_info_table[]= {
     {0,NULL}
 };
 
-static struct pci_device_id device_id_table[] __devinitdata = {
-{ 0x1106, 0x3253, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (long)&chip_info_table[0]},
-{ 0, }
+DEFINE_PCI_DEVICE_TABLE(device_id_table) = {
+	{ PCI_VDEVICE(VIA, 0x3253), (kernel_ulong_t)chip_info_table},
+	{ 0, }
 };
-#endif
 
 /*---------------------  Static Functions  --------------------------*/
 
-#ifndef PRIVATE_OBJ
 
 static int  device_found1(struct pci_dev *pcid, const struct pci_device_id *ent);
 static BOOL device_init_info(struct pci_dev* pcid, PSDevice* ppDevice, PCHIP_INFO);
@@ -378,7 +365,6 @@ struct notifier_block device_notifier = {
 };
 #endif
 
-#endif // #ifndef PRIVATE_OBJ
 
 static void device_init_rd0_ring(PSDevice pDevice);
 static void device_init_rd1_ring(PSDevice pDevice);
@@ -386,9 +372,7 @@ static void device_init_defrag_cb(PSDevice pDevice);
 static void device_init_td0_ring(PSDevice pDevice);
 static void device_init_td1_ring(PSDevice pDevice);
 
-#ifndef PRIVATE_OBJ
 static int  device_dma0_tx_80211(struct sk_buff *skb, struct net_device *dev);
-#endif
 //2008-0714<Add>by Mike Liu
 static BOOL device_release_WPADEV(PSDevice pDevice);
 
@@ -412,7 +396,6 @@ static int Config_FileGetParameter(UCHAR *string, UCHAR *dest,UCHAR *source);
 /*---------------------  Export Functions  --------------------------*/
 
 
-#ifndef PRIVATE_OBJ
 
 static char* get_chip_name(int chip_id) {
     int i;
@@ -422,7 +405,7 @@ static char* get_chip_name(int chip_id) {
     return chip_info_table[i].name;
 }
 
-static void __devexit device_remove1(struct pci_dev *pcid)
+static void device_remove1(struct pci_dev *pcid)
 {
     PSDevice pDevice=pci_get_drvdata(pcid);
 
@@ -432,18 +415,17 @@ static void __devexit device_remove1(struct pci_dev *pcid)
 
 }
 
-#endif
 /*
 static void
 device_set_int_opt(int *opt, int val, int min, int max, int def,char* name,char* devname) {
     if (val==-1)
         *opt=def;
     else if (val<min || val>max) {
-        DEVICE_PRT(MSG_LEVEL_INFO, KERN_NOTICE "%s: the value of parameter %s is invalid, the valid range is (%d-%d)\n" ,
+        DBG_PRT(MSG_LEVEL_INFO, KERN_NOTICE "%s: the value of parameter %s is invalid, the valid range is (%d-%d)\n" ,
             devname,name, min,max);
         *opt=def;
     } else {
-        DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO "%s: set value of parameter %s to %d\n",
+        DBG_PRT(MSG_LEVEL_INFO, KERN_INFO "%s: set value of parameter %s to %d\n",
             devname, name, val);
         *opt=val;
     }
@@ -455,11 +437,11 @@ device_set_bool_opt(PU32 opt, int val,BOOL def,U32 flag, char* name,char* devnam
     if (val==-1)
         *opt|=(def ? flag : 0);
     else if (val<0 || val>1) {
-        DEVICE_PRT(MSG_LEVEL_INFO, KERN_NOTICE
+        DBG_PRT(MSG_LEVEL_INFO, KERN_NOTICE
             "%s: the value of parameter %s is invalid, the valid range is (0-1)\n",devname,name);
         *opt|=(def ? flag : 0);
     } else {
-        DEVICE_PRT(MSG_LEVEL_INFO, KERN_NOTICE "%s: set parameter %s to %s\n",
+        DBG_PRT(MSG_LEVEL_INFO, KERN_NOTICE "%s: set parameter %s to %s\n",
             devname,name , val ? "TRUE" : "FALSE");
         *opt|=(val ? flag : 0);
     }
@@ -530,18 +512,18 @@ pDevice->bUpdateBBVGA = TRUE;
     pDevice->byPreambleType = 0;
 
 
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" uChannel= %d\n",(INT)pDevice->uChannel);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byOpMode= %d\n",(INT)pDevice->byOpMode);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" ePSMode= %d\n",(INT)pDevice->ePSMode);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" wRTSThreshold= %d\n",(INT)pDevice->wRTSThreshold);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byShortRetryLimit= %d\n",(INT)pDevice->byShortRetryLimit);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byLongRetryLimit= %d\n",(INT)pDevice->byLongRetryLimit);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byPreambleType= %d\n",(INT)pDevice->byPreambleType);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byShortPreamble= %d\n",(INT)pDevice->byShortPreamble);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" uConnectionRate= %d\n",(INT)pDevice->uConnectionRate);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byBBType= %d\n",(INT)pDevice->byBBType);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" pDevice->b11hEnable= %d\n",(INT)pDevice->b11hEnable);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" pDevice->bDiversityRegCtlON= %d\n",(INT)pDevice->bDiversityRegCtlON);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" uChannel= %d\n",(INT)pDevice->uChannel);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byOpMode= %d\n",(INT)pDevice->byOpMode);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" ePSMode= %d\n",(INT)pDevice->ePSMode);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" wRTSThreshold= %d\n",(INT)pDevice->wRTSThreshold);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byShortRetryLimit= %d\n",(INT)pDevice->byShortRetryLimit);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byLongRetryLimit= %d\n",(INT)pDevice->byLongRetryLimit);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byPreambleType= %d\n",(INT)pDevice->byPreambleType);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byShortPreamble= %d\n",(INT)pDevice->byShortPreamble);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" uConnectionRate= %d\n",(INT)pDevice->uConnectionRate);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" byBBType= %d\n",(INT)pDevice->byBBType);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" pDevice->b11hEnable= %d\n",(INT)pDevice->b11hEnable);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" pDevice->bDiversityRegCtlON= %d\n",(INT)pDevice->bDiversityRegCtlON);
 }
 
 static VOID s_vCompleteCurrentMeasure (IN PSDevice pDevice, IN BYTE byResult)
@@ -697,7 +679,7 @@ byValue1 = SROMbyReadEmbedded(pDevice->PortOffset, EEP_OFS_ANTENNA);
 #ifdef	PLICE_DEBUG
 	//printk("init registers: TxAntennaMode is %d\n",pDevice->byTxAntennaMode);
 #endif
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "bDiversityEnable=[%d],NValue=[%d],MValue=[%d],TMax=[%d],TMax2=[%d]\n",
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "bDiversityEnable=[%d],NValue=[%d],MValue=[%d],TMax=[%d],TMax2=[%d]\n",
             pDevice->bDiversityEnable,(int)pDevice->ulDiversityNValue,(int)pDevice->ulDiversityMValue,pDevice->byTMax,pDevice->byTMax2);
 
 //#ifdef ZoneType_DefaultSetting
@@ -709,7 +691,7 @@ byValue1 = SROMbyReadEmbedded(pDevice->PortOffset, EEP_OFS_ANTENNA);
         (pDevice->abyEEPROM[EEP_OFS_ZONETYPE] !=0x00)){          //for USA
     pDevice->abyEEPROM[EEP_OFS_ZONETYPE] = 0;
     pDevice->abyEEPROM[EEP_OFS_MAXCHANNEL] = 0x0B;
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Init Zone Type :USA\n");
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Init Zone Type :USA\n");
   }
  else if((zonetype == 1)&&
  	     (pDevice->abyEEPROM[EEP_OFS_ZONETYPE]!=0x01)){   //for Japan
@@ -720,7 +702,7 @@ byValue1 = SROMbyReadEmbedded(pDevice->PortOffset, EEP_OFS_ANTENNA);
  	     (pDevice->abyEEPROM[EEP_OFS_ZONETYPE]!=0x02)){   //for Europe
     pDevice->abyEEPROM[EEP_OFS_ZONETYPE] = 0x02;
     pDevice->abyEEPROM[EEP_OFS_MAXCHANNEL] = 0x0D;
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Init Zone Type :Europe\n");
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Init Zone Type :Europe\n");
   }
 
 else
@@ -743,12 +725,12 @@ else
         }
 
         pDevice->byRFType &= RF_MASK;
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->byRFType = %x\n", pDevice->byRFType);
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->byRFType = %x\n", pDevice->byRFType);
 
         if (pDevice->bZoneRegExist == FALSE) {
             pDevice->byZoneType = pDevice->abyEEPROM[EEP_OFS_ZONETYPE];
         }
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->byZoneType = %x\n", pDevice->byZoneType);
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->byZoneType = %x\n", pDevice->byZoneType);
 
         //Init RF module
         RFbInit(pDevice);
@@ -878,7 +860,7 @@ else  CARDbRadioPowerOn(pDevice);
             pMgmt->eScanType = WMAC_SCAN_PASSIVE;
     // get Permanent network address
     SROMvReadEtherAddress(pDevice->PortOffset, pDevice->abyCurrentNetAddr);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Network address = %02x-%02x-%02x=%02x-%02x-%02x\n",
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Network address = %02x-%02x-%02x=%02x-%02x-%02x\n",
         pDevice->abyCurrentNetAddr[0],
         pDevice->abyCurrentNetAddr[1],
         pDevice->abyCurrentNetAddr[2],
@@ -946,7 +928,7 @@ static BOOL device_release_WPADEV(PSDevice pDevice)
                  wpahdr->req_ie_len = 0;
                  skb_put(pDevice->skb, sizeof(viawget_wpa_header));
                  pDevice->skb->dev = pDevice->wpadev;
-                 pDevice->skb->mac_header = pDevice->skb->data;
+		 skb_reset_mac_header(pDevice->skb);
                  pDevice->skb->pkt_type = PACKET_HOST;
                  pDevice->skb->protocol = htons(ETH_P_802_2);
                  memset(pDevice->skb->cb, 0, sizeof(pDevice->skb->cb));
@@ -978,7 +960,6 @@ static const struct net_device_ops device_netdev_ops = {
 };
 
 
-#ifndef PRIVATE_OBJ
 
 static int
 device_found1(struct pci_dev *pcid, const struct pci_device_id *ent)
@@ -1146,14 +1127,7 @@ device_found1(struct pci_dev *pcid, const struct pci_device_id *ent)
     dev->irq                = pcid->irq;
     dev->netdev_ops         = &device_netdev_ops;
 
-#ifdef WIRELESS_EXT
-//Einsn Modify for ubuntu-7.04
-//	dev->wireless_handlers->get_wireless_stats = iwctl_get_wireless_stats;
-#if WIRELESS_EXT > 12
 	dev->wireless_handlers = (struct iw_handler_def *)&iwctl_handler_def;
-//	netdev->wireless_handlers = NULL;
-#endif /* WIRELESS_EXT > 12 */
-#endif /* WIRELESS_EXT */
 
     rc = register_netdev(dev);
     if (rc)
@@ -1179,17 +1153,17 @@ static void device_print_info(PSDevice pDevice)
 {
     struct net_device* dev=pDevice->dev;
 
-    DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO "%s: %s\n",dev->name, get_chip_name(pDevice->chip_id));
-    DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO "%s: MAC=%2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X",
+    DBG_PRT(MSG_LEVEL_INFO, KERN_INFO "%s: %s\n",dev->name, get_chip_name(pDevice->chip_id));
+    DBG_PRT(MSG_LEVEL_INFO, KERN_INFO "%s: MAC=%2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X",
         dev->name,
         dev->dev_addr[0],dev->dev_addr[1],dev->dev_addr[2],
         dev->dev_addr[3],dev->dev_addr[4],dev->dev_addr[5]);
 #ifdef IO_MAP
-    DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO" IO=0x%lx  ",(ULONG) pDevice->ioaddr);
-    DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO" IRQ=%d \n", pDevice->dev->irq);
+    DBG_PRT(MSG_LEVEL_INFO, KERN_INFO" IO=0x%lx  ",(ULONG) pDevice->ioaddr);
+    DBG_PRT(MSG_LEVEL_INFO, KERN_INFO" IRQ=%d \n", pDevice->dev->irq);
 #else
-    DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO" IO=0x%lx Mem=0x%lx ",(ULONG) pDevice->ioaddr,(ULONG) pDevice->PortOffset);
-    DEVICE_PRT(MSG_LEVEL_INFO, KERN_INFO" IRQ=%d \n", pDevice->dev->irq);
+    DBG_PRT(MSG_LEVEL_INFO, KERN_INFO" IO=0x%lx Mem=0x%lx ",(ULONG) pDevice->ioaddr,(ULONG) pDevice->PortOffset);
+    DBG_PRT(MSG_LEVEL_INFO, KERN_INFO" IRQ=%d \n", pDevice->dev->irq);
 #endif
 
 }
@@ -1314,7 +1288,7 @@ device_release_WPADEV(pDevice);
             ptr->prev->next=ptr->next;
     }
     else {
-        DEVICE_PRT(MSG_LEVEL_ERR, KERN_ERR "info struct not found\n");
+        DBG_PRT(MSG_LEVEL_ERR, KERN_ERR "info struct not found\n");
         return;
     }
 #ifdef HOSTAP
@@ -1336,7 +1310,6 @@ device_release_WPADEV(pDevice);
         pci_set_drvdata(pDevice->pcid,NULL);
     }
 }
-#endif// ifndef PRIVATE_OBJ
 
 static BOOL device_init_rings(PSDevice pDevice) {
     void*   vir_pool;
@@ -1351,7 +1324,7 @@ static BOOL device_init_rings(PSDevice pDevice) {
                     &pDevice->pool_dma);
 
     if (vir_pool == NULL) {
-        DEVICE_PRT(MSG_LEVEL_ERR,KERN_ERR "%s : allocate desc dma memory failed\n", pDevice->dev->name);
+        DBG_PRT(MSG_LEVEL_ERR,KERN_ERR "%s : allocate desc dma memory failed\n", pDevice->dev->name);
         return FALSE;
     }
 
@@ -1379,7 +1352,7 @@ static BOOL device_init_rings(PSDevice pDevice) {
                     &pDevice->tx_bufs_dma0);
 
     if (pDevice->tx0_bufs == NULL) {
-        DEVICE_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: allocate buf dma memory failed\n", pDevice->dev->name);
+        DBG_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: allocate buf dma memory failed\n", pDevice->dev->name);
         pci_free_consistent(pDevice->pcid,
             pDevice->sOpts.nRxDescs0 * sizeof(SRxDesc) +
             pDevice->sOpts.nRxDescs1 * sizeof(SRxDesc) +
@@ -1468,7 +1441,7 @@ static void device_init_rd0_ring(PSDevice pDevice) {
         pDesc->pRDInfo = alloc_rd_info();
         ASSERT(pDesc->pRDInfo);
         if (!device_alloc_rx_buf(pDevice, pDesc)) {
-            DEVICE_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: can not alloc rx bufs\n",
+            DBG_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: can not alloc rx bufs\n",
             pDevice->dev->name);
         }
         pDesc->next = &(pDevice->aRD0Ring[(i+1) % pDevice->sOpts.nRxDescs0]);
@@ -1492,7 +1465,7 @@ static void device_init_rd1_ring(PSDevice pDevice) {
         pDesc->pRDInfo = alloc_rd_info();
         ASSERT(pDesc->pRDInfo);
         if (!device_alloc_rx_buf(pDevice, pDesc)) {
-            DEVICE_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: can not alloc rx bufs\n",
+            DBG_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: can not alloc rx bufs\n",
             pDevice->dev->name);
         }
         pDesc->next = &(pDevice->aRD1Ring[(i+1) % pDevice->sOpts.nRxDescs1]);
@@ -1513,7 +1486,7 @@ static void device_init_defrag_cb(PSDevice pDevice) {
     for (i = 0; i < CB_MAX_RX_FRAG; i++) {
         pDeF = &(pDevice->sRxDFCB[i]);
         if (!device_alloc_frag_buf(pDevice, pDeF)) {
-            DEVICE_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: can not alloc frag bufs\n",
+            DBG_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: can not alloc frag bufs\n",
                 pDevice->dev->name);
         };
     }
@@ -1672,22 +1645,18 @@ static int device_rx_srv(PSDevice pDevice, UINT uIdx) {
     for (pRD = pDevice->pCurrRD[uIdx];
          pRD->m_rd0RD0.f1Owner == OWNED_BY_HOST;
          pRD = pRD->next) {
-//        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->pCurrRD = %x, works = %d\n", pRD, works);
+//        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->pCurrRD = %x, works = %d\n", pRD, works);
         if (works++>15)
             break;
         if (device_receive_frame(pDevice, pRD)) {
             if (!device_alloc_rx_buf(pDevice,pRD)) {
-                    DEVICE_PRT(MSG_LEVEL_ERR, KERN_ERR
+                    DBG_PRT(MSG_LEVEL_ERR, KERN_ERR
                     "%s: can not allocate rx buf\n", pDevice->dev->name);
                     break;
             }
         }
         pRD->m_rd0RD0.f1Owner = OWNED_BY_NIC;
-#ifdef PRIVATE_OBJ
-        ref_set_rx_jiffies(pDevice->dev);
-#else
         pDevice->dev->last_rx = jiffies;
-#endif
     }
 
     pDevice->pCurrRD[uIdx]=pRD;
@@ -1700,15 +1669,6 @@ static BOOL device_alloc_rx_buf(PSDevice pDevice, PSRxDesc pRD) {
 
     PDEVICE_RD_INFO pRDInfo=pRD->pRDInfo;
 
-#ifdef PRIVATE_OBJ
-
-    pRDInfo->skb=dev_alloc_skb(pDevice->rx_buf_sz);
-    if (pRDInfo->skb==NULL)
-        return FALSE;
-    ref_skb_remap(pDevice->dev, &(pRDInfo->ref_skb), pRDInfo->skb);
-    pRDInfo->skb_dma = pci_map_single(pDevice->pcid, pRDInfo->ref_skb.tail, pDevice->rx_buf_sz,
-                        PCI_DMA_FROMDEVICE);
-#else
 
     pRDInfo->skb = dev_alloc_skb((int)pDevice->rx_buf_sz);
 #ifdef	PLICE_DEBUG
@@ -1718,9 +1678,8 @@ static BOOL device_alloc_rx_buf(PSDevice pDevice, PSRxDesc pRD) {
         return FALSE;
     ASSERT(pRDInfo->skb);
     pRDInfo->skb->dev = pDevice->dev;
-    pRDInfo->skb_dma = pci_map_single(pDevice->pcid, pRDInfo->skb->tail, pDevice->rx_buf_sz,
-                        PCI_DMA_FROMDEVICE);
-#endif
+    pRDInfo->skb_dma = pci_map_single(pDevice->pcid, skb_tail_pointer(pRDInfo->skb),
+				      pDevice->rx_buf_sz, PCI_DMA_FROMDEVICE);
     *((PU32) &(pRD->m_rd0RD0)) = 0;
 
     pRD->m_rd0RD0.wResCount = cpu_to_le16(pDevice->rx_buf_sz);
@@ -1735,20 +1694,11 @@ static BOOL device_alloc_rx_buf(PSDevice pDevice, PSRxDesc pRD) {
 
 BOOL device_alloc_frag_buf(PSDevice pDevice, PSDeFragControlBlock pDeF) {
 
-#ifdef PRIVATE_OBJ
-
-    pDeF->skb=dev_alloc_skb(pDevice->rx_buf_sz);
-    if (pDeF->skb==NULL)
-        return FALSE;
-    ref_skb_remap(pDevice->dev, &(pDeF->ref_skb), pDeF->skb);
-
-#else
     pDeF->skb = dev_alloc_skb((int)pDevice->rx_buf_sz);
     if (pDeF->skb == NULL)
         return FALSE;
     ASSERT(pDeF->skb);
     pDeF->skb->dev = pDevice->dev;
-#endif
 
     return TRUE;
 }
@@ -1767,9 +1717,6 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
     struct sk_buff*          skb;
     UINT                     uNodeIndex;
     PSMgmtObject             pMgmt = pDevice->pMgmt;
-#ifdef PRIVATE_OBJ
-    ref_sk_buff              ref_skb;
-#endif
 
 
     for (pTD = pDevice->apTailTD[uIdx]; pDevice->iTDUsed[uIdx] >0; pTD = pTD->next) {
@@ -1789,9 +1736,6 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
                 uFIFOHeaderSize = pTD->pTDInfo->dwHeaderLength;
                 uFrameSize = pTD->pTDInfo->dwReqCount - uFIFOHeaderSize;
                 pTxBufHead = (PSTxBufHead) (pTD->pTDInfo->buf);
-#ifdef PRIVATE_OBJ
-                ref_skb_remap(pDevice->dev, &ref_skb, pTD->pTDInfo->skb);
-#endif
                 // Update the statistics based on the Transmit status
                 // now, we DO'NT check TSR0_CDH
 
@@ -1809,21 +1753,17 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
 
                 if (BITbIsBitOff(byTsr1, TSR1_TERR)) {
                     if (byTsr0 != 0) {
-                        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] OK but has error. tsr1[%02X] tsr0[%02X].\n",
+                        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] OK but has error. tsr1[%02X] tsr0[%02X].\n",
                            (INT)uIdx, byTsr1, byTsr0);
                     }
                     if ((pTxBufHead->wFragCtl & FRAGCTL_ENDFRAG) != FRAGCTL_NONFRAG) {
                         pDevice->s802_11Counter.TransmittedFragmentCount ++;
                     }
                     pStats->tx_packets++;
-#ifdef PRIVATE_OBJ
-                    pStats->tx_bytes += *(ref_skb.len);
-#else
                     pStats->tx_bytes += pTD->pTDInfo->skb->len;
-#endif
                 }
                 else {
-                     DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] dropped & tsr1[%02X] tsr0[%02X].\n",
+                     DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] dropped & tsr1[%02X] tsr0[%02X].\n",
                            (INT)uIdx, byTsr1, byTsr0);
                     pStats->tx_errors++;
                     pStats->tx_dropped++;
@@ -1832,33 +1772,24 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
 
             if ((pTD->pTDInfo->byFlags & TD_FLAGS_PRIV_SKB) != 0) {
                 if (pDevice->bEnableHostapd) {
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "tx call back netif.. \n");
-#ifdef PRIVATE_OBJ
-                    ref_skb_remap(pDevice->apdev, &(ref_skb), pTD->pTDInfo->skb);
-	                ref_skb.mac.raw = ref_skb.data;
-	                *(ref_skb.pkt_type) = PACKET_OTHERHOST;
-    	            //*(ref_skb.protocol) = htons(ETH_P_802_2);
-	                memset(ref_skb.cb, 0, sizeof(ref_skb.cb));
-	                netif_rx(ref_skb.skb);
-#else
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "tx call back netif.. \n");
                     skb = pTD->pTDInfo->skb;
 	                skb->dev = pDevice->apdev;
-			        skb->mac_header = skb->data;
+			skb_reset_mac_header(skb);
 	                skb->pkt_type = PACKET_OTHERHOST;
     	            //skb->protocol = htons(ETH_P_802_2);
 	                memset(skb->cb, 0, sizeof(skb->cb));
 	                netif_rx(skb);
-#endif
 	            }
             }
 
             if (BITbIsBitOn(byTsr1, TSR1_TERR)) {
             if ((pTD->pTDInfo->byFlags & TD_FLAGS_PRIV_SKB) != 0) {
-                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] fail has error. tsr1[%02X] tsr0[%02X].\n",
+                DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] fail has error. tsr1[%02X] tsr0[%02X].\n",
                           (INT)uIdx, byTsr1, byTsr0);
             }
 
-//                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] fail has error. tsr1[%02X] tsr0[%02X].\n",
+//                DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO" Tx[%d] fail has error. tsr1[%02X] tsr0[%02X].\n",
 //                          (INT)uIdx, byTsr1, byTsr0);
 
                 if ((pMgmt->eCurrMode == WMAC_MODE_ESS_AP) &&
@@ -1875,7 +1806,7 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
                             wAID = pMgmt->sNodeDBTable[uNodeIndex].wAID;
                             pMgmt->abyPSTxMap[wAID >> 3] |=  byMask[wAID & 7];
                             pTD->pTDInfo->byFlags &= ~(TD_FLAGS_NETIF_SKB);
-                            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "tx_srv:tx fail re-queue sta index= %d, QueCnt= %d\n"
+                            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "tx_srv:tx fail re-queue sta index= %d, QueCnt= %d\n"
                                     ,(INT)uNodeIndex, pMgmt->sNodeDBTable[uNodeIndex].wEnQueueCnt);
                             pStats->tx_errors--;
                             pStats->tx_dropped--;
@@ -1894,7 +1825,7 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
 
         if (AVAIL_TD(pDevice, uIdx) < RESERV_AC0DMA) {
             bFull = TRUE;
-            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " AC0DMA is Full = %d\n", pDevice->iTDUsed[uIdx]);
+            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " AC0DMA is Full = %d\n", pDevice->iTDUsed[uIdx]);
         }
         if (netif_queue_stopped(pDevice->dev) && (bFull==FALSE)){
             netif_wake_queue(pDevice->dev);
@@ -1911,7 +1842,7 @@ static int device_tx_srv(PSDevice pDevice, UINT uIdx) {
 static void device_error(PSDevice pDevice, WORD status) {
 
     if (status & ISR_FETALERR) {
-        DEVICE_PRT(MSG_LEVEL_ERR, KERN_ERR
+        DBG_PRT(MSG_LEVEL_ERR, KERN_ERR
             "%s: Hardware fatal error.\n",
             pDevice->dev->name);
         netif_stop_queue(pDevice->dev);
@@ -2005,31 +1936,24 @@ INT MlmeThread(
 }
 
 
-#ifdef PRIVATE_OBJ
-
-int __device_open(HANDLE pExDevice) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-#else
 
 static int  device_open(struct net_device *dev) {
     PSDevice    pDevice=(PSDevice) netdev_priv(dev);
     int i;
+#ifdef WPA_SM_Transtatus
+    extern SWPAResult wpa_Result;
 #endif
+
     pDevice->rx_buf_sz = PKT_BUF_SZ;
     if (!device_init_rings(pDevice)) {
         return -ENOMEM;
     }
 //2008-5-13 <add> by chester
-#ifndef PRIVATE_OBJ
     i=request_irq(pDevice->pcid->irq, &device_intr, IRQF_SHARED, dev->name, dev);
     if (i)
         return i;
-#endif
 	//printk("DEBUG1\n");
 #ifdef WPA_SM_Transtatus
-     extern SWPAResult wpa_Result;
      memset(wpa_Result.ifname,0,sizeof(wpa_Result.ifname));
      wpa_Result.proto = 0;
      wpa_Result.key_mgmt = 0;
@@ -2037,7 +1961,7 @@ static int  device_open(struct net_device *dev) {
      wpa_Result.authenticated = FALSE;
      pDevice->fWPA_Authened = FALSE;
 #endif
-DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call device init rd0 ring\n");
+DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call device init rd0 ring\n");
 device_init_rd0_ring(pDevice);
     device_init_rd1_ring(pDevice);
     device_init_defrag_cb(pDevice);
@@ -2088,15 +2012,11 @@ device_init_rd0_ring(pDevice);
 
   // if (( SROMbyReadEmbedded(pDevice->PortOffset, EEP_OFS_RADIOCTL)&0x06)==0x04)
     //    return -ENOMEM;
-DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call device_init_registers\n");
+DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call device_init_registers\n");
 	device_init_registers(pDevice, DEVICE_INIT_COLD);
     MACvReadEtherAddress(pDevice->PortOffset, pDevice->abyCurrentNetAddr);
     memcpy(pDevice->pMgmt->abyMACAddr, pDevice->abyCurrentNetAddr, U_ETHER_ADDR_LEN);
-#ifdef PRIVATE_OBJ
-    __device_set_multi(pExDevice);
-#else
     device_set_multi(pDevice->dev);
-#endif
 
     // Init for Key Management
     KeyvInitTable(&pDevice->sKey, pDevice->PortOffset);
@@ -2131,7 +2051,7 @@ DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call device_init_registers\n");
 //printk("DEBUG2\n");
 
 
-DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call MACvIntEnable\n");
+DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call MACvIntEnable\n");
 	MACvIntEnable(pDevice->PortOffset, IMR_MASK_VALUE);
 
     if (pDevice->pMgmt->eConfigMode == WMAC_CONFIG_AP) {
@@ -2143,22 +2063,13 @@ DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "call MACvIntEnable\n");
     }
     pDevice->flags |=DEVICE_FLAGS_OPENED;
 
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_open success.. \n");
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_open success.. \n");
     return 0;
 }
 
 
-#ifdef PRIVATE_OBJ
-
-int  __device_close(HANDLE pExDevice) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    struct net_device *dev = pDevice_info->dev;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-#else
 static int  device_close(struct net_device *dev) {
     PSDevice  pDevice=(PSDevice) netdev_priv(dev);
-#endif
     PSMgmtObject     pMgmt = pDevice->pMgmt;
  //PLICE_DEBUG->
 #ifdef	THREAD
@@ -2207,32 +2118,23 @@ device_release_WPADEV(pDevice);
 //PLICE_DEBUG->
 	//tasklet_kill(&pDevice->RxMngWorkItem);
 //PLICE_DEBUG<-
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_close.. \n");
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_close.. \n");
     return 0;
 }
 
-#ifdef PRIVATE_OBJ
-
-int  __device_dma0_tx_80211(HANDLE pExDevice, struct sk_buff *skb) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-    ref_sk_buff     ref_skb;
-
-#else
 
 
 static int device_dma0_tx_80211(struct sk_buff *skb, struct net_device *dev) {
     PSDevice        pDevice=netdev_priv(dev);
-#endif
     PBYTE           pbMPDU;
     UINT            cbMPDULen = 0;
 
 
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_tx_80211\n");
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_tx_80211\n");
     spin_lock_irq(&pDevice->lock);
 
     if (AVAIL_TD(pDevice, TYPE_TXDMA0) <= 0) {
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_tx_80211, td0 <=0\n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_tx_80211, td0 <=0\n");
         dev_kfree_skb_irq(skb);
         spin_unlock_irq(&pDevice->lock);
         return 0;
@@ -2244,14 +2146,8 @@ static int device_dma0_tx_80211(struct sk_buff *skb, struct net_device *dev) {
         return 0;
     };
 
-#ifdef PRIVATE_OBJ
-    ref_skb_remap(pDevice->dev, &ref_skb, skb);
-    cbMPDULen = *(ref_skb.len);
-    pbMPDU = ref_skb.data;
-#else
     cbMPDULen = skb->len;
     pbMPDU = skb->data;
-#endif
 
     vDMA0_tx_80211(pDevice, skb, pbMPDU, cbMPDULen);
 
@@ -2268,16 +2164,13 @@ BOOL device_dma0_xmit(PSDevice pDevice, struct sk_buff *skb, UINT uNodeIndex) {
     PSTxDesc        pHeadTD, pLastTD;
     UINT            cbFrameBodySize;
     UINT            uMACfragNum;
-    BYTE            byPktTyp;
+    BYTE            byPktType;
     BOOL            bNeedEncryption = FALSE;
     PSKeyItem       pTransmitKey = NULL;
     UINT            cbHeaderSize;
     UINT            ii;
     SKeyItem        STempKey;
 //    BYTE            byKeyIndex = 0;
-#ifdef PRIVATE_OBJ
-    ref_sk_buff     ref_skb;
-#endif
 
 
     if (pDevice->bStopTx0Pkt == TRUE) {
@@ -2287,33 +2180,24 @@ BOOL device_dma0_xmit(PSDevice pDevice, struct sk_buff *skb, UINT uNodeIndex) {
 
     if (AVAIL_TD(pDevice, TYPE_TXDMA0) <= 0) {
         dev_kfree_skb_irq(skb);
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_xmit, td0 <=0\n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_xmit, td0 <=0\n");
         return FALSE;
     }
 
     if (pMgmt->eCurrMode == WMAC_MODE_ESS_AP) {
         if (pDevice->uAssocCount == 0) {
             dev_kfree_skb_irq(skb);
-            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_xmit, assocCount = 0\n");
+            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "device_dma0_xmit, assocCount = 0\n");
             return FALSE;
         }
     }
 
-#ifdef PRIVATE_OBJ
-    ref_skb_remap(pDevice->dev, &(ref_skb), skb);
-#endif
     pHeadTD = pDevice->apCurrTD[TYPE_TXDMA0];
 
     pHeadTD->m_td1TD1.byTCR = (TCR_EDP|TCR_STP);
 
-#ifdef PRIVATE_OBJ
-    memcpy(pDevice->sTxEthHeader.abyDstAddr, (PBYTE)(ref_skb.data), U_HEADER_LEN);
-    cbFrameBodySize = *(ref_skb.len) - U_HEADER_LEN;
-
-#else
     memcpy(pDevice->sTxEthHeader.abyDstAddr, (PBYTE)(skb->data), U_HEADER_LEN);
     cbFrameBodySize = skb->len - U_HEADER_LEN;
-#endif
 
     // 802.1H
     if (ntohs(pDevice->sTxEthHeader.wType) > MAX_DATA_LEN) {
@@ -2325,7 +2209,7 @@ BOOL device_dma0_xmit(PSDevice pDevice, struct sk_buff *skb, UINT uNodeIndex) {
         dev_kfree_skb_irq(skb);
         return FALSE;
     }
-    byPktTyp = (BYTE)pDevice->byPacketType;
+    byPktType = (BYTE)pDevice->byPacketType;
 
 
     if (pDevice->bFixRate) {
@@ -2354,18 +2238,18 @@ BOOL device_dma0_xmit(PSDevice pDevice, struct sk_buff *skb, UINT uNodeIndex) {
         pDevice->byPreambleType = PREAMBLE_LONG;
     }
 
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "dma0: pDevice->wCurrentRate = %d \n", pDevice->wCurrentRate);
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "dma0: pDevice->wCurrentRate = %d \n", pDevice->wCurrentRate);
 
 
     if (pDevice->wCurrentRate <= RATE_11M) {
-        byPktTyp = PK_TYPE_11B;
+        byPktType = PK_TYPE_11B;
     } else if (pDevice->eCurrentPHYType == PHY_TYPE_11A) {
-        byPktTyp = PK_TYPE_11A;
+        byPktType = PK_TYPE_11A;
     } else {
         if (pDevice->bProtectMode == TRUE) {
-            byPktTyp = PK_TYPE_11GB;
+            byPktType = PK_TYPE_11GB;
         } else {
-            byPktTyp = PK_TYPE_11GA;
+            byPktType = PK_TYPE_11GA;
         }
     }
 
@@ -2384,7 +2268,7 @@ BOOL device_dma0_xmit(PSDevice pDevice, struct sk_buff *skb, UINT uNodeIndex) {
             pTransmitKey->uKeyLength
             );
     }
-    vGenerateFIFOHeader(pDevice, byPktTyp, pDevice->pbyTmpBuff, bNeedEncryption,
+    vGenerateFIFOHeader(pDevice, byPktType, pDevice->pbyTmpBuff, bNeedEncryption,
                         cbFrameBodySize, TYPE_TXDMA0, pHeadTD,
                         &pDevice->sTxEthHeader, (PBYTE)skb->data, pTransmitKey, uNodeIndex,
                         &uMACfragNum,
@@ -2424,19 +2308,9 @@ BOOL device_dma0_xmit(PSDevice pDevice, struct sk_buff *skb, UINT uNodeIndex) {
 }
 
 //TYPE_AC0DMA data tx
-#ifdef PRIVATE_OBJ
-
-int  __device_xmit(HANDLE pExDevice, struct sk_buff *skb) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-    struct net_device *dev = pDevice_info->dev;
-    ref_sk_buff     ref_skb;
-
-#else
 static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
     PSDevice pDevice=netdev_priv(dev);
 
-#endif
     PSMgmtObject    pMgmt = pDevice->pMgmt;
     PSTxDesc        pHeadTD, pLastTD;
     UINT            uNodeIndex = 0;
@@ -2444,7 +2318,7 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
     WORD            wAID;
     UINT            uMACfragNum = 1;
     UINT            cbFrameBodySize;
-    BYTE            byPktTyp;
+    BYTE            byPktType;
     UINT            cbHeaderSize;
     BOOL            bNeedEncryption = FALSE;
     PSKeyItem       pTransmitKey = NULL;
@@ -2470,9 +2344,6 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
         return 0;
     }
 
-#ifdef PRIVATE_OBJ
-    ref_skb_remap(pDevice->dev, &ref_skb, skb);
-#endif
 
     if (pMgmt->eCurrMode == WMAC_MODE_ESS_AP) {
         if (pDevice->uAssocCount == 0) {
@@ -2480,19 +2351,11 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
             spin_unlock_irq(&pDevice->lock);
             return 0;
         }
-#ifdef PRIVATE_OBJ
-        if (IS_MULTICAST_ADDRESS((PBYTE)(ref_skb.data))) {
-#else
         if (IS_MULTICAST_ADDRESS((PBYTE)(skb->data))) {
-#endif
             uNodeIndex = 0;
             bNodeExist = TRUE;
             if (pMgmt->sNodeDBTable[0].bPSEnable) {
-#ifdef PRIVATE_OBJ
-                skb_queue_tail(&(pMgmt->sNodeDBTable[0].sTxPSQueue), ref_skb.skb);
-#else
                 skb_queue_tail(&(pMgmt->sNodeDBTable[0].sTxPSQueue), skb);
-#endif
                 pMgmt->sNodeDBTable[0].wEnQueueCnt++;
                 // set tx map
                 pMgmt->abyPSTxMap[0] |= byMask[0];
@@ -2500,22 +2363,14 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
                 return 0;
             }
 }else {
-#ifdef PRIVATE_OBJ
-            if (BSSDBbIsSTAInNodeDB(pMgmt, (PBYTE)(ref_skb.data), &uNodeIndex)) {
-#else
             if (BSSDBbIsSTAInNodeDB(pMgmt, (PBYTE)(skb->data), &uNodeIndex)) {
-#endif
                 if (pMgmt->sNodeDBTable[uNodeIndex].bPSEnable) {
-#ifdef PRIVATE_OBJ
-                    skb_queue_tail(&pMgmt->sNodeDBTable[uNodeIndex].sTxPSQueue, ref_skb.skb);
-#else
                     skb_queue_tail(&pMgmt->sNodeDBTable[uNodeIndex].sTxPSQueue, skb);
-#endif
                     pMgmt->sNodeDBTable[uNodeIndex].wEnQueueCnt++;
                     // set tx map
                     wAID = pMgmt->sNodeDBTable[uNodeIndex].wAID;
                     pMgmt->abyPSTxMap[wAID >> 3] |=  byMask[wAID & 7];
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Set:pMgmt->abyPSTxMap[%d]= %d\n",
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Set:pMgmt->abyPSTxMap[%d]= %d\n",
                              (wAID >> 3), pMgmt->abyPSTxMap[wAID >> 3]);
                     spin_unlock_irq(&pDevice->lock);
                     return 0;
@@ -2533,7 +2388,7 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
         }
 
         if (bNodeExist == FALSE) {
-            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Unknown STA not found in node DB \n");
+            DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Unknown STA not found in node DB \n");
             dev_kfree_skb_irq(skb);
             spin_unlock_irq(&pDevice->lock);
             return 0;
@@ -2545,13 +2400,8 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
     pHeadTD->m_td1TD1.byTCR = (TCR_EDP|TCR_STP);
 
 
-#ifdef PRIVATE_OBJ
-    memcpy(pDevice->sTxEthHeader.abyDstAddr, (PBYTE)(ref_skb.data), U_HEADER_LEN);
-    cbFrameBodySize = *(ref_skb.len) - U_HEADER_LEN;
-#else
     memcpy(pDevice->sTxEthHeader.abyDstAddr, (PBYTE)(skb->data), U_HEADER_LEN);
     cbFrameBodySize = skb->len - U_HEADER_LEN;
-#endif
     // 802.1H
     if (ntohs(pDevice->sTxEthHeader.wType) > MAX_DATA_LEN) {
         cbFrameBodySize += 8;
@@ -2570,20 +2420,20 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
                     // get group key
                     if(KeybGetTransmitKey(&(pDevice->sKey), pbyBSSID, GROUP_KEY, &pTransmitKey) == TRUE) {
                         bTKIP_UseGTK = TRUE;
-                        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Get GTK.\n");
+                        DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Get GTK.\n");
                         break;
                     }
                 } else {
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Get PTK.\n");
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Get PTK.\n");
                     break;
                 }
             }else if (pDevice->pMgmt->eCurrMode == WMAC_MODE_IBSS_STA) {
 
                 pbyBSSID = pDevice->sTxEthHeader.abyDstAddr;  //TO_DS = 0 and FROM_DS = 0 --> 802.11 MAC Address1
-                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"IBSS Serach Key: \n");
+                DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"IBSS Serach Key: \n");
                 for (ii = 0; ii< 6; ii++)
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"%x \n", *(pbyBSSID+ii));
-                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"\n");
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"%x \n", *(pbyBSSID+ii));
+                DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"\n");
 
                 // get pairwise key
                 if(KeybGetTransmitKey(&(pDevice->sKey), pbyBSSID, PAIRWISE_KEY, &pTransmitKey) == TRUE)
@@ -2594,19 +2444,19 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
             if(KeybGetTransmitKey(&(pDevice->sKey), pbyBSSID, GROUP_KEY, &pTransmitKey) == FALSE) {
                 pTransmitKey = NULL;
                 if (pDevice->pMgmt->eCurrMode == WMAC_MODE_IBSS_STA) {
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"IBSS and KEY is NULL. [%d]\n", pDevice->pMgmt->eCurrMode);
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"IBSS and KEY is NULL. [%d]\n", pDevice->pMgmt->eCurrMode);
                 }
                 else
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"NOT IBSS and KEY is NULL. [%d]\n", pDevice->pMgmt->eCurrMode);
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"NOT IBSS and KEY is NULL. [%d]\n", pDevice->pMgmt->eCurrMode);
             } else {
                 bTKIP_UseGTK = TRUE;
-                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Get GTK.\n");
+                DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"Get GTK.\n");
             }
         } while(FALSE);
     }
 
     if (pDevice->bEnableHostWEP) {
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"acdma0: STA index %d\n", uNodeIndex);
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_DEBUG"acdma0: STA index %d\n", uNodeIndex);
         if (pDevice->bEncryptionEnable == TRUE) {
             pTransmitKey = &STempKey;
             pTransmitKey->byCipherSuite = pMgmt->sNodeDBTable[uNodeIndex].byCipherSuite;
@@ -2624,7 +2474,7 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
     uMACfragNum = cbGetFragCount(pDevice, pTransmitKey, cbFrameBodySize, &pDevice->sTxEthHeader);
 
     if (uMACfragNum > AVAIL_TD(pDevice, TYPE_AC0DMA)) {
-        DEVICE_PRT(MSG_LEVEL_ERR, KERN_DEBUG "uMACfragNum > AVAIL_TD(TYPE_AC0DMA) = %d\n", uMACfragNum);
+        DBG_PRT(MSG_LEVEL_ERR, KERN_DEBUG "uMACfragNum > AVAIL_TD(TYPE_AC0DMA) = %d\n", uMACfragNum);
         dev_kfree_skb_irq(skb);
         spin_unlock_irq(&pDevice->lock);
         return 0;
@@ -2637,7 +2487,7 @@ static int  device_xmit(struct sk_buff *skb, struct net_device *dev) {
         }
     }
 
-    byPktTyp = (BYTE)pDevice->byPacketType;
+    byPktType = (BYTE)pDevice->byPacketType;
 
     if (pDevice->bFixRate) {
 #ifdef	PLICE_DEBUG
@@ -2708,17 +2558,17 @@ pDevice->byTopCCKBasicRate,pDevice->byTopOFDMBasicRate);
 		}
     }
 
-//    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "acdma0: pDevice->wCurrentRate = %d \n", pDevice->wCurrentRate);
+//    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "acdma0: pDevice->wCurrentRate = %d \n", pDevice->wCurrentRate);
 
     if (pDevice->wCurrentRate <= RATE_11M) {
-        byPktTyp = PK_TYPE_11B;
+        byPktType = PK_TYPE_11B;
     } else if (pDevice->eCurrentPHYType == PHY_TYPE_11A) {
-        byPktTyp = PK_TYPE_11A;
+        byPktType = PK_TYPE_11A;
     } else {
         if (pDevice->bProtectMode == TRUE) {
-            byPktTyp = PK_TYPE_11GB;
+            byPktType = PK_TYPE_11GB;
         } else {
-            byPktTyp = PK_TYPE_11GA;
+            byPktType = PK_TYPE_11GA;
         }
     }
 
@@ -2727,20 +2577,20 @@ pDevice->byTopCCKBasicRate,pDevice->byTopOFDMBasicRate);
 //#endif
 
     if (bNeedEncryption == TRUE) {
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"ntohs Pkt Type=%04x\n", ntohs(pDevice->sTxEthHeader.wType));
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"ntohs Pkt Type=%04x\n", ntohs(pDevice->sTxEthHeader.wType));
         if ((pDevice->sTxEthHeader.wType) == TYPE_PKT_802_1x) {
             bNeedEncryption = FALSE;
-            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Pkt Type=%04x\n", (pDevice->sTxEthHeader.wType));
+            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Pkt Type=%04x\n", (pDevice->sTxEthHeader.wType));
             if ((pDevice->pMgmt->eCurrMode == WMAC_MODE_ESS_STA) && (pDevice->pMgmt->eCurrState == WMAC_STATE_ASSOC)) {
                 if (pTransmitKey == NULL) {
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Don't Find TX KEY\n");
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Don't Find TX KEY\n");
                 }
                 else {
                     if (bTKIP_UseGTK == TRUE) {
-                        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"error: KEY is GTK!!~~\n");
+                        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"error: KEY is GTK!!~~\n");
                     }
                     else {
-                        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Find PTK [%lX]\n", pTransmitKey->dwKeyIndex);
+                        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Find PTK [%lX]\n", pTransmitKey->dwKeyIndex);
                         bNeedEncryption = TRUE;
                     }
                 }
@@ -2754,14 +2604,14 @@ pDevice->byTopCCKBasicRate,pDevice->byTopOFDMBasicRate);
             if (pDevice->bEnableHostWEP) {
                 if ((uNodeIndex != 0) &&
                     (pMgmt->sNodeDBTable[uNodeIndex].dwKeyIndex & PAIRWISE_KEY)) {
-                    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Find PTK [%lX]\n", pTransmitKey->dwKeyIndex);
+                    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"Find PTK [%lX]\n", pTransmitKey->dwKeyIndex);
                     bNeedEncryption = TRUE;
                  }
              }
         }
         else {
             if (pTransmitKey == NULL) {
-                DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"return no tx key\n");
+                DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"return no tx key\n");
                 dev_kfree_skb_irq(skb);
                 spin_unlock_irq(&pDevice->lock);
                 return 0;
@@ -2770,27 +2620,18 @@ pDevice->byTopCCKBasicRate,pDevice->byTopOFDMBasicRate);
     }
 
 
-#ifdef PRIVATE_OBJ
-    vGenerateFIFOHeader(pDevice, byPktTyp, pDevice->pbyTmpBuff, bNeedEncryption,
-                        cbFrameBodySize, TYPE_AC0DMA, pHeadTD,
-                        &pDevice->sTxEthHeader, (PBYTE)ref_skb.data, pTransmitKey, uNodeIndex,
-                        &uMACfragNum,
-                        &cbHeaderSize
-                        );
-#else
 #ifdef	PLICE_DEBUG
 	//if (skb->len == 98)
 	//{
 	//	printk("ping:len is %d\n");
 	//}
 #endif
-    vGenerateFIFOHeader(pDevice, byPktTyp, pDevice->pbyTmpBuff, bNeedEncryption,
+    vGenerateFIFOHeader(pDevice, byPktType, pDevice->pbyTmpBuff, bNeedEncryption,
                         cbFrameBodySize, TYPE_AC0DMA, pHeadTD,
                         &pDevice->sTxEthHeader, (PBYTE)skb->data, pTransmitKey, uNodeIndex,
                         &uMACfragNum,
                         &cbHeaderSize
                         );
-#endif
 
     if (MACbIsRegBitsOn(pDevice->PortOffset, MAC_REG_PSCTL, PSCTL_PS)) {
         // Disable PS
@@ -2811,11 +2652,7 @@ pDevice->byTopCCKBasicRate,pDevice->byTopOFDMBasicRate);
 
     // Save the information needed by the tx interrupt handler
     // to complete the Send request
-#ifdef PRIVATE_OBJ
-    pLastTD->pTDInfo->skb = ref_skb.skb;
-#else
     pLastTD->pTDInfo->skb = skb;
-#endif
     pLastTD->pTDInfo->byFlags = 0;
     pLastTD->pTDInfo->byFlags |= TD_FLAGS_NETIF_SKB;
 #ifdef TxInSleep
@@ -2867,31 +2704,18 @@ BOOL            bTxeapol_key = FALSE;
 }
 
     MACvTransmitAC0(pDevice->PortOffset);
-//    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "acdma0:pDevice->apCurrTD= %p\n", pHeadTD);
+//    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "acdma0:pDevice->apCurrTD= %p\n", pHeadTD);
 
-#ifdef PRIVATE_OBJ
-    ref_set_tx_jiffies(pDevice->dev);
-#else
     dev->trans_start = jiffies;
-#endif
 
     spin_unlock_irq(&pDevice->lock);
     return 0;
 
 }
 
-#ifdef PRIVATE_OBJ
-
-int __device_intr(int irq, HANDLE pExDevice, struct pt_regs *regs) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-
-#else
 static  irqreturn_t  device_intr(int irq,  void *dev_instance) {
     struct net_device* dev=dev_instance;
     PSDevice     pDevice=(PSDevice) netdev_priv(dev);
-#endif
 
     int             max_count=0;
     DWORD           dwMIBCounter=0;
@@ -2909,7 +2733,7 @@ static  irqreturn_t  device_intr(int irq,  void *dev_instance) {
         return IRQ_RETVAL(handled);
 
     if (pDevice->dwIsr == 0xffffffff) {
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "dwIsr = 0xffff\n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "dwIsr = 0xffff\n");
         return IRQ_RETVAL(handled);
     }
     /*
@@ -2948,7 +2772,7 @@ static  irqreturn_t  device_intr(int irq,  void *dev_instance) {
         MACvWriteISR(pDevice->PortOffset, pDevice->dwIsr);
 
         if (pDevice->dwIsr & ISR_FETALERR){
-            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " ISR_FETALERR \n");
+            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " ISR_FETALERR \n");
             VNSvOutPortB(pDevice->PortOffset + MAC_REG_SOFTPWRCTL, 0);
             VNSvOutPortW(pDevice->PortOffset + MAC_REG_SOFTPWRCTL, SOFTPWRCTL_SWPECTI);
             device_error(pDevice, pDevice->dwIsr);
@@ -3064,11 +2888,11 @@ static  irqreturn_t  device_intr(int irq,  void *dev_instance) {
                         if (pDevice->uBBVGADiffCount == 1) {
                             // first VGA diff gain
                             BBvSetVGAGainOffset(pDevice, pDevice->byBBVGANew);
-                            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"First RSSI[%d] NewGain[%d] OldGain[%d] Count[%d]\n",
+                            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"First RSSI[%d] NewGain[%d] OldGain[%d] Count[%d]\n",
                                             (int)ldBm, pDevice->byBBVGANew, pDevice->byBBVGACurrent, (int)pDevice->uBBVGADiffCount);
                         }
                         if (pDevice->uBBVGADiffCount >= BB_VGA_CHANGE_THRESHOLD) {
-                            DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO"RSSI[%d] NewGain[%d] OldGain[%d] Count[%d]\n",
+                            DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO"RSSI[%d] NewGain[%d] OldGain[%d] Count[%d]\n",
                                             (int)ldBm, pDevice->byBBVGANew, pDevice->byBBVGACurrent, (int)pDevice->uBBVGADiffCount);
                             BBvSetVGAGainOffset(pDevice, pDevice->byBBVGANew);
                         }
@@ -3297,18 +3121,9 @@ error2:
 }
 
 
-#ifdef PRIVATE_OBJ
-
-void __device_set_multi(HANDLE pExDevice) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    ref_net_device  *dev = &(pDevice_info->ref_dev);
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-#else
 
 static void device_set_multi(struct net_device *dev) {
     PSDevice         pDevice = (PSDevice) netdev_priv(dev);
-#endif
 
     PSMgmtObject     pMgmt = pDevice->pMgmt;
     u32              mc_filter[2];
@@ -3318,24 +3133,13 @@ static void device_set_multi(struct net_device *dev) {
 
     VNSvInPortB(pDevice->PortOffset + MAC_REG_RCR, &(pDevice->byRxMode));
 
-#ifdef PRIVATE_OBJ
-    if (*(dev->flags) & IFF_PROMISC) {         /* Set promiscuous. */
-        DEVICE_PRT(MSG_LEVEL_ERR,KERN_ERR "%s: Promiscuous mode enabled.\n", pDevice->dev->name);
-
-#else
     if (dev->flags & IFF_PROMISC) {         /* Set promiscuous. */
-        DEVICE_PRT(MSG_LEVEL_ERR,KERN_NOTICE "%s: Promiscuous mode enabled.\n", dev->name);
-#endif
+        DBG_PRT(MSG_LEVEL_ERR,KERN_NOTICE "%s: Promiscuous mode enabled.\n", dev->name);
         /* Unconditionally log net taps. */
         pDevice->byRxMode |= (RCR_MULTICAST|RCR_BROADCAST|RCR_UNICAST);
     }
-#ifdef PRIVATE_OBJ
-    else if ((*(dev->mc_count) > pDevice->multicast_limit)
-        ||  (*(dev->flags) & IFF_ALLMULTI)) {
-#else
     else if ((dev->mc_count > pDevice->multicast_limit)
         ||  (dev->flags & IFF_ALLMULTI)) {
-#endif
         MACvSelectPage1(pDevice->PortOffset);
         VNSvOutPortD(pDevice->PortOffset + MAC_REG_MAR0, 0xffffffff);
         VNSvOutPortD(pDevice->PortOffset + MAC_REG_MAR0 + 4, 0xffffffff);
@@ -3344,13 +3148,8 @@ static void device_set_multi(struct net_device *dev) {
     }
     else {
         memset(mc_filter, 0, sizeof(mc_filter));
-#ifdef PRIVATE_OBJ
-        for (i = 0, mclist = dev->mc_list; mclist && i < *(dev->mc_count);
-             i++, mclist = mclist->next) {
-#else
         for (i = 0, mclist = dev->mc_list; mclist && i < dev->mc_count;
              i++, mclist = mclist->next) {
-#endif
             int bit_nr = ether_crc(ETH_ALEN, mclist->dmi_addr) >> 26;
             mc_filter[bit_nr >> 5] |= cpu_to_le32(1 << (bit_nr & 31));
         }
@@ -3369,42 +3168,23 @@ static void device_set_multi(struct net_device *dev) {
     }
 
     VNSvOutPortB(pDevice->PortOffset + MAC_REG_RCR, pDevice->byRxMode);
-    DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->byRxMode = %x\n", pDevice->byRxMode );
+    DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "pDevice->byRxMode = %x\n", pDevice->byRxMode );
 }
 
 
-#ifdef PRIVATE_OBJ
-
-struct net_device_stats *__device_get_stats(HANDLE pExDevice) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-#else
 static struct net_device_stats *device_get_stats(struct net_device *dev) {
     PSDevice pDevice=(PSDevice) netdev_priv(dev);
-#endif
 
     return &pDevice->stats;
 }
 
 
-#ifdef PRIVATE_OBJ
-
-int __device_ioctl(HANDLE pExDevice, struct ifreq *rq, int cmd) {
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    struct net_device *dev = pDevice_info->dev;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-#else
 
 static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 	PSDevice	        pDevice = (PSDevice)netdev_priv(dev);
-#endif
 
-#ifdef WIRELESS_EXT
 	struct iwreq *wrq = (struct iwreq *) rq;
 	int                 rc =0;
-#endif
     PSMgmtObject        pMgmt = pDevice->pMgmt;
     PSCmdRequest        pReq;
 
@@ -3415,9 +3195,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
     }
 
     switch(cmd) {
-
-#ifdef WIRELESS_EXT
-//#if WIRELESS_EXT < 13
 
 	case SIOCGIWNAME:
 		rc = iwctl_giwname(dev, NULL, (char *)&(wrq->u.name), NULL);
@@ -3490,13 +3267,13 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 
 		// Set desired station name
 	case SIOCSIWNICKN:
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWNICKN \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWNICKN \n");
         rc = -EOPNOTSUPP;
 		break;
 
 		// Get current station name
 	case SIOCGIWNICKN:
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWNICKN \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWNICKN \n");
         rc = -EOPNOTSUPP;
 		break;
 
@@ -3593,21 +3370,17 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		}
 		break;
 
-#if WIRELESS_EXT > 9
 		// Get the current Tx-Power
 	case SIOCGIWTXPOW:
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWTXPOW \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWTXPOW \n");
         rc = -EOPNOTSUPP;
 		break;
 
 	case SIOCSIWTXPOW:
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWTXPOW \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWTXPOW \n");
         rc = -EOPNOTSUPP;
 		break;
 
-#endif // WIRELESS_EXT > 9
-
-#if WIRELESS_EXT > 10
 	case SIOCSIWRETRY:
 
 		rc = iwctl_siwretry(dev, NULL, &(wrq->u.retry), NULL);
@@ -3617,8 +3390,6 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 
 		rc = iwctl_giwretry(dev, NULL, &(wrq->u.retry), NULL);
 		break;
-
-#endif // WIRELESS_EXT > 10
 
 		// Get range of parameters
 	case SIOCGIWRANGE:
@@ -3651,7 +3422,7 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		break;
 
 	case SIOCSIWSENS:
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWSENS \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWSENS \n");
 		rc = -EOPNOTSUPP;
 		break;
 
@@ -3677,21 +3448,21 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		// Set the spy list
 	case SIOCSIWSPY:
 
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWSPY \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWSPY \n");
 		rc = -EOPNOTSUPP;
 		break;
 
 		// Get the spy list
 	case SIOCGIWSPY:
 
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWSPY \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWSPY \n");
 		rc = -EOPNOTSUPP;
 		break;
 
 #endif // WIRELESS_SPY
 
 	case SIOCGIWPRIV:
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWPRIV \n");
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWPRIV \n");
 		rc = -EOPNOTSUPP;
 /*
 		if(wrq->u.data.pointer) {
@@ -3706,33 +3477,32 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		break;
 
 
-//#endif // WIRELESS_EXT < 13
 //2008-0409-07, <Add> by Einsn Liu
 #ifdef  WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 	case SIOCSIWAUTH:
-		DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWAUTH \n");
+		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWAUTH \n");
 		rc = iwctl_siwauth(dev, NULL, &(wrq->u.param), NULL);
 		break;
 
 	case SIOCGIWAUTH:
-		DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWAUTH \n");
+		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWAUTH \n");
 		rc = iwctl_giwauth(dev, NULL, &(wrq->u.param), NULL);
 		break;
 
 	case SIOCSIWGENIE:
-		DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWGENIE \n");
+		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWGENIE \n");
 		rc = iwctl_siwgenie(dev, NULL, &(wrq->u.data), wrq->u.data.pointer);
 		break;
 
 	case SIOCGIWGENIE:
-		DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWGENIE \n");
+		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWGENIE \n");
 		rc = iwctl_giwgenie(dev, NULL, &(wrq->u.data), wrq->u.data.pointer);
 		break;
 
 	case SIOCSIWENCODEEXT:
 		{
 			char extra[sizeof(struct iw_encode_ext)+MAX_KEY_LEN+1];
-			DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWENCODEEXT \n");
+			DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWENCODEEXT \n");
 			if(wrq->u.encoding.pointer){
 				memset(extra, 0, sizeof(struct iw_encode_ext)+MAX_KEY_LEN+1);
 				if(wrq->u.encoding.length > (sizeof(struct iw_encode_ext)+ MAX_KEY_LEN)){
@@ -3752,19 +3522,17 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 		break;
 
 	case SIOCGIWENCODEEXT:
-		DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWENCODEEXT \n");
+		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCGIWENCODEEXT \n");
 		rc = iwctl_giwencodeext(dev, NULL, &(wrq->u.encoding), NULL);
 		break;
 
 	case SIOCSIWMLME:
-		DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWMLME \n");
+		DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO " SIOCSIWMLME \n");
 		rc = iwctl_siwmlme(dev, NULL, &(wrq->u.data), wrq->u.data.pointer);
 		break;
 
 #endif // #ifdef WPA_SUPPLICANT_DRIVER_WEXT_SUPPORT
 //End Add -- //2008-0409-07, <Add> by Einsn Liu
-
-#endif // WIRELESS_EXT
 
     case IOCTL_CMD_TEST:
 
@@ -3804,20 +3572,12 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
     case IOCTL_CMD_HOSTAPD:
 
 
-#if WIRELESS_EXT > 8
-		rc = hostap_ioctl(pDevice, &wrq->u.data);
-#else // WIRELESS_EXT > 8
-		rc = hostap_ioctl(pDevice, (struct iw_point *) &wrq->u.data);
-#endif // WIRELESS_EXT > 8
+	rc = hostap_ioctl(pDevice, &wrq->u.data);
         break;
 
     case IOCTL_CMD_WPA:
 
-#if WIRELESS_EXT > 8
-		rc = wpa_ioctl(pDevice, &wrq->u.data);
-#else // WIRELESS_EXT > 8
-		rc = wpa_ioctl(pDevice, (struct iw_point *) &wrq->u.data);
-#endif // WIRELESS_EXT > 8
+	rc = wpa_ioctl(pDevice, &wrq->u.data);
         break;
 
 	case SIOCETHTOOL:
@@ -3826,7 +3586,7 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
 
 	default:
 		rc = -EOPNOTSUPP;
-        DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Ioctl command not support..%x\n", cmd);
+        DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Ioctl command not support..%x\n", cmd);
 
 
     }
@@ -3839,7 +3599,7 @@ static int  device_ioctl(struct net_device *dev, struct ifreq *rq, int cmd) {
            spin_unlock_irq(&pDevice->lock);
        }
        else {
-           DEVICE_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Commit the settings\n");
+           DBG_PRT(MSG_LEVEL_DEBUG, KERN_INFO "Commit the settings\n");
            spin_lock_irq(&pDevice->lock);
            pDevice->bLinkPass = FALSE;
            memset(pMgmt->abyCurrBSSID, 0, 6);
@@ -3883,7 +3643,6 @@ static int ethtool_ioctl(struct net_device *dev, void *useraddr)
 }
 
 /*------------------------------------------------------------------*/
-#ifndef PRIVATE_OBJ
 
 MODULE_DEVICE_TABLE(pci, device_id_table);
 
@@ -4016,59 +3775,6 @@ viawget_resume(struct pci_dev *pcid)
 
 #endif
 
-#endif //#ifndef PRIVATE_OBJ
 
-#ifdef PRIVATE_OBJ
-
-
-int __device_hw_reset(HANDLE pExDevice){
-     PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-
-     return MACbSoftwareReset(pDevice_info->port_offset);
-}
-
-
-int __device_hw_init(HANDLE pExDevice){
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice;
-
-    pDevice = (PSDevice)kmalloc(sizeof(DEVICE_INFO), (int)GFP_ATOMIC);
-    if (pDevice == NULL)
-        return FALSE;
-
-    memset(pDevice, 0, sizeof(DEVICE_INFO));
-    pDevice_info->pWDevice = pDevice;
-    pDevice->PortOffset = pDevice_info->port_offset;
-    pDevice->dev = pDevice_info->dev;
-    pDevice->pcid = pDevice_info->pcid;
-    pDevice->chip_id = pDevice_info->chip_id;
-    pDevice->memaddr = pDevice_info->mem_addr;
-    pDevice->ioaddr = pDevice_info->io_addr;
-    pDevice->io_size = pDevice_info->io_size;
-    pDevice->nTxQueues = pDevice_info->nTxQueues;
-    pDevice->multicast_limit = pDevice_info->multicast_limit;
-    pDevice->sMgmtObj.pAdapter = (PVOID)pDevice;
-    pDevice->pMgmt = &(pDevice->sMgmtObj);
-    MACvInitialize(pDevice->PortOffset);
-    device_get_options(pDevice, 0 , pDevice_info->dev->name);
-    device_set_options(pDevice);
-    pDevice->sOpts.flags &= pDevice_info->flags;
-    pDevice->flags = pDevice->sOpts.flags | (pDevice_info->flags & 0xFF000000UL);
-    spin_lock_init(&(pDevice->lock));
-
-    return TRUE;
-}
-
-
-void __device_read_mac(HANDLE pExDevice, PBYTE dev_addr){
-    PSDevice_info pDevice_info = (PSDevice_info)pExDevice;
-    PSDevice    pDevice = (PSDevice)(pDevice_info->pWDevice);
-
-    MACvReadEtherAddress(pDevice->PortOffset, dev_addr);
-    return;
-}
-
-
-#endif
 
 

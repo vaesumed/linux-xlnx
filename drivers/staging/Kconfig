@@ -75,6 +75,8 @@ source "drivers/staging/rt2870/Kconfig"
 
 source "drivers/staging/rt3070/Kconfig"
 
+source "drivers/staging/rt3090/Kconfig"
+
 source "drivers/staging/comedi/Kconfig"
 
 source "drivers/staging/asus_oled/Kconfig"
@@ -87,13 +89,13 @@ source "drivers/staging/rtl8187se/Kconfig"
 
 source "drivers/staging/rtl8192su/Kconfig"
 
+source "drivers/staging/rtl8192e/Kconfig"
+
 source "drivers/staging/rspiusb/Kconfig"
 
 source "drivers/staging/mimio/Kconfig"
 
 source "drivers/staging/frontier/Kconfig"
-
-source "drivers/staging/epl/Kconfig"
 
 source "drivers/staging/android/Kconfig"
 
@@ -119,13 +121,23 @@ source "drivers/staging/octeon/Kconfig"
 
 source "drivers/staging/serqt_usb2/Kconfig"
 
+source "drivers/staging/quatech_usb2/Kconfig"
+
 source "drivers/staging/vt6655/Kconfig"
+
+source "drivers/staging/vt6656/Kconfig"
 
 source "drivers/staging/cpc-usb/Kconfig"
 
-source "drivers/staging/pata_rdc/Kconfig"
+source "drivers/staging/dream/smd/Kconfig"
+
+source "drivers/staging/dream/camera/Kconfig"
 
 source "drivers/staging/udlfb/Kconfig"
+
+source "drivers/staging/hv/Kconfig"
+
+source "drivers/staging/vme/Kconfig"
 
 endif # !STAGING_EXCLUDE_BUILD
 endif # STAGING
