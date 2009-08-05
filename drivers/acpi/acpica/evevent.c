@@ -203,10 +203,7 @@ static acpi_status acpi_ev_fixed_event_initialize(void)
 		/* Disable the fixed event */
 
 		if (acpi_gbl_fixed_event_info[i].enable_register_id != 0xFF) {
-			status =
-			    acpi_write_bit_register(acpi_gbl_fixed_event_info
-						    [i].enable_register_id,
-						    ACPI_DISABLE_EVENT);
+			status = acpi_disable_event(i, 0);
 			if (ACPI_FAILURE(status)) {
 				return (status);
 			}
@@ -288,18 +285,14 @@ static u32 acpi_ev_fixed_event_dispatch(u32 event)
 	ACPI_FUNCTION_ENTRY();
 
 	/* Clear the status bit */
-
-	(void)acpi_write_bit_register(acpi_gbl_fixed_event_info[event].
-				      status_register_id, ACPI_CLEAR_STATUS);
+	acpi_clear_event(event);
 
 	/*
 	 * Make sure we've got a handler. If not, report an error. The event is
 	 * disabled to prevent further interrupts.
 	 */
 	if (NULL == acpi_gbl_fixed_event_handlers[event].handler) {
-		(void)acpi_write_bit_register(acpi_gbl_fixed_event_info[event].
-					      enable_register_id,
-					      ACPI_DISABLE_EVENT);
+		acpi_disable_event(event, 0);
 
 		ACPI_ERROR((AE_INFO,
 			    "No installed handler for fixed event [%08X]",
