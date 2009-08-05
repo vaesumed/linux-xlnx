@@ -258,7 +258,6 @@ struct mxser_port {
 	struct mxser_mon mon_data;
 
 	spinlock_t slock;
-	wait_queue_head_t delta_msr_wait;
 };
 
 struct mxser_board {
@@ -818,7 +817,7 @@ static void mxser_check_modem_status(struct tty_struct *tty,
 	if (status & UART_MSR_DCTS)
 		port->icount.cts++;
 	port->mon_data.modem_status = status;
-	wake_up_interruptible(&port->delta_msr_wait);
+	wake_up_interruptible(&port->port.delta_msr_wait);
 
 	if ((port->port.flags & ASYNC_CHECK_CD) && (status & UART_MSR_DDCD)) {
 		if (status & UART_MSR_DCD)
@@ -973,7 +972,7 @@ static void mxser_shutdown(struct tty_struct *tty)
 	 * clear delta_msr_wait queue to avoid mem leaks: we may free the irq
 	 * here so the queue might never be waken up
 	 */
-	wake_up_interruptible(&info->delta_msr_wait);
+	wake_up_interruptible(&info->port.delta_msr_wait);
 
 	/*
 	 * Free the IRQ, if necessary
@@ -1073,34 +1072,17 @@ static void mxser_flush_buffer(struct tty_struct *tty)
 }
 
 
-/*
- * This routine is called when the serial port gets closed.  First, we
- * wait for the last remaining data to be sent.  Then, we unlink its
- * async structure from the interrupt chain if necessary, and we free
- * that IRQ if nothing is left in the chain.
- */
-static void mxser_close(struct tty_struct *tty, struct file *filp)
+static void mxser_close_port(struct tty_struct *tty, struct tty_port *port)
 {
-	struct mxser_port *info = tty->driver_data;
-	struct tty_port *port = &info->port;
-
+	struct mxser_port *info = container_of(port, struct mxser_port, port);
 	unsigned long timeout;
-
-	if (tty->index == MXSER_PORTS)
-		return;
-	if (!info)
-		return;
-
-	if (tty_port_close_start(port, tty, filp) == 0)
-		return;
-
 	/*
 	 * Save the termios structure, since this port may have
 	 * separate termios for callout and dialin.
 	 *
 	 * FIXME: Can this go ?
 	 */
-	if (info->port.flags & ASYNC_NORMAL_ACTIVE)
+	if (port->flags & ASYNC_NORMAL_ACTIVE)
 		info->normal_termios = *tty->termios;
 	/*
 	 * At this point we stop accepting input.  To do this, we
@@ -1112,7 +1094,7 @@ static void mxser_close(struct tty_struct *tty, struct file *filp)
 	if (info->board->chip_flag)
 		info->IER &= ~MOXA_MUST_RECV_ISR;
 
-	if (info->port.flags & ASYNC_INITIALIZED) {
+	if (port->flags & ASYNC_INITIALIZED) {
 		outb(info->IER, info->ioaddr + UART_IER);
 		/*
 		 * Before we drop DTR, make sure the UART transmitter
@@ -1127,8 +1109,26 @@ static void mxser_close(struct tty_struct *tty, struct file *filp)
 		}
 	}
 	mxser_shutdown(tty);
-	mxser_flush_buffer(tty);
 
+}
+
+/*
+ * This routine is called when the serial port gets closed.  First, we
+ * wait for the last remaining data to be sent.  Then, we unlink its
+ * async structure from the interrupt chain if necessary, and we free
+ * that IRQ if nothing is left in the chain.
+ */
+static void mxser_close(struct tty_struct *tty, struct file *filp)
+{
+	struct mxser_port *info = tty->driver_data;
+	struct tty_port *port = &info->port;
+
+	if (tty->index == MXSER_PORTS)
+		return;
+	if (tty_port_close_start(port, tty, filp) == 0)
+		return;
+	mxser_close_port(tty, port);
+	mxser_flush_buffer(tty);
 	/* Right now the tty_port set is done outside of the close_end helper
 	   as we don't yet have everyone using refcounts */	
 	tty_port_close_end(port, tty);
@@ -1761,7 +1761,7 @@ static int mxser_ioctl(struct tty_struct *tty, struct file *file,
 		cnow = info->icount;	/* note the counters on entry */
 		spin_unlock_irqrestore(&info->slock, flags);
 
-		return wait_event_interruptible(info->delta_msr_wait,
+		return wait_event_interruptible(info->port.delta_msr_wait,
 				mxser_cflags_changed(info, arg, &cnow));
 	/*
 	 * Get counter of input serial line interrupts (DCD,RI,DSR,CTS)
@@ -2413,7 +2413,6 @@ static int __devinit mxser_initbrd(struct mxser_board *brd,
 		info->port.close_delay = 5 * HZ / 10;
 		info->port.closing_wait = 30 * HZ;
 		info->normal_termios = mxvar_sdriver->init_termios;
-		init_waitqueue_head(&info->delta_msr_wait);
 		memset(&info->mon_data, 0, sizeof(struct mxser_mon));
 		info->err_shadow = 0;
 		spin_lock_init(&info->slock);
