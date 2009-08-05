@@ -59,6 +59,9 @@ MODULE_LICENSE("GPL");
 				    IWL_RATE_##pp##M_INDEX,    \
 				    IWL_RATE_##np##M_INDEX }
 
+u32 iwl_debug_level;
+EXPORT_SYMBOL(iwl_debug_level);
+
 static irqreturn_t iwl_isr(int irq, void *data);
 
 /*
@@ -629,11 +632,72 @@ u8 iwl_is_fat_tx_allowed(struct iwl_priv *priv,
 		if (!sta_ht_inf->ht_supported)
 			return 0;
 	}
+#ifdef CONFIG_IWLWIFI_DEBUG
+	if (priv->disable_ht40)
+		return 0;
+#endif
 	return iwl_is_channel_extension(priv, priv->band,
 			le16_to_cpu(priv->staging_rxon.channel),
 			iwl_ht_conf->extension_chan_offset);
 }
 EXPORT_SYMBOL(iwl_is_fat_tx_allowed);
+
+static u16 iwl_adjust_beacon_interval(u16 beacon_val, u16 max_beacon_val)
+{
+	u16 new_val = 0;
+	u16 beacon_factor = 0;
+
+	beacon_factor = (beacon_val + max_beacon_val) / max_beacon_val;
+	new_val = beacon_val / beacon_factor;
+
+	if (!new_val)
+		new_val = max_beacon_val;
+
+	return new_val;
+}
+
+void iwl_setup_rxon_timing(struct iwl_priv *priv)
+{
+	u64 tsf;
+	s32 interval_tm, rem;
+	unsigned long flags;
+	struct ieee80211_conf *conf = NULL;
+	u16 beacon_int;
+
+	conf = ieee80211_get_hw_conf(priv->hw);
+
+	spin_lock_irqsave(&priv->lock, flags);
+	priv->rxon_timing.timestamp = cpu_to_le64(priv->timestamp);
+	priv->rxon_timing.listen_interval = cpu_to_le16(conf->listen_interval);
+
+	if (priv->iw_mode == NL80211_IFTYPE_STATION) {
+		beacon_int = priv->beacon_int;
+		priv->rxon_timing.atim_window = 0;
+	} else {
+		beacon_int = priv->vif->bss_conf.beacon_int;
+
+		/* TODO: we need to get atim_window from upper stack
+		 * for now we set to 0 */
+		priv->rxon_timing.atim_window = 0;
+	}
+
+	beacon_int = iwl_adjust_beacon_interval(beacon_int,
+				priv->hw_params.max_beacon_itrvl * 1024);
+	priv->rxon_timing.beacon_interval = cpu_to_le16(beacon_int);
+
+	tsf = priv->timestamp; /* tsf is modifed by do_div: copy it */
+	interval_tm = beacon_int * 1024;
+	rem = do_div(tsf, interval_tm);
+	priv->rxon_timing.beacon_init_val = cpu_to_le32(interval_tm - rem);
+
+	spin_unlock_irqrestore(&priv->lock, flags);
+	IWL_DEBUG_ASSOC(priv,
+			"beacon interval %d beacon timer %d beacon tim %d\n",
+			le16_to_cpu(priv->rxon_timing.beacon_interval),
+			le32_to_cpu(priv->rxon_timing.beacon_init_val),
+			le16_to_cpu(priv->rxon_timing.atim_window));
+}
+EXPORT_SYMBOL(iwl_setup_rxon_timing);
 
 void iwl_set_rxon_hwcrypto(struct iwl_priv *priv, int hw_decrypt)
 {
@@ -1218,7 +1282,7 @@ static void iwl_print_rx_config_cmd(struct iwl_priv *priv)
 	struct iwl_rxon_cmd *rxon = &priv->staging_rxon;
 
 	IWL_DEBUG_RADIO(priv, "RX CONFIG:\n");
-	iwl_print_hex_dump(priv, IWL_DL_RADIO, (u8 *) rxon, sizeof(*rxon));
+	iwl_print_hex_dump(IWL_DL_RADIO, (u8 *) rxon, sizeof(*rxon));
 	IWL_DEBUG_RADIO(priv, "u16 channel: 0x%x\n", le16_to_cpu(rxon->channel));
 	IWL_DEBUG_RADIO(priv, "u32 flags: 0x%08X\n", le32_to_cpu(rxon->flags));
 	IWL_DEBUG_RADIO(priv, "u32 filter_flags: 0x%08x\n",
@@ -1231,8 +1295,211 @@ static void iwl_print_rx_config_cmd(struct iwl_priv *priv)
 	IWL_DEBUG_RADIO(priv, "u8[6] bssid_addr: %pM\n", rxon->bssid_addr);
 	IWL_DEBUG_RADIO(priv, "u16 assoc_id: 0x%x\n", le16_to_cpu(rxon->assoc_id));
 }
-#endif
 
+static const char *desc_lookup_text[] = {
+	"OK",
+	"FAIL",
+	"BAD_PARAM",
+	"BAD_CHECKSUM",
+	"NMI_INTERRUPT_WDG",
+	"SYSASSERT",
+	"FATAL_ERROR",
+	"BAD_COMMAND",
+	"HW_ERROR_TUNE_LOCK",
+	"HW_ERROR_TEMPERATURE",
+	"ILLEGAL_CHAN_FREQ",
+	"VCC_NOT_STABLE",
+	"FH_ERROR",
+	"NMI_INTERRUPT_HOST",
+	"NMI_INTERRUPT_ACTION_PT",
+	"NMI_INTERRUPT_UNKNOWN",
+	"UCODE_VERSION_MISMATCH",
+	"HW_ERROR_ABS_LOCK",
+	"HW_ERROR_CAL_LOCK_FAIL",
+	"NMI_INTERRUPT_INST_ACTION_PT",
+	"NMI_INTERRUPT_DATA_ACTION_PT",
+	"NMI_TRM_HW_ER",
+	"NMI_INTERRUPT_TRM",
+	"NMI_INTERRUPT_BREAK_POINT"
+	"DEBUG_0",
+	"DEBUG_1",
+	"DEBUG_2",
+	"DEBUG_3",
+	"UNKNOWN"
+};
+
+static const char *desc_lookup(int i)
+{
+	int max = ARRAY_SIZE(desc_lookup_text) - 1;
+
+	if (i < 0 || i > max)
+		i = max;
+
+	return desc_lookup_text[i];
+}
+
+#define ERROR_START_OFFSET  (1 * sizeof(u32))
+#define ERROR_ELEM_SIZE     (7 * sizeof(u32))
+
+static void iwl_dump_nic_error_log(struct iwl_priv *priv)
+{
+	u32 data2, line;
+	u32 desc, time, count, base, data1;
+	u32 blink1, blink2, ilink1, ilink2;
+
+	switch (priv->ucode_type) {
+	case UCODE_RT:
+		base = le32_to_cpu(priv->card_alive.error_event_table_ptr);
+		break;
+	case UCODE_INIT:
+		base = le32_to_cpu(priv->card_alive_init.error_event_table_ptr);
+		break;
+	default:
+		IWL_ERR(priv, "uCode image not available\n");
+		return;
+	}
+
+	if (!priv->cfg->ops->lib->is_valid_rtc_data_addr(base)) {
+		IWL_ERR(priv, "Not valid error log pointer 0x%08X\n", base);
+		return;
+	}
+
+	count = iwl_read_targ_mem(priv, base);
+
+	if (ERROR_START_OFFSET <= count * ERROR_ELEM_SIZE) {
+		IWL_ERR(priv, "Start IWL Error Log Dump:\n");
+		IWL_ERR(priv, "Status: 0x%08lX, count: %d\n",
+			priv->status, count);
+	}
+
+	desc = iwl_read_targ_mem(priv, base + 1 * sizeof(u32));
+	blink1 = iwl_read_targ_mem(priv, base + 3 * sizeof(u32));
+	blink2 = iwl_read_targ_mem(priv, base + 4 * sizeof(u32));
+	ilink1 = iwl_read_targ_mem(priv, base + 5 * sizeof(u32));
+	ilink2 = iwl_read_targ_mem(priv, base + 6 * sizeof(u32));
+	data1 = iwl_read_targ_mem(priv, base + 7 * sizeof(u32));
+	data2 = iwl_read_targ_mem(priv, base + 8 * sizeof(u32));
+	line = iwl_read_targ_mem(priv, base + 9 * sizeof(u32));
+	time = iwl_read_targ_mem(priv, base + 11 * sizeof(u32));
+
+	IWL_ERR(priv, "Desc                               Time       "
+		"data1      data2      line\n");
+	IWL_ERR(priv, "%-28s (#%02d) %010u 0x%08X 0x%08X %u\n",
+		desc_lookup(desc), desc, time, data1, data2, line);
+	IWL_ERR(priv, "blink1  blink2  ilink1  ilink2\n");
+	IWL_ERR(priv, "0x%05X 0x%05X 0x%05X 0x%05X\n", blink1, blink2,
+		ilink1, ilink2);
+
+}
+
+#define EVENT_START_OFFSET  (4 * sizeof(u32))
+
+/**
+ * iwl_print_event_log - Dump error event log to syslog
+ *
+ */
+static void iwl_print_event_log(struct iwl_priv *priv, u32 start_idx,
+				u32 num_events, u32 mode)
+{
+	u32 i;
+	u32 base;       /* SRAM byte address of event log header */
+	u32 event_size; /* 2 u32s, or 3 u32s if timestamp recorded */
+	u32 ptr;        /* SRAM byte address of log data */
+	u32 ev, time, data; /* event log data */
+
+	if (num_events == 0)
+		return;
+	switch (priv->ucode_type) {
+	case UCODE_RT:
+		base = le32_to_cpu(priv->card_alive.log_event_table_ptr);
+		break;
+	case UCODE_INIT:
+		base = le32_to_cpu(priv->card_alive_init.log_event_table_ptr);
+		break;
+	default:
+		IWL_ERR(priv, "uCode image not available\n");
+		return;
+	}
+
+	if (mode == 0)
+		event_size = 2 * sizeof(u32);
+	else
+		event_size = 3 * sizeof(u32);
+
+	ptr = base + EVENT_START_OFFSET + (start_idx * event_size);
+
+	/* "time" is actually "data" for mode 0 (no timestamp).
+	* place event id # at far right for easier visual parsing. */
+	for (i = 0; i < num_events; i++) {
+		ev = iwl_read_targ_mem(priv, ptr);
+		ptr += sizeof(u32);
+		time = iwl_read_targ_mem(priv, ptr);
+		ptr += sizeof(u32);
+		if (mode == 0) {
+			/* data, ev */
+			IWL_ERR(priv, "EVT_LOG:0x%08x:%04u\n", time, ev);
+		} else {
+			data = iwl_read_targ_mem(priv, ptr);
+			ptr += sizeof(u32);
+			IWL_ERR(priv, "EVT_LOGT:%010u:0x%08x:%04u\n",
+					time, data, ev);
+		}
+	}
+}
+
+void iwl_dump_nic_event_log(struct iwl_priv *priv)
+{
+	u32 base;       /* SRAM byte address of event log header */
+	u32 capacity;   /* event log capacity in # entries */
+	u32 mode;       /* 0 - no timestamp, 1 - timestamp recorded */
+	u32 num_wraps;  /* # times uCode wrapped to top of log */
+	u32 next_entry; /* index of next entry to be written by uCode */
+	u32 size;       /* # entries that we'll print */
+
+	switch (priv->ucode_type) {
+	case UCODE_RT:
+		base = le32_to_cpu(priv->card_alive.log_event_table_ptr);
+		break;
+	case UCODE_INIT:
+		base = le32_to_cpu(priv->card_alive_init.log_event_table_ptr);
+		break;
+	default:
+		IWL_ERR(priv, "uCode image not available\n");
+		return;
+	}
+
+	if (!priv->cfg->ops->lib->is_valid_rtc_data_addr(base)) {
+		IWL_ERR(priv, "Invalid event log pointer 0x%08X\n", base);
+		return;
+	}
+
+	/* event log header */
+	capacity = iwl_read_targ_mem(priv, base);
+	mode = iwl_read_targ_mem(priv, base + (1 * sizeof(u32)));
+	num_wraps = iwl_read_targ_mem(priv, base + (2 * sizeof(u32)));
+	next_entry = iwl_read_targ_mem(priv, base + (3 * sizeof(u32)));
+
+	size = num_wraps ? capacity : next_entry;
+
+	/* bail out if nothing in log */
+	if (size == 0) {
+		IWL_ERR(priv, "Start IWL Event Log Dump: nothing in log\n");
+		return;
+	}
+
+	IWL_ERR(priv, "Start IWL Event Log Dump: display count %d, wraps %d\n",
+			size, num_wraps);
+
+	/* if uCode has wrapped back to top of log, start at the oldest entry,
+	 * i.e the next one that uCode would fill. */
+	if (num_wraps)
+		iwl_print_event_log(priv, next_entry,
+					capacity - next_entry, mode);
+	/* (then/else) start at top of log */
+	iwl_print_event_log(priv, 0, next_entry, mode);
+
+}
+#endif
 /**
  * iwl_irq_handle_error - called for HW or SW error interrupt from card
  */
@@ -1245,7 +1512,7 @@ void iwl_irq_handle_error(struct iwl_priv *priv)
 	clear_bit(STATUS_HCMD_ACTIVE, &priv->status);
 
 #ifdef CONFIG_IWLWIFI_DEBUG
-	if (priv->debug_level & IWL_DL_FW_ERRORS) {
+	if (iwl_debug_level & IWL_DL_FW_ERRORS) {
 		iwl_dump_nic_error_log(priv);
 		iwl_dump_nic_event_log(priv);
 		iwl_print_rx_config_cmd(priv);
@@ -1325,7 +1592,8 @@ int iwl_setup_mac(struct iwl_priv *priv)
 	hw->flags = IEEE80211_HW_SIGNAL_DBM |
 		    IEEE80211_HW_NOISE_DBM |
 		    IEEE80211_HW_AMPDU_AGGREGATION |
-		    IEEE80211_HW_SPECTRUM_MGMT;
+		    IEEE80211_HW_SPECTRUM_MGMT |
+		    IEEE80211_HW_SUPPORTS_PS;
 	hw->wiphy->interface_modes =
 		BIT(NL80211_IFTYPE_STATION) |
 		BIT(NL80211_IFTYPE_ADHOC);
@@ -1364,7 +1632,6 @@ EXPORT_SYMBOL(iwl_setup_mac);
 
 int iwl_set_hw_params(struct iwl_priv *priv)
 {
-	priv->hw_params.sw_crypto = priv->cfg->mod_params->sw_crypto;
 	priv->hw_params.max_rxq_size = RX_QUEUE_SIZE;
 	priv->hw_params.max_rxq_log = RX_QUEUE_SIZE_LOG;
 	if (priv->cfg->mod_params->amsdu_size_8K)
@@ -1372,6 +1639,8 @@ int iwl_set_hw_params(struct iwl_priv *priv)
 	else
 		priv->hw_params.rx_buf_size = IWL_RX_BUF_SIZE_4K;
 	priv->hw_params.max_pkt_size = priv->hw_params.rx_buf_size - 256;
+
+	priv->hw_params.max_beacon_itrvl = IWL_MAX_UCODE_BEACON_INTERVAL;
 
 	if (priv->cfg->mod_params->disable_11n)
 		priv->cfg->sku &= ~IWL_SKU_N;
@@ -1486,31 +1755,6 @@ void iwl_uninit_drv(struct iwl_priv *priv)
 	kfree(priv->scan);
 }
 EXPORT_SYMBOL(iwl_uninit_drv);
-
-
-void iwl_disable_interrupts(struct iwl_priv *priv)
-{
-	clear_bit(STATUS_INT_ENABLED, &priv->status);
-
-	/* disable interrupts from uCode/NIC to host */
-	iwl_write32(priv, CSR_INT_MASK, 0x00000000);
-
-	/* acknowledge/clear/reset any interrupts still pending
-	 * from uCode or flow handler (Rx/Tx DMA) */
-	iwl_write32(priv, CSR_INT, 0xffffffff);
-	iwl_write32(priv, CSR_FH_INT_STATUS, 0xffffffff);
-	IWL_DEBUG_ISR(priv, "Disabled interrupts\n");
-}
-EXPORT_SYMBOL(iwl_disable_interrupts);
-
-void iwl_enable_interrupts(struct iwl_priv *priv)
-{
-	IWL_DEBUG_ISR(priv, "Enabling interrupts\n");
-	set_bit(STATUS_INT_ENABLED, &priv->status);
-	iwl_write32(priv, CSR_INT_MASK, priv->inta_mask);
-}
-EXPORT_SYMBOL(iwl_enable_interrupts);
-
 
 #define ICT_COUNT (PAGE_SIZE/sizeof(u32))
 
@@ -1745,7 +1989,7 @@ static irqreturn_t iwl_isr(int irq, void *data)
 	}
 
 #ifdef CONFIG_IWLWIFI_DEBUG
-	if (priv->debug_level & (IWL_DL_ISR)) {
+	if (iwl_debug_level & (IWL_DL_ISR)) {
 		inta_fh = iwl_read32(priv, CSR_FH_INT_STATUS);
 		IWL_DEBUG_ISR(priv, "ISR inta 0x%08x, enabled 0x%08x, "
 			      "fh 0x%08x\n", inta, inta_mask, inta_fh);
@@ -1852,7 +2096,7 @@ int iwl_send_statistics_request(struct iwl_priv *priv, u8 flags)
 	u32 stat_flags = 0;
 	struct iwl_host_cmd cmd = {
 		.id = REPLY_STATISTICS_CMD,
-		.meta.flags = flags,
+		.flags = flags,
 		.len = sizeof(stat_flags),
 		.data = (u8 *) &stat_flags,
 	};
@@ -1984,194 +2228,10 @@ int iwl_verify_ucode(struct iwl_priv *priv)
 EXPORT_SYMBOL(iwl_verify_ucode);
 
 
-static const char *desc_lookup_text[] = {
-	"OK",
-	"FAIL",
-	"BAD_PARAM",
-	"BAD_CHECKSUM",
-	"NMI_INTERRUPT_WDG",
-	"SYSASSERT",
-	"FATAL_ERROR",
-	"BAD_COMMAND",
-	"HW_ERROR_TUNE_LOCK",
-	"HW_ERROR_TEMPERATURE",
-	"ILLEGAL_CHAN_FREQ",
-	"VCC_NOT_STABLE",
-	"FH_ERROR",
-	"NMI_INTERRUPT_HOST",
-	"NMI_INTERRUPT_ACTION_PT",
-	"NMI_INTERRUPT_UNKNOWN",
-	"UCODE_VERSION_MISMATCH",
-	"HW_ERROR_ABS_LOCK",
-	"HW_ERROR_CAL_LOCK_FAIL",
-	"NMI_INTERRUPT_INST_ACTION_PT",
-	"NMI_INTERRUPT_DATA_ACTION_PT",
-	"NMI_TRM_HW_ER",
-	"NMI_INTERRUPT_TRM",
-	"NMI_INTERRUPT_BREAK_POINT"
-	"DEBUG_0",
-	"DEBUG_1",
-	"DEBUG_2",
-	"DEBUG_3",
-	"UNKNOWN"
-};
-
-static const char *desc_lookup(int i)
-{
-	int max = ARRAY_SIZE(desc_lookup_text) - 1;
-
-	if (i < 0 || i > max)
-		i = max;
-
-	return desc_lookup_text[i];
-}
-
-#define ERROR_START_OFFSET  (1 * sizeof(u32))
-#define ERROR_ELEM_SIZE     (7 * sizeof(u32))
-
-void iwl_dump_nic_error_log(struct iwl_priv *priv)
-{
-	u32 data2, line;
-	u32 desc, time, count, base, data1;
-	u32 blink1, blink2, ilink1, ilink2;
-
-	if (priv->ucode_type == UCODE_INIT)
-		base = le32_to_cpu(priv->card_alive_init.error_event_table_ptr);
-	else
-		base = le32_to_cpu(priv->card_alive.error_event_table_ptr);
-
-	if (!priv->cfg->ops->lib->is_valid_rtc_data_addr(base)) {
-		IWL_ERR(priv, "Not valid error log pointer 0x%08X\n", base);
-		return;
-	}
-
-	count = iwl_read_targ_mem(priv, base);
-
-	if (ERROR_START_OFFSET <= count * ERROR_ELEM_SIZE) {
-		IWL_ERR(priv, "Start IWL Error Log Dump:\n");
-		IWL_ERR(priv, "Status: 0x%08lX, count: %d\n",
-			priv->status, count);
-	}
-
-	desc = iwl_read_targ_mem(priv, base + 1 * sizeof(u32));
-	blink1 = iwl_read_targ_mem(priv, base + 3 * sizeof(u32));
-	blink2 = iwl_read_targ_mem(priv, base + 4 * sizeof(u32));
-	ilink1 = iwl_read_targ_mem(priv, base + 5 * sizeof(u32));
-	ilink2 = iwl_read_targ_mem(priv, base + 6 * sizeof(u32));
-	data1 = iwl_read_targ_mem(priv, base + 7 * sizeof(u32));
-	data2 = iwl_read_targ_mem(priv, base + 8 * sizeof(u32));
-	line = iwl_read_targ_mem(priv, base + 9 * sizeof(u32));
-	time = iwl_read_targ_mem(priv, base + 11 * sizeof(u32));
-
-	IWL_ERR(priv, "Desc                               Time       "
-		"data1      data2      line\n");
-	IWL_ERR(priv, "%-28s (#%02d) %010u 0x%08X 0x%08X %u\n",
-		desc_lookup(desc), desc, time, data1, data2, line);
-	IWL_ERR(priv, "blink1  blink2  ilink1  ilink2\n");
-	IWL_ERR(priv, "0x%05X 0x%05X 0x%05X 0x%05X\n", blink1, blink2,
-		ilink1, ilink2);
-
-}
-EXPORT_SYMBOL(iwl_dump_nic_error_log);
-
-#define EVENT_START_OFFSET  (4 * sizeof(u32))
-
-/**
- * iwl_print_event_log - Dump error event log to syslog
- *
- */
-static void iwl_print_event_log(struct iwl_priv *priv, u32 start_idx,
-				u32 num_events, u32 mode)
-{
-	u32 i;
-	u32 base;       /* SRAM byte address of event log header */
-	u32 event_size; /* 2 u32s, or 3 u32s if timestamp recorded */
-	u32 ptr;        /* SRAM byte address of log data */
-	u32 ev, time, data; /* event log data */
-
-	if (num_events == 0)
-		return;
-	if (priv->ucode_type == UCODE_INIT)
-		base = le32_to_cpu(priv->card_alive_init.log_event_table_ptr);
-	else
-		base = le32_to_cpu(priv->card_alive.log_event_table_ptr);
-
-	if (mode == 0)
-		event_size = 2 * sizeof(u32);
-	else
-		event_size = 3 * sizeof(u32);
-
-	ptr = base + EVENT_START_OFFSET + (start_idx * event_size);
-
-	/* "time" is actually "data" for mode 0 (no timestamp).
-	* place event id # at far right for easier visual parsing. */
-	for (i = 0; i < num_events; i++) {
-		ev = iwl_read_targ_mem(priv, ptr);
-		ptr += sizeof(u32);
-		time = iwl_read_targ_mem(priv, ptr);
-		ptr += sizeof(u32);
-		if (mode == 0) {
-			/* data, ev */
-			IWL_ERR(priv, "EVT_LOG:0x%08x:%04u\n", time, ev);
-		} else {
-			data = iwl_read_targ_mem(priv, ptr);
-			ptr += sizeof(u32);
-			IWL_ERR(priv, "EVT_LOGT:%010u:0x%08x:%04u\n",
-					time, data, ev);
-		}
-	}
-}
-
-void iwl_dump_nic_event_log(struct iwl_priv *priv)
-{
-	u32 base;       /* SRAM byte address of event log header */
-	u32 capacity;   /* event log capacity in # entries */
-	u32 mode;       /* 0 - no timestamp, 1 - timestamp recorded */
-	u32 num_wraps;  /* # times uCode wrapped to top of log */
-	u32 next_entry; /* index of next entry to be written by uCode */
-	u32 size;       /* # entries that we'll print */
-
-	if (priv->ucode_type == UCODE_INIT)
-		base = le32_to_cpu(priv->card_alive_init.log_event_table_ptr);
-	else
-		base = le32_to_cpu(priv->card_alive.log_event_table_ptr);
-
-	if (!priv->cfg->ops->lib->is_valid_rtc_data_addr(base)) {
-		IWL_ERR(priv, "Invalid event log pointer 0x%08X\n", base);
-		return;
-	}
-
-	/* event log header */
-	capacity = iwl_read_targ_mem(priv, base);
-	mode = iwl_read_targ_mem(priv, base + (1 * sizeof(u32)));
-	num_wraps = iwl_read_targ_mem(priv, base + (2 * sizeof(u32)));
-	next_entry = iwl_read_targ_mem(priv, base + (3 * sizeof(u32)));
-
-	size = num_wraps ? capacity : next_entry;
-
-	/* bail out if nothing in log */
-	if (size == 0) {
-		IWL_ERR(priv, "Start IWL Event Log Dump: nothing in log\n");
-		return;
-	}
-
-	IWL_ERR(priv, "Start IWL Event Log Dump: display count %d, wraps %d\n",
-			size, num_wraps);
-
-	/* if uCode has wrapped back to top of log, start at the oldest entry,
-	 * i.e the next one that uCode would fill. */
-	if (num_wraps)
-		iwl_print_event_log(priv, next_entry,
-					capacity - next_entry, mode);
-	/* (then/else) start at top of log */
-	iwl_print_event_log(priv, 0, next_entry, mode);
-
-}
-EXPORT_SYMBOL(iwl_dump_nic_event_log);
-
 void iwl_rf_kill_ct_config(struct iwl_priv *priv)
 {
 	struct iwl_ct_kill_config cmd;
+	struct iwl_ct_kill_throttling_config adv_cmd;
 	unsigned long flags;
 	int ret = 0;
 
@@ -2179,10 +2239,28 @@ void iwl_rf_kill_ct_config(struct iwl_priv *priv)
 	iwl_write32(priv, CSR_UCODE_DRV_GP1_CLR,
 		    CSR_UCODE_DRV_GP1_REG_BIT_CT_KILL_EXIT);
 	spin_unlock_irqrestore(&priv->lock, flags);
+	priv->power_data.ct_kill_toggle = false;
 
-	cmd.critical_temperature_R =
-		cpu_to_le32(priv->hw_params.ct_kill_threshold);
+	switch (priv->hw_rev & CSR_HW_REV_TYPE_MSK) {
+	case CSR_HW_REV_TYPE_1000:
+	case CSR_HW_REV_TYPE_6x00:
+	case CSR_HW_REV_TYPE_6x50:
+		adv_cmd.critical_temperature_enter =
+			cpu_to_le32(priv->hw_params.ct_kill_threshold);
+		adv_cmd.critical_temperature_exit =
+			cpu_to_le32(priv->hw_params.ct_kill_exit_threshold);
 
+		ret = iwl_send_cmd_pdu(priv, REPLY_CT_KILL_CONFIG_CMD,
+				       sizeof(adv_cmd), &adv_cmd);
+		break;
+	default:
+		cmd.critical_temperature_R =
+			cpu_to_le32(priv->hw_params.ct_kill_threshold);
+
+		ret = iwl_send_cmd_pdu(priv, REPLY_CT_KILL_CONFIG_CMD,
+				       sizeof(cmd), &cmd);
+		break;
+	}
 	ret = iwl_send_cmd_pdu(priv, REPLY_CT_KILL_CONFIG_CMD,
 			       sizeof(cmd), &cmd);
 	if (ret)
@@ -2211,7 +2289,7 @@ int iwl_send_card_state(struct iwl_priv *priv, u32 flags, u8 meta_flag)
 		.id = REPLY_CARD_STATE_CMD,
 		.len = sizeof(u32),
 		.data = &flags,
-		.meta.flags = meta_flag,
+		.flags = meta_flag,
 	};
 
 	return iwl_send_cmd(priv, &cmd);
@@ -2237,7 +2315,7 @@ void iwl_rx_pm_debug_statistics_notif(struct iwl_priv *priv,
 	IWL_DEBUG_RADIO(priv, "Dumping %d bytes of unhandled "
 			"notification for %s:\n",
 			le32_to_cpu(pkt->len), get_cmd_string(pkt->hdr.cmd));
-	iwl_print_hex_dump(priv, IWL_DL_RADIO, pkt->u.raw, le32_to_cpu(pkt->len));
+	iwl_print_hex_dump(IWL_DL_RADIO, pkt->u.raw, le32_to_cpu(pkt->len));
 }
 EXPORT_SYMBOL(iwl_rx_pm_debug_statistics_notif);
 

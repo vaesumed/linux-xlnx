@@ -65,6 +65,7 @@ static struct pci_device_id igb_pci_tbl[] = {
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82576_NS), board_82575 },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82576_FIBER), board_82575 },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82576_SERDES), board_82575 },
+	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82576_SERDES_QUAD), board_82575 },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82576_QUAD_COPPER), board_82575 },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82575EB_COPPER), board_82575 },
 	{ PCI_VDEVICE(INTEL, E1000_DEV_ID_82575EB_FIBER_SERDES), board_82575 },
@@ -127,7 +128,7 @@ static void igb_restore_vlan(struct igb_adapter *);
 static void igb_ping_all_vfs(struct igb_adapter *);
 static void igb_msg_task(struct igb_adapter *);
 static int igb_rcv_msg_from_vf(struct igb_adapter *, u32);
-static void igb_set_mc_list_pools(struct igb_adapter *, int, u16);
+static inline void igb_set_rah_pool(struct e1000_hw *, int , int);
 static void igb_vmm_control(struct igb_adapter *);
 static int igb_set_vf_mac(struct igb_adapter *adapter, int, unsigned char *);
 static void igb_restore_vf_multicasts(struct igb_adapter *adapter);
@@ -1129,7 +1130,7 @@ void igb_reset(struct igb_adapter *adapter)
 	}
 	fc->pause_time = 0xFFFF;
 	fc->send_xon = 1;
-	fc->type = fc->original_type;
+	fc->current_mode = fc->requested_mode;
 
 	/* disable receive for all VFs and wait one second */
 	if (adapter->vfs_allocated_count) {
@@ -1426,8 +1427,8 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	hw->mac.autoneg = true;
 	hw->phy.autoneg_advertised = 0x2f;
 
-	hw->fc.original_type = e1000_fc_default;
-	hw->fc.type = e1000_fc_default;
+	hw->fc.requested_mode = e1000_fc_default;
+	hw->fc.current_mode = e1000_fc_default;
 
 	adapter->itr_setting = IGB_DEFAULT_ITR;
 	adapter->itr = IGB_START_ITR;
@@ -2535,7 +2536,6 @@ static void igb_set_multi(struct net_device *netdev)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
-	struct e1000_mac_info *mac = &hw->mac;
 	struct dev_mc_list *mc_ptr;
 	u8  *mta_list = NULL;
 	u32 rctl;
@@ -2558,13 +2558,18 @@ static void igb_set_multi(struct net_device *netdev)
 	}
 	wr32(E1000_RCTL, rctl);
 
-	if (netdev->mc_count) {
-		mta_list = kzalloc(netdev->mc_count * 6, GFP_ATOMIC);
-		if (!mta_list) {
-			dev_err(&adapter->pdev->dev,
-			        "failed to allocate multicast filter list\n");
-			return;
-		}
+	if (!netdev->mc_count) {
+		/* nothing to program, so clear mc list */
+		igb_update_mc_addr_list(hw, NULL, 0);
+		igb_restore_vf_multicasts(adapter);
+		return;
+	}
+
+	mta_list = kzalloc(netdev->mc_count * 6, GFP_ATOMIC);
+	if (!mta_list) {
+		dev_err(&adapter->pdev->dev,
+		        "failed to allocate multicast filter list\n");
+		return;
 	}
 
 	/* The shared function expects a packed array of only addresses. */
@@ -2576,14 +2581,9 @@ static void igb_set_multi(struct net_device *netdev)
 		memcpy(mta_list + (i*ETH_ALEN), mc_ptr->dmi_addr, ETH_ALEN);
 		mc_ptr = mc_ptr->next;
 	}
-	igb_update_mc_addr_list(hw, mta_list, i,
-	                        adapter->vfs_allocated_count + 1,
-	                        mac->rar_entry_count);
-
-	igb_set_mc_list_pools(adapter, i, mac->rar_entry_count);
-	igb_restore_vf_multicasts(adapter);
-
+	igb_update_mc_addr_list(hw, mta_list, i);
 	kfree(mta_list);
+	igb_restore_vf_multicasts(adapter);
 }
 
 /* Need to wait a few seconds after link up to get diagnostic information from
@@ -2617,10 +2617,6 @@ static bool igb_has_link(struct igb_adapter *adapter)
 		} else {
 			link_active = true;
 		}
-		break;
-	case e1000_media_type_fiber:
-		ret_val = hw->mac.ops.check_for_link(hw);
-		link_active = !!(rd32(E1000_STATUS) & E1000_STATUS_LU);
 		break;
 	case e1000_media_type_internal_serdes:
 		ret_val = hw->mac.ops.check_for_link(hw);
@@ -4542,6 +4538,20 @@ static inline void igb_rx_checksum_adv(struct igb_adapter *adapter,
 	adapter->hw_csum_good++;
 }
 
+static inline u16 igb_get_hlen(struct igb_adapter *adapter,
+                               union e1000_adv_rx_desc *rx_desc)
+{
+	/* HW will not DMA in data larger than the given buffer, even if it
+	 * parses the (NFS, of course) header to be larger.  In that case, it
+	 * fills the header buffer and spills the rest into the page.
+	 */
+	u16 hlen = (le16_to_cpu(rx_desc->wb.lower.lo_dword.hdr_info) &
+	           E1000_RXDADV_HDRBUFLEN_MASK) >> E1000_RXDADV_HDRBUFLEN_SHIFT;
+	if (hlen > adapter->rx_ps_hdr_size)
+		hlen = adapter->rx_ps_hdr_size;
+	return hlen;
+}
+
 static bool igb_clean_rx_irq_adv(struct igb_ring *rx_ring,
 				 int *work_done, int budget)
 {
@@ -4556,7 +4566,8 @@ static bool igb_clean_rx_irq_adv(struct igb_ring *rx_ring,
 	int cleaned_count = 0;
 	unsigned int total_bytes = 0, total_packets = 0;
 	unsigned int i;
-	u32 length, hlen, staterr;
+	u32 staterr;
+	u16 length;
 
 	i = rx_ring->next_to_clean;
 	buffer_info = &rx_ring->buffer_info[i];
@@ -4593,17 +4604,8 @@ static bool igb_clean_rx_irq_adv(struct igb_ring *rx_ring,
 			goto send_up;
 		}
 
-		/* HW will not DMA in data larger than the given buffer, even
-		 * if it parses the (NFS, of course) header to be larger.  In
-		 * that case, it fills the header buffer and spills the rest
-		 * into the page.
-		 */
-		hlen = (le16_to_cpu(rx_desc->wb.lower.lo_dword.hdr_info) &
-		  E1000_RXDADV_HDRBUFLEN_MASK) >> E1000_RXDADV_HDRBUFLEN_SHIFT;
-		if (hlen > adapter->rx_ps_hdr_size)
-			hlen = adapter->rx_ps_hdr_size;
-
-		if (!skb_shinfo(skb)->nr_frags) {
+		if (buffer_info->dma) {
+			u16 hlen = igb_get_hlen(adapter, rx_desc);
 			pci_unmap_single(pdev, buffer_info->dma,
 					 adapter->rx_ps_hdr_size,
 					 PCI_DMA_FROMDEVICE);
@@ -5033,6 +5035,34 @@ static int igb_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
 	}
 }
 
+s32 igb_read_pcie_cap_reg(struct e1000_hw *hw, u32 reg, u16 *value)
+{
+	struct igb_adapter *adapter = hw->back;
+	u16 cap_offset;
+
+	cap_offset = pci_find_capability(adapter->pdev, PCI_CAP_ID_EXP);
+	if (!cap_offset)
+		return -E1000_ERR_CONFIG;
+
+	pci_read_config_word(adapter->pdev, cap_offset + reg, value);
+
+	return 0;
+}
+
+s32 igb_write_pcie_cap_reg(struct e1000_hw *hw, u32 reg, u16 *value)
+{
+	struct igb_adapter *adapter = hw->back;
+	u16 cap_offset;
+
+	cap_offset = pci_find_capability(adapter->pdev, PCI_CAP_ID_EXP);
+	if (!cap_offset)
+		return -E1000_ERR_CONFIG;
+
+	pci_write_config_word(adapter->pdev, cap_offset + reg, *value);
+
+	return 0;
+}
+
 static void igb_vlan_rx_register(struct net_device *netdev,
 				 struct vlan_group *grp)
 {
@@ -5135,14 +5165,6 @@ int igb_set_spd_dplx(struct igb_adapter *adapter, u16 spddplx)
 	struct e1000_mac_info *mac = &adapter->hw.mac;
 
 	mac->autoneg = 0;
-
-	/* Fiber NICs only allow 1000 gbps Full duplex */
-	if ((adapter->hw.phy.media_type == e1000_media_type_fiber) &&
-		spddplx != (SPEED_1000 + DUPLEX_FULL)) {
-		dev_err(&adapter->pdev->dev,
-			"Unsupported Speed/Duplex configuration\n");
-		return -EINVAL;
-	}
 
 	switch (spddplx) {
 	case SPEED_10 + DUPLEX_HALF:
@@ -5450,19 +5472,6 @@ static void igb_io_resume(struct pci_dev *pdev)
 	/* let the f/w know that the h/w is now under the control of the
 	 * driver. */
 	igb_get_hw_control(adapter);
-}
-
-static void igb_set_mc_list_pools(struct igb_adapter *adapter,
-				  int entry_count, u16 total_rar_filters)
-{
-	struct e1000_hw *hw = &adapter->hw;
-	int i = adapter->vfs_allocated_count + 1;
-
-	if ((i + entry_count) < total_rar_filters)
-		total_rar_filters = i + entry_count;
-
-	for (; i < total_rar_filters; i++)
-		igb_set_rah_pool(hw, adapter->vfs_allocated_count, i);
 }
 
 static int igb_set_vf_mac(struct igb_adapter *adapter,

@@ -73,7 +73,8 @@ static int rt2x00mac_tx_rts_cts(struct rt2x00_dev *rt2x00dev,
 	else
 		rts_info->flags &= ~IEEE80211_TX_CTL_NO_ACK;
 
-	skb->do_not_encrypt = 1;
+	/* Disable hardware encryption */
+	rts_info->control.hw_key = NULL;
 
 	/*
 	 * RTS/CTS frame should use the length of the frame plus any
@@ -340,7 +341,7 @@ int rt2x00mac_config(struct ieee80211_hw *hw, u32 changed)
 	int status;
 
 	/*
-	 * Mac80211 might be calling this function while we are trying
+	 * mac80211 might be calling this function while we are trying
 	 * to remove the device or perhaps suspending it.
 	 */
 	if (!test_bit(DEVICE_STATE_PRESENT, &rt2x00dev->flags))
@@ -377,7 +378,7 @@ int rt2x00mac_config(struct ieee80211_hw *hw, u32 changed)
 		 */
 		if (changed & IEEE80211_CONF_CHANGE_RADIO_ENABLED)
 			rt2x00lib_config_antenna(rt2x00dev,
-						 &rt2x00dev->default_ant);
+						 rt2x00dev->default_ant);
 
 		/* Turn RX back on */
 		rt2x00lib_toggle_rx(rt2x00dev, STATE_RADIO_RX_ON);
@@ -452,6 +453,16 @@ static void memcpy_tkip(struct rt2x00lib_crypto *crypto, u8 *key, u8 key_len)
 		       &key[NL80211_TKIP_DATA_OFFSET_RX_MIC_KEY],
 		       sizeof(crypto->rx_mic));
 }
+
+int rt2x00mac_set_tim(struct ieee80211_hw *hw, struct ieee80211_sta *sta,
+		      bool set)
+{
+	struct rt2x00_dev *rt2x00dev = hw->priv;
+
+	rt2x00lib_beacondone(rt2x00dev);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(rt2x00mac_set_tim);
 
 int rt2x00mac_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 		      struct ieee80211_vif *vif, struct ieee80211_sta *sta,
@@ -576,7 +587,7 @@ void rt2x00mac_bss_info_changed(struct ieee80211_hw *hw,
 	int update_bssid = 0;
 
 	/*
-	 * Mac80211 might be calling this function while we are trying
+	 * mac80211 might be calling this function while we are trying
 	 * to remove the device or perhaps suspending it.
 	 */
 	if (!test_bit(DEVICE_STATE_PRESENT, &rt2x00dev->flags))
@@ -687,3 +698,12 @@ int rt2x00mac_conf_tx(struct ieee80211_hw *hw, u16 queue_idx,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(rt2x00mac_conf_tx);
+
+void rt2x00mac_rfkill_poll(struct ieee80211_hw *hw)
+{
+	struct rt2x00_dev *rt2x00dev = hw->priv;
+	bool blocked = !!rt2x00dev->ops->lib->rfkill_poll(rt2x00dev);
+
+	wiphy_rfkill_set_hw_state(hw->wiphy, blocked);
+}
+EXPORT_SYMBOL_GPL(rt2x00mac_rfkill_poll);

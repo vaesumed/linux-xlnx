@@ -765,6 +765,8 @@ struct iwl5000_rxon_assoc_cmd {
 } __attribute__ ((packed));
 
 #define IWL_CONN_MAX_LISTEN_INTERVAL	10
+#define IWL_MAX_UCODE_BEACON_INTERVAL	4 /* 4096 */
+#define IWL39_MAX_UCODE_BEACON_INTERVAL	1 /* 1024 */
 
 /*
  * REPLY_RXON_TIMING = 0x14 (command, has simple generic response)
@@ -1922,7 +1924,7 @@ struct iwl_link_qual_general_params {
 #define LINK_QUAL_AGG_DISABLE_START_MIN	(0)
 
 #define LINK_QUAL_AGG_FRAME_LIMIT_DEF	(31)
-#define LINK_QUAL_AGG_FRAME_LIMIT_MAX	(64)
+#define LINK_QUAL_AGG_FRAME_LIMIT_MAX	(63)
 #define LINK_QUAL_AGG_FRAME_LIMIT_MIN	(0)
 
 /**
@@ -2409,6 +2411,13 @@ struct iwl_ct_kill_config {
 	__le32   reserved;
 	__le32   critical_temperature_M;
 	__le32   critical_temperature_R;
+}  __attribute__ ((packed));
+
+/* 1000, and 6x00 */
+struct iwl_ct_kill_throttling_config {
+	__le32   critical_temperature_exit;
+	__le32   reserved;
+	__le32   critical_temperature_enter;
 }  __attribute__ ((packed));
 
 /******************************************************************************

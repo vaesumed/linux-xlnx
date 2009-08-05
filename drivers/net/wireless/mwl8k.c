@@ -1047,7 +1047,8 @@ static int rxq_process(struct ieee80211_hw *hw, int index, int limit)
 		status.flag = 0;
 		status.band = IEEE80211_BAND_2GHZ;
 		status.freq = ieee80211_channel_to_frequency(rx_desc->channel);
-		ieee80211_rx_irqsafe(hw, skb, &status);
+		memcpy(IEEE80211_SKB_RXCB(skb), &status, sizeof(status));
+		ieee80211_rx_irqsafe(hw, skb);
 
 		processed++;
 	}
@@ -2270,7 +2271,6 @@ static int mwl8k_cmd_update_sta_db(struct ieee80211_hw *hw,
 	struct mwl8k_cmd_update_sta_db *cmd;
 	struct peer_capability_info *peer_info;
 	struct ieee80211_rate *bitrates = mv_vif->legacy_rates;
-	DECLARE_MAC_BUF(mac);
 	int rc;
 	__u8 count, *rates;
 
@@ -3479,7 +3479,6 @@ static int __devinit mwl8k_probe(struct pci_dev *pdev,
 {
 	struct ieee80211_hw *hw;
 	struct mwl8k_priv *priv;
-	DECLARE_MAC_BUF(mac);
 	int rc;
 	int i;
 	u8 *fw;
@@ -3668,8 +3667,8 @@ static int __devinit mwl8k_probe(struct pci_dev *pdev,
 		MWL8K_DESC);
 	printk(KERN_INFO "%s: Driver Ver:%s  Firmware Ver:%u.%u.%u.%u\n",
 		priv->name, MWL8K_VERSION, fw[3], fw[2], fw[1], fw[0]);
-	printk(KERN_INFO "%s: MAC Address: %s\n", priv->name,
-	       print_mac(mac, hw->wiphy->perm_addr));
+	printk(KERN_INFO "%s: MAC Address: %pM\n", priv->name,
+		hw->wiphy->perm_addr);
 
 	return 0;
 

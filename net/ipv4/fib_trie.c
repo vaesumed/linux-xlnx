@@ -164,6 +164,14 @@ static struct tnode *inflate(struct trie *t, struct tnode *tn);
 static struct tnode *halve(struct trie *t, struct tnode *tn);
 /* tnodes to free after resize(); protected by RTNL */
 static struct tnode *tnode_free_head;
+static size_t tnode_free_size;
+
+/*
+ * synchronize_rcu after call_rcu for that many pages; it should be especially
+ * useful before resizing the root node with PREEMPT_NONE configs; the value was
+ * obtained experimentally, aiming to avoid visible slowdown.
+ */
+static const int sync_pages = 128;
 
 static struct kmem_cache *fn_alias_kmem __read_mostly;
 static struct kmem_cache *trie_leaf_kmem __read_mostly;
@@ -319,6 +327,8 @@ static const int inflate_threshold = 50;
 static const int halve_threshold_root = 15;
 static const int inflate_threshold_root = 25;
 
+static int inflate_threshold_root_fix;
+#define INFLATE_FIX_MAX 10	/* a comment in resize() */
 
 static void __alias_free_mem(struct rcu_head *head)
 {
@@ -393,6 +403,8 @@ static void tnode_free_safe(struct tnode *tn)
 	BUG_ON(IS_LEAF(tn));
 	tn->tnode_free = tnode_free_head;
 	tnode_free_head = tn;
+	tnode_free_size += sizeof(struct tnode) +
+			   (sizeof(struct node *) << tn->bits);
 }
 
 static void tnode_free_flush(void)
@@ -403,6 +415,11 @@ static void tnode_free_flush(void)
 		tnode_free_head = tn->tnode_free;
 		tn->tnode_free = NULL;
 		tnode_free(tn);
+	}
+
+	if (tnode_free_size >= PAGE_SIZE * sync_pages) {
+		tnode_free_size = 0;
+		synchronize_rcu();
 	}
 }
 
@@ -602,7 +619,8 @@ static struct node *resize(struct trie *t, struct tnode *tn)
 	/* Keep root node larger  */
 
 	if (!tn->parent)
-		inflate_threshold_use = inflate_threshold_root;
+		inflate_threshold_use = inflate_threshold_root +
+					inflate_threshold_root_fix;
 	else
 		inflate_threshold_use = inflate_threshold;
 
@@ -626,15 +644,27 @@ static struct node *resize(struct trie *t, struct tnode *tn)
 	}
 
 	if (max_resize < 0) {
-		if (!tn->parent)
-			pr_warning("Fix inflate_threshold_root."
-				   " Now=%d size=%d bits\n",
-				   inflate_threshold_root, tn->bits);
-		else
+		if (!tn->parent) {
+			/*
+			 * It was observed that during large updates even
+			 * inflate_threshold_root = 35 might be needed to avoid
+			 * this warning; but it should be temporary, so let's
+			 * try to handle this automatically.
+			 */
+			if (inflate_threshold_root_fix < INFLATE_FIX_MAX)
+				inflate_threshold_root_fix++;
+			else
+				pr_warning("Fix inflate_threshold_root."
+					   " Now=%d size=%d bits fix=%d\n",
+					   inflate_threshold_root, tn->bits,
+					   inflate_threshold_root_fix);
+		} else {
 			pr_warning("Fix inflate_threshold."
 				   " Now=%d size=%d bits\n",
 				   inflate_threshold, tn->bits);
-	}
+		}
+	} else if (max_resize > 3 && !tn->parent && inflate_threshold_root_fix)
+		inflate_threshold_root_fix--;
 
 	check_tnode(tn);
 
@@ -1435,7 +1465,7 @@ static int fn_trie_lookup(struct fib_table *tb, const struct flowi *flp,
 			cindex = tkey_extract_bits(mask_pfx(key, current_prefix_length),
 						   pos, bits);
 
-		n = tnode_get_child(pn, cindex);
+		n = tnode_get_child_rcu(pn, cindex);
 
 		if (n == NULL) {
 #ifdef CONFIG_IP_FIB_TRIE_STATS
@@ -1570,7 +1600,7 @@ backtrace:
 		if (chopped_off <= pn->bits) {
 			cindex &= ~(1 << (chopped_off-1));
 		} else {
-			struct tnode *parent = node_parent((struct node *) pn);
+			struct tnode *parent = node_parent_rcu((struct node *) pn);
 			if (!parent)
 				goto failed;
 
@@ -1783,7 +1813,7 @@ static struct leaf *trie_firstleaf(struct trie *t)
 static struct leaf *trie_nextleaf(struct leaf *l)
 {
 	struct node *c = (struct node *) l;
-	struct tnode *p = node_parent(c);
+	struct tnode *p = node_parent_rcu(c);
 
 	if (!p)
 		return NULL;	/* trie with just one leaf */

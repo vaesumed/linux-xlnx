@@ -7250,9 +7250,6 @@ static void ipw_bg_qos_activate(struct work_struct *work)
 	struct ipw_priv *priv =
 		container_of(work, struct ipw_priv, qos_activate);
 
-	if (priv == NULL)
-		return;
-
 	mutex_lock(&priv->mutex);
 
 	if (priv->status & STATUS_ASSOCIATED)
@@ -11436,11 +11433,11 @@ static struct pci_device_id card_ids[] = {
 	{PCI_VENDOR_ID_INTEL, 0x1043, 0x8086, 0x2754, 0, 0, 0},
 	{PCI_VENDOR_ID_INTEL, 0x1043, 0x8086, 0x2761, 0, 0, 0},
 	{PCI_VENDOR_ID_INTEL, 0x1043, 0x8086, 0x2762, 0, 0, 0},
-	{PCI_VENDOR_ID_INTEL, 0x104f, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
-	{PCI_VENDOR_ID_INTEL, 0x4220, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},	/* BG */
-	{PCI_VENDOR_ID_INTEL, 0x4221, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},	/* BG */
-	{PCI_VENDOR_ID_INTEL, 0x4223, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},	/* ABG */
-	{PCI_VENDOR_ID_INTEL, 0x4224, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},	/* ABG */
+	{PCI_VDEVICE(INTEL, 0x104f), 0},
+	{PCI_VDEVICE(INTEL, 0x4220), 0},	/* BG */
+	{PCI_VDEVICE(INTEL, 0x4221), 0},	/* BG */
+	{PCI_VDEVICE(INTEL, 0x4223), 0},	/* ABG */
+	{PCI_VDEVICE(INTEL, 0x4224), 0},	/* ABG */
 
 	/* required last entry */
 	{0,}

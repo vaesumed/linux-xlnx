@@ -2748,7 +2748,7 @@ again:
 				/* The packet is gone, so we must
 				 * return 0 */
 				ss->stats.tx_dropped += 1;
-				return 0;
+				return NETDEV_TX_OK;
 			}
 			/* adjust the len to account for the zero pad
 			 * so that the nic can know how long it is */
@@ -2892,7 +2892,7 @@ again:
 		tx->stop_queue++;
 		netif_tx_stop_queue(netdev_queue);
 	}
-	return 0;
+	return NETDEV_TX_OK;
 
 abort_linearize:
 	/* Free any DMA resources we've alloced and clear out the skb
@@ -2936,7 +2936,7 @@ abort_linearize:
 drop:
 	dev_kfree_skb_any(skb);
 	ss->stats.tx_dropped += 1;
-	return 0;
+	return NETDEV_TX_OK;
 
 }
 
@@ -2968,13 +2968,13 @@ static int myri10ge_sw_tso(struct sk_buff *skb, struct net_device *dev)
 		}
 	}
 	dev_kfree_skb_any(skb);
-	return 0;
+	return NETDEV_TX_OK;
 
 drop:
 	ss = &mgp->ss[skb_get_queue_mapping(skb)];
 	dev_kfree_skb_any(skb);
 	ss->stats.tx_dropped += 1;
-	return 0;
+	return NETDEV_TX_OK;
 }
 
 static struct net_device_stats *myri10ge_get_stats(struct net_device *dev)

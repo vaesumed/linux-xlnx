@@ -1022,7 +1022,7 @@ static int arlan_mac_addr(struct net_device *dev, void *p)
 	ARLAN_DEBUG_ENTRY("arlan_mac_addr");
 	return -EINVAL;
 
-	if (!netif_running(dev))
+	if (netif_running(dev))
 		return -EBUSY;
 	memcpy(dev->dev_addr, addr->sa_data, dev->addr_len);
 
@@ -1193,7 +1193,7 @@ static int arlan_tx(struct sk_buff *skb, struct net_device *dev)
 
 	arlan_process_interrupt(dev);
 	ARLAN_DEBUG_EXIT("arlan_tx");
-	return 0;
+	return NETDEV_TX_OK;
 
 bad_end:
 	arlan_process_interrupt(dev);

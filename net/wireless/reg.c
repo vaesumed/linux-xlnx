@@ -113,11 +113,7 @@ static const struct ieee80211_regdomain world_regdom = {
 static const struct ieee80211_regdomain *cfg80211_world_regdom =
 	&world_regdom;
 
-#ifdef CONFIG_WIRELESS_OLD_REGULATORY
-static char *ieee80211_regdom = "US";
-#else
 static char *ieee80211_regdom = "00";
-#endif
 
 module_param(ieee80211_regdom, charp, 0444);
 MODULE_PARM_DESC(ieee80211_regdom, "IEEE 802.11 regulatory domain code");
@@ -1061,10 +1057,10 @@ static bool ignore_reg_update(struct wiphy *wiphy,
 
 static void update_all_wiphy_regulatory(enum nl80211_reg_initiator initiator)
 {
-	struct cfg80211_registered_device *drv;
+	struct cfg80211_registered_device *rdev;
 
-	list_for_each_entry(drv, &cfg80211_drv_list, list)
-		wiphy_update_regulatory(&drv->wiphy, initiator);
+	list_for_each_entry(rdev, &cfg80211_rdev_list, list)
+		wiphy_update_regulatory(&rdev->wiphy, initiator);
 }
 
 static void handle_reg_beacon(struct wiphy *wiphy,
@@ -1615,7 +1611,7 @@ static void reg_process_pending_hints(void)
 /* Processes beacon hints -- this has nothing to do with country IEs */
 static void reg_process_pending_beacon_hints(void)
 {
-	struct cfg80211_registered_device *drv;
+	struct cfg80211_registered_device *rdev;
 	struct reg_beacon *pending_beacon, *tmp;
 
 	mutex_lock(&cfg80211_mutex);
@@ -1634,8 +1630,8 @@ static void reg_process_pending_beacon_hints(void)
 		list_del_init(&pending_beacon->list);
 
 		/* Applies the beacon hint to current wiphys */
-		list_for_each_entry(drv, &cfg80211_drv_list, list)
-			wiphy_update_new_beacon(&drv->wiphy, pending_beacon);
+		list_for_each_entry(rdev, &cfg80211_rdev_list, list)
+			wiphy_update_new_beacon(&rdev->wiphy, pending_beacon);
 
 		/* Remembers the beacon hint for new wiphys or reg changes */
 		list_add_tail(&pending_beacon->list, &reg_beacon_list);
@@ -1815,23 +1811,23 @@ void regulatory_hint_11d(struct wiphy *wiphy,
 	if (likely(last_request->initiator ==
 	    NL80211_REGDOM_SET_BY_COUNTRY_IE &&
 	    wiphy_idx_valid(last_request->wiphy_idx))) {
-		struct cfg80211_registered_device *drv_last_ie;
+		struct cfg80211_registered_device *rdev_last_ie;
 
-		drv_last_ie =
-			cfg80211_drv_by_wiphy_idx(last_request->wiphy_idx);
+		rdev_last_ie =
+			cfg80211_rdev_by_wiphy_idx(last_request->wiphy_idx);
 
 		/*
 		 * Lets keep this simple -- we trust the first AP
 		 * after we intersect with CRDA
 		 */
-		if (likely(&drv_last_ie->wiphy == wiphy)) {
+		if (likely(&rdev_last_ie->wiphy == wiphy)) {
 			/*
 			 * Ignore IEs coming in on this wiphy with
 			 * the same alpha2 and environment cap
 			 */
-			if (likely(alpha2_equal(drv_last_ie->country_ie_alpha2,
+			if (likely(alpha2_equal(rdev_last_ie->country_ie_alpha2,
 				  alpha2) &&
-				  env == drv_last_ie->env)) {
+				  env == rdev_last_ie->env)) {
 				goto out;
 			}
 			/*
@@ -1847,9 +1843,9 @@ void regulatory_hint_11d(struct wiphy *wiphy,
 			 * Ignore IEs coming in on two separate wiphys with
 			 * the same alpha2 and environment cap
 			 */
-			if (likely(alpha2_equal(drv_last_ie->country_ie_alpha2,
+			if (likely(alpha2_equal(rdev_last_ie->country_ie_alpha2,
 				  alpha2) &&
-				  env == drv_last_ie->env)) {
+				  env == rdev_last_ie->env)) {
 				goto out;
 			}
 			/* We could potentially intersect though */
@@ -1996,14 +1992,14 @@ static void print_regdomain(const struct ieee80211_regdomain *rd)
 
 		if (last_request->initiator ==
 		    NL80211_REGDOM_SET_BY_COUNTRY_IE) {
-			struct cfg80211_registered_device *drv;
-			drv = cfg80211_drv_by_wiphy_idx(
+			struct cfg80211_registered_device *rdev;
+			rdev = cfg80211_rdev_by_wiphy_idx(
 				last_request->wiphy_idx);
-			if (drv) {
+			if (rdev) {
 				printk(KERN_INFO "cfg80211: Current regulatory "
 					"domain updated by AP to: %c%c\n",
-					drv->country_ie_alpha2[0],
-					drv->country_ie_alpha2[1]);
+					rdev->country_ie_alpha2[0],
+					rdev->country_ie_alpha2[1]);
 			} else
 				printk(KERN_INFO "cfg80211: Current regulatory "
 					"domain intersected: \n");
@@ -2064,7 +2060,7 @@ static inline void reg_country_ie_process_debug(
 static int __set_regdom(const struct ieee80211_regdomain *rd)
 {
 	const struct ieee80211_regdomain *intersected_rd = NULL;
-	struct cfg80211_registered_device *drv = NULL;
+	struct cfg80211_registered_device *rdev = NULL;
 	struct wiphy *request_wiphy;
 	/* Some basic sanity checks first */
 
@@ -2203,11 +2199,11 @@ static int __set_regdom(const struct ieee80211_regdomain *rd)
 	if (!intersected_rd)
 		return -EINVAL;
 
-	drv = wiphy_to_dev(request_wiphy);
+	rdev = wiphy_to_dev(request_wiphy);
 
-	drv->country_ie_alpha2[0] = rd->alpha2[0];
-	drv->country_ie_alpha2[1] = rd->alpha2[1];
-	drv->env = last_request->country_ie_env;
+	rdev->country_ie_alpha2[0] = rd->alpha2[0];
+	rdev->country_ie_alpha2[1] = rd->alpha2[1];
+	rdev->env = last_request->country_ie_env;
 
 	BUG_ON(intersected_rd == rd);
 
@@ -2288,22 +2284,12 @@ int regulatory_init(void)
 
 	printk(KERN_INFO "cfg80211: Using static regulatory domain info\n");
 	print_regdomain_info(cfg80211_regdomain);
-	/*
-	 * The old code still requests for a new regdomain and if
-	 * you have CRDA you get it updated, otherwise you get
-	 * stuck with the static values. Since "EU" is not a valid
-	 * ISO / IEC 3166 alpha2 code we can't expect userpace to
-	 * give us a regulatory domain for it. We need last_request
-	 * iniitalized though so lets just send a request which we
-	 * know will be ignored... this crap will be removed once
-	 * OLD_REG dies.
-	 */
-	err = regulatory_hint_core(ieee80211_regdom);
 #else
 	cfg80211_regdomain = cfg80211_world_regdom;
 
-	err = regulatory_hint_core(ieee80211_regdom);
 #endif
+	/* We always try to get an update for the static regdomain */
+	err = regulatory_hint_core(cfg80211_regdomain->alpha2);
 	if (err) {
 		if (err == -ENOMEM)
 			return err;
@@ -2321,6 +2307,13 @@ int regulatory_init(void)
 		WARN_ON(err);
 #endif
 	}
+
+	/*
+	 * Finally, if the user set the module parameter treat it
+	 * as a user hint.
+	 */
+	if (!is_world_regdom(ieee80211_regdom))
+		regulatory_hint_user(ieee80211_regdom);
 
 	return 0;
 }

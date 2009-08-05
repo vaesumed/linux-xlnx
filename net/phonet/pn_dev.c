@@ -27,6 +27,7 @@
 #include <linux/net.h>
 #include <linux/netdevice.h>
 #include <linux/phonet.h>
+#include <linux/proc_fs.h>
 #include <net/sock.h>
 #include <net/netns/generic.h>
 #include <net/phonet/pn_dev.h>
@@ -96,7 +97,7 @@ struct net_device *phonet_device_get(struct net *net)
 {
 	struct phonet_device_list *pndevs = phonet_device_list(net);
 	struct phonet_device *pnd;
-	struct net_device *dev;
+	struct net_device *dev = NULL;
 
 	spin_lock_bh(&pndevs->lock);
 	list_for_each_entry(pnd, &pndevs->list, list) {
@@ -218,6 +219,11 @@ static int phonet_init_net(struct net *net)
 	if (!pnn)
 		return -ENOMEM;
 
+	if (!proc_net_fops_create(net, "phonet", 0, &pn_sock_seq_fops)) {
+		kfree(pnn);
+		return -ENOMEM;
+	}
+
 	INIT_LIST_HEAD(&pnn->pndevs.list);
 	spin_lock_init(&pnn->pndevs.lock);
 	net_assign_generic(net, phonet_net_id, pnn);
@@ -233,6 +239,8 @@ static void phonet_exit_net(struct net *net)
 	for_each_netdev(net, dev)
 		phonet_device_destroy(dev);
 	rtnl_unlock();
+
+	proc_net_remove(net, "phonet");
 	kfree(pnn);
 }
 

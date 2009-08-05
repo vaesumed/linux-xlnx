@@ -4111,14 +4111,14 @@ static int s2io_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (unlikely(skb->len <= 0)) {
 		DBG_PRINT(TX_DBG, "%s:Buffer has no data..\n", dev->name);
 		dev_kfree_skb_any(skb);
-		return 0;
+		return NETDEV_TX_OK;
 	}
 
 	if (!is_s2io_card_up(sp)) {
 		DBG_PRINT(TX_DBG, "%s: Card going down for reset\n",
 			  dev->name);
 		dev_kfree_skb(skb);
-		return 0;
+		return NETDEV_TX_OK;
 	}
 
 	queue = 0;
@@ -4192,7 +4192,7 @@ static int s2io_xmit(struct sk_buff *skb, struct net_device *dev)
 		s2io_stop_tx_queue(sp, fifo->fifo_no);
 		dev_kfree_skb(skb);
 		spin_unlock_irqrestore(&fifo->tx_lock, flags);
-		return 0;
+		return NETDEV_TX_OK;
 	}
 
 	offload_type = s2io_offload_type(skb);
@@ -4304,14 +4304,14 @@ static int s2io_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (sp->config.intr_type == MSI_X)
 		tx_intr_handler(fifo);
 
-	return 0;
+	return NETDEV_TX_OK;
 pci_map_failed:
 	stats->pci_map_fail_cnt++;
 	s2io_stop_tx_queue(sp, fifo->fifo_no);
 	stats->mem_freed += skb->truesize;
 	dev_kfree_skb(skb);
 	spin_unlock_irqrestore(&fifo->tx_lock, flags);
-	return 0;
+	return NETDEV_TX_OK;
 }
 
 static void
@@ -8635,6 +8635,9 @@ static pci_ers_result_t s2io_io_error_detected(struct pci_dev *pdev,
 	struct s2io_nic *sp = netdev_priv(netdev);
 
 	netif_device_detach(netdev);
+
+	if (state == pci_channel_io_perm_failure)
+		return PCI_ERS_RESULT_DISCONNECT;
 
 	if (netif_running(netdev)) {
 		/* Bring down the card, while avoiding PCI I/O */

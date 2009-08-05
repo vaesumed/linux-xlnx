@@ -1297,7 +1297,8 @@ static void b44_chip_reset(struct b44 *bp, int reset_kind)
 	switch (sdev->bus->bustype) {
 	case SSB_BUSTYPE_SSB:
 		bw32(bp, B44_MDIO_CTRL, (MDIO_CTRL_PREAMBLE |
-		     (((ssb_clockspeed(sdev->bus) + (B44_MDC_RATIO / 2)) / B44_MDC_RATIO)
+		     (DIV_ROUND_CLOSEST(ssb_clockspeed(sdev->bus),
+					B44_MDC_RATIO)
 		     & MDIO_CTRL_MAXF_MASK)));
 		break;
 	case SSB_BUSTYPE_PCI:
@@ -1756,15 +1757,15 @@ static void b44_get_drvinfo (struct net_device *dev, struct ethtool_drvinfo *inf
 	struct b44 *bp = netdev_priv(dev);
 	struct ssb_bus *bus = bp->sdev->bus;
 
-	strncpy(info->driver, DRV_MODULE_NAME, sizeof(info->driver));
-	strncpy(info->version, DRV_MODULE_VERSION, sizeof(info->driver));
+	strlcpy(info->driver, DRV_MODULE_NAME, sizeof(info->driver));
+	strlcpy(info->version, DRV_MODULE_VERSION, sizeof(info->version));
 	switch (bus->bustype) {
 	case SSB_BUSTYPE_PCI:
-		strncpy(info->bus_info, pci_name(bus->host_pci), sizeof(info->bus_info));
+		strlcpy(info->bus_info, pci_name(bus->host_pci), sizeof(info->bus_info));
 		break;
 	case SSB_BUSTYPE_PCMCIA:
 	case SSB_BUSTYPE_SSB:
-		strncpy(info->bus_info, "SSB", sizeof(info->bus_info));
+		strlcpy(info->bus_info, "SSB", sizeof(info->bus_info));
 		break;
 	}
 }

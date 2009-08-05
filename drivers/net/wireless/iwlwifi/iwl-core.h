@@ -116,6 +116,17 @@ struct iwl_temp_ops {
 	void (*set_ct_kill)(struct iwl_priv *priv);
 };
 
+struct iwl_ucode_ops {
+	u32 (*get_header_size)(u32);
+	u32 (*get_build)(const struct iwl_ucode_header *, u32);
+	u32 (*get_inst_size)(const struct iwl_ucode_header *, u32);
+	u32 (*get_data_size)(const struct iwl_ucode_header *, u32);
+	u32 (*get_init_size)(const struct iwl_ucode_header *, u32);
+	u32 (*get_init_data_size)(const struct iwl_ucode_header *, u32);
+	u32 (*get_boot_size)(const struct iwl_ucode_header *, u32);
+	u8 * (*get_data)(const struct iwl_ucode_header *, u32);
+};
+
 struct iwl_lib_ops {
 	/* set hw dependent parameters */
 	int (*set_hw_params)(struct iwl_priv *priv);
@@ -171,6 +182,7 @@ struct iwl_lib_ops {
 };
 
 struct iwl_ops {
+	const struct iwl_ucode_ops *ucode;
 	const struct iwl_lib_ops *lib;
 	const struct iwl_hcmd_ops *hcmd;
 	const struct iwl_hcmd_utils_ops *utils;
@@ -178,7 +190,6 @@ struct iwl_ops {
 
 struct iwl_mod_params {
 	int sw_crypto;		/* def: 0 = using hardware encryption */
-	u32 debug;		/* def: 0 = minimal debug log messages */
 	int disable_hw_scan;	/* def: 0 = use h/w scan */
 	int num_of_queues;	/* def: HW dependent */
 	int num_of_ampdu_queues;/* def: HW dependent */
@@ -384,7 +395,6 @@ static inline __le32 iwl_hw_set_rate_n_flags(u8 rate, u32 flags)
 void iwl_init_scan_params(struct iwl_priv *priv);
 int iwl_scan_cancel(struct iwl_priv *priv);
 int iwl_scan_cancel_timeout(struct iwl_priv *priv, unsigned long ms);
-int iwl_scan_initiate(struct iwl_priv *priv);
 int iwl_mac_hw_scan(struct ieee80211_hw *hw, struct cfg80211_scan_request *req);
 u16 iwl_fill_probe_req(struct iwl_priv *priv, struct ieee80211_mgmt *frame,
 		       const u8 *ie, int ie_len, int left);
@@ -398,7 +408,6 @@ void iwl_bg_scan_check(struct work_struct *data);
 void iwl_bg_abort_scan(struct work_struct *work);
 void iwl_bg_scan_completed(struct work_struct *work);
 void iwl_setup_scan_deferred_work(struct iwl_priv *priv);
-int iwl_send_scan_abort(struct iwl_priv *priv);
 
 /* For faster active scanning, scan will move to the next channel if fewer than
  * PLCP_QUIET_THRESH packets are heard on this channel within
@@ -437,9 +446,9 @@ int __must_check iwl_send_cmd_pdu(struct iwl_priv *priv, u8 id,
 				  u16 len, const void *data);
 int iwl_send_cmd_pdu_async(struct iwl_priv *priv, u8 id, u16 len,
 			   const void *data,
-			   int (*callback)(struct iwl_priv *priv,
-					   struct iwl_cmd *cmd,
-					   struct sk_buff *skb));
+			   void (*callback)(struct iwl_priv *priv,
+					    struct iwl_device_cmd *cmd,
+					    struct sk_buff *skb));
 
 int iwl_enqueue_hcmd(struct iwl_priv *priv, struct iwl_host_cmd *cmd);
 
@@ -449,8 +458,6 @@ int iwl_send_card_state(struct iwl_priv *priv, u32 flags,
 /*****************************************************
  * PCI						     *
  *****************************************************/
-void iwl_disable_interrupts(struct iwl_priv *priv);
-void iwl_enable_interrupts(struct iwl_priv *priv);
 irqreturn_t iwl_isr_legacy(int irq, void *data);
 int iwl_reset_ict(struct iwl_priv *priv);
 void iwl_disable_ict(struct iwl_priv *priv);
@@ -474,7 +481,6 @@ int iwl_pci_resume(struct pci_dev *pdev);
 /*****************************************************
 *  Error Handling Debugging
 ******************************************************/
-void iwl_dump_nic_error_log(struct iwl_priv *priv);
 void iwl_dump_nic_event_log(struct iwl_priv *priv);
 void iwl_clear_isr_stats(struct iwl_priv *priv);
 
@@ -503,6 +509,8 @@ void iwlcore_free_geos(struct iwl_priv *priv);
 #define STATUS_POWER_PMI	16
 #define STATUS_FW_ERROR		17
 #define STATUS_MODE_PENDING	18
+#define STATUS_INIT_UCODE_ALIVE	19
+#define STATUS_RT_UCODE_ALIVE	20
 
 
 static inline int iwl_is_ready(struct iwl_priv *priv)
@@ -556,6 +564,7 @@ extern void iwl_rx_reply_rx_phy(struct iwl_priv *priv,
 void iwl_rx_reply_compressed_ba(struct iwl_priv *priv,
 					   struct iwl_rx_mem_buffer *rxb);
 
+void iwl_setup_rxon_timing(struct iwl_priv *priv);
 static inline int iwl_send_rxon_assoc(struct iwl_priv *priv)
 {
 	return priv->cfg->ops->hcmd->rxon_assoc(priv);

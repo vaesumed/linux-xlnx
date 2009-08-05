@@ -102,7 +102,6 @@ static int iwm_ntf_error(struct iwm_priv *iwm, u8 *buf,
 	error = (struct iwm_umac_notif_error *)buf;
 	fw_err = &error->err;
 
-
 	IWM_ERR(iwm, "%cMAC FW ERROR:\n",
 	 (le32_to_cpu(fw_err->category) == UMAC_SYS_ERR_CAT_LMAC) ? 'L' : 'U');
 	IWM_ERR(iwm, "\tCategory:    %d\n", le32_to_cpu(fw_err->category));
@@ -143,17 +142,18 @@ static int iwm_ntf_init_complete(struct iwm_priv *iwm, u8 *buf,
 				 unsigned long buf_size,
 				 struct iwm_wifi_cmd *cmd)
 {
+	struct wiphy *wiphy = iwm_to_wiphy(iwm);
 	struct iwm_umac_notif_init_complete *init_complete =
 			(struct iwm_umac_notif_init_complete *)(buf);
 	u16 status = le16_to_cpu(init_complete->status);
+	bool blocked = (status == UMAC_NTFY_INIT_COMPLETE_STATUS_ERR);
 
-	if (status == UMAC_NTFY_INIT_COMPLETE_STATUS_ERR) {
+	if (blocked)
 		IWM_DBG_NTF(iwm, DBG, "Hardware rf kill is on (radio off)\n");
-		set_bit(IWM_RADIO_RFKILL_HW, &iwm->radio);
-	} else {
+	else
 		IWM_DBG_NTF(iwm, DBG, "Hardware rf kill is off (radio on)\n");
-		clear_bit(IWM_RADIO_RFKILL_HW, &iwm->radio);
-	}
+
+	wiphy_rfkill_set_hw_state(wiphy, blocked);
 
 	return 0;
 }
@@ -218,17 +218,17 @@ static int iwm_ntf_tx(struct iwm_priv *iwm, u8 *buf,
 		(buf + sizeof(struct iwm_umac_wifi_in_hdr));
 	hdr = (struct iwm_umac_wifi_in_hdr *)buf;
 
-	IWM_DBG_NTF(iwm, DBG, "REPLY_TX, buf size: %lu\n", buf_size);
+	IWM_DBG_TX(iwm, DBG, "REPLY_TX, buf size: %lu\n", buf_size);
 
-	IWM_DBG_NTF(iwm, DBG, "Seqnum: %d\n",
-		    le16_to_cpu(hdr->sw_hdr.cmd.seq_num));
-	IWM_DBG_NTF(iwm, DBG, "\tFrame cnt: %d\n", tx_resp->frame_cnt);
-	IWM_DBG_NTF(iwm, DBG, "\tRetry cnt: %d\n",
-		    le16_to_cpu(tx_resp->retry_cnt));
-	IWM_DBG_NTF(iwm, DBG, "\tSeq ctl: %d\n", le16_to_cpu(tx_resp->seq_ctl));
-	IWM_DBG_NTF(iwm, DBG, "\tByte cnt: %d\n",
-		    le16_to_cpu(tx_resp->byte_cnt));
-	IWM_DBG_NTF(iwm, DBG, "\tStatus: 0x%x\n", le32_to_cpu(tx_resp->status));
+	IWM_DBG_TX(iwm, DBG, "Seqnum: %d\n",
+		   le16_to_cpu(hdr->sw_hdr.cmd.seq_num));
+	IWM_DBG_TX(iwm, DBG, "\tFrame cnt: %d\n", tx_resp->frame_cnt);
+	IWM_DBG_TX(iwm, DBG, "\tRetry cnt: %d\n",
+		   le16_to_cpu(tx_resp->retry_cnt));
+	IWM_DBG_TX(iwm, DBG, "\tSeq ctl: %d\n", le16_to_cpu(tx_resp->seq_ctl));
+	IWM_DBG_TX(iwm, DBG, "\tByte cnt: %d\n",
+		   le16_to_cpu(tx_resp->byte_cnt));
+	IWM_DBG_TX(iwm, DBG, "\tStatus: 0x%x\n", le32_to_cpu(tx_resp->status));
 
 	return 0;
 }
@@ -418,8 +418,8 @@ static int iwm_ntf_rx_ticket(struct iwm_priv *iwm, u8 *buf,
 			if (IS_ERR(ticket_node))
 				return PTR_ERR(ticket_node);
 
-			IWM_DBG_NTF(iwm, DBG, "TICKET RELEASE(%d)\n",
-				    ticket->id);
+			IWM_DBG_RX(iwm, DBG, "TICKET RELEASE(%d)\n",
+				   ticket->id);
 			list_add_tail(&ticket_node->node, &iwm->rx_tickets);
 
 			/*
@@ -454,15 +454,15 @@ static int iwm_ntf_rx_packet(struct iwm_priv *iwm, u8 *buf,
 	u16 id, buf_offset;
 	u32 packet_size;
 
-	IWM_DBG_NTF(iwm, DBG, "\n");
+	IWM_DBG_RX(iwm, DBG, "\n");
 
 	wifi_hdr = (struct iwm_umac_wifi_in_hdr *)buf;
 	id = le16_to_cpu(wifi_hdr->sw_hdr.cmd.seq_num);
 	buf_offset = sizeof(struct iwm_umac_wifi_in_hdr);
 	packet_size = buf_size - sizeof(struct iwm_umac_wifi_in_hdr);
 
-	IWM_DBG_NTF(iwm, DBG, "CMD:0x%x, seqnum: %d, packet size: %d\n",
-		    wifi_hdr->sw_hdr.cmd.cmd, id, packet_size);
+	IWM_DBG_RX(iwm, DBG, "CMD:0x%x, seqnum: %d, packet size: %d\n",
+		   wifi_hdr->sw_hdr.cmd.cmd, id, packet_size);
 	IWM_DBG_RX(iwm, DBG, "Packet id: %d\n", id);
 	IWM_HEXDUMP(iwm, DBG, RX, "PACKET: ", buf + buf_offset, packet_size);
 
@@ -503,12 +503,9 @@ static int iwm_mlme_assoc_complete(struct iwm_priv *iwm, u8 *buf,
 {
 	struct iwm_umac_notif_assoc_complete *complete =
 		(struct iwm_umac_notif_assoc_complete *)buf;
-	union iwreq_data wrqu;
 
 	IWM_DBG_MLME(iwm, INFO, "Association with %pM completed, status: %d\n",
 		     complete->bssid, complete->status);
-
-	memset(&wrqu, 0, sizeof(wrqu));
 
 	clear_bit(IWM_STATUS_ASSOCIATING, &iwm->status);
 
@@ -520,7 +517,14 @@ static int iwm_mlme_assoc_complete(struct iwm_priv *iwm, u8 *buf,
 
 		iwm_link_on(iwm);
 
-		memcpy(wrqu.ap_addr.sa_data, complete->bssid, ETH_ALEN);
+		if (iwm->conf.mode == UMAC_MODE_IBSS)
+			goto ibss;
+
+		cfg80211_connect_result(iwm_to_ndev(iwm),
+					complete->bssid,
+					iwm->req_ie, iwm->req_ie_len,
+					iwm->resp_ie, iwm->resp_ie_len,
+					WLAN_STATUS_SUCCESS, GFP_KERNEL);
 		break;
 	case UMAC_ASSOC_COMPLETE_FAILURE:
 		clear_bit(IWM_STATUS_ASSOCIATED, &iwm->status);
@@ -528,18 +532,22 @@ static int iwm_mlme_assoc_complete(struct iwm_priv *iwm, u8 *buf,
 		iwm->channel = 0;
 
 		iwm_link_off(iwm);
+
+		if (iwm->conf.mode == UMAC_MODE_IBSS)
+			goto ibss;
+
+		cfg80211_connect_result(iwm_to_ndev(iwm), complete->bssid,
+					NULL, 0, NULL, 0,
+					WLAN_STATUS_UNSPECIFIED_FAILURE,
+					GFP_KERNEL);
 	default:
 		break;
 	}
 
-	if (iwm->conf.mode == UMAC_MODE_IBSS) {
-		cfg80211_ibss_joined(iwm_to_ndev(iwm), iwm->bssid, GFP_KERNEL);
-		return 0;
-	}
+	return 0;
 
-	wrqu.ap_addr.sa_family = ARPHRD_ETHER;
-	wireless_send_event(iwm_to_ndev(iwm), SIOCGIWAP, &wrqu, NULL);
-
+ ibss:
+	cfg80211_ibss_joined(iwm_to_ndev(iwm), iwm->bssid, GFP_KERNEL);
 	return 0;
 }
 
@@ -769,36 +777,45 @@ static int iwm_mlme_mgt_frame(struct iwm_priv *iwm, u8 *buf,
 			      unsigned long buf_size, struct iwm_wifi_cmd *cmd)
 {
 	struct iwm_umac_notif_mgt_frame *mgt_frame =
-	(struct iwm_umac_notif_mgt_frame *)buf;
+			(struct iwm_umac_notif_mgt_frame *)buf;
 	struct ieee80211_mgmt *mgt = (struct ieee80211_mgmt *)mgt_frame->frame;
 	u8 *ie;
-	unsigned int event;
-	union iwreq_data wrqu;
 
 	IWM_HEXDUMP(iwm, DBG, MLME, "MGT: ", mgt_frame->frame,
 		    le16_to_cpu(mgt_frame->len));
 
 	if (ieee80211_is_assoc_req(mgt->frame_control)) {
 		ie = mgt->u.assoc_req.variable;;
-		event = IWEVASSOCREQIE;
+		iwm->req_ie_len =
+				le16_to_cpu(mgt_frame->len) - (ie - (u8 *)mgt);
+		kfree(iwm->req_ie);
+		iwm->req_ie = kmemdup(mgt->u.assoc_req.variable,
+				      iwm->req_ie_len, GFP_KERNEL);
 	} else if (ieee80211_is_reassoc_req(mgt->frame_control)) {
 		ie = mgt->u.reassoc_req.variable;;
-		event = IWEVASSOCREQIE;
+		iwm->req_ie_len =
+				le16_to_cpu(mgt_frame->len) - (ie - (u8 *)mgt);
+		kfree(iwm->req_ie);
+		iwm->req_ie = kmemdup(mgt->u.reassoc_req.variable,
+				      iwm->req_ie_len, GFP_KERNEL);
 	} else if (ieee80211_is_assoc_resp(mgt->frame_control)) {
 		ie = mgt->u.assoc_resp.variable;;
-		event = IWEVASSOCRESPIE;
+		iwm->resp_ie_len =
+				le16_to_cpu(mgt_frame->len) - (ie - (u8 *)mgt);
+		kfree(iwm->resp_ie);
+		iwm->resp_ie = kmemdup(mgt->u.assoc_resp.variable,
+				       iwm->resp_ie_len, GFP_KERNEL);
 	} else if (ieee80211_is_reassoc_resp(mgt->frame_control)) {
 		ie = mgt->u.reassoc_resp.variable;;
-		event = IWEVASSOCRESPIE;
+		iwm->resp_ie_len =
+				le16_to_cpu(mgt_frame->len) - (ie - (u8 *)mgt);
+		kfree(iwm->resp_ie);
+		iwm->resp_ie = kmemdup(mgt->u.reassoc_resp.variable,
+				       iwm->resp_ie_len, GFP_KERNEL);
 	} else {
 		IWM_ERR(iwm, "Unsupported management frame");
 		return 0;
 	}
-
-	wrqu.data.length = le16_to_cpu(mgt_frame->len) - (ie - (u8 *)mgt);
-
-	IWM_HEXDUMP(iwm, DBG, MLME, "EVT: ", ie, wrqu.data.length);
-	wireless_send_event(iwm_to_ndev(iwm), event, &wrqu, ie);
 
 	return 0;
 }
@@ -875,6 +892,7 @@ static int iwm_ntf_statistics(struct iwm_priv *iwm, u8 *buf,
 		/* UMAC passes rate info multiplies by 2 */
 		iwm->rate = max_rate >> 1;
 	}
+	iwm->txpower = le32_to_cpu(stats->tx_power);
 
 	wstats->status = 0;
 
@@ -921,13 +939,6 @@ static int iwm_ntf_eeprom_proxy(struct iwm_priv *iwm, u8 *buf,
 
 	if ((hdr_offset + hdr_len) > IWM_EEPROM_LEN)
 		return -EINVAL;
-
-#ifdef CONFIG_IWM_B0_HW_SUPPORT
-	if (hdr_offset == IWM_EEPROM_SKU_CAP_OFF) {
-		if (eeprom_proxy->buf[0] == 0xff)
-			iwm->conf.hw_b0 = 1;
-	}
-#endif
 
 	switch (hdr_type) {
 	case IWM_UMAC_CMD_EEPROM_TYPE_READ:
@@ -993,12 +1004,17 @@ static int iwm_ntf_wifi_if_wrapper(struct iwm_priv *iwm, u8 *buf,
 			(struct iwm_umac_wifi_if *)cmd->buf.payload;
 
 	IWM_DBG_NTF(iwm, DBG, "WIFI_IF_WRAPPER cmd is delivered to UMAC: "
-		    "oid is %d\n", hdr->oid);
+		    "oid is 0x%x\n", hdr->oid);
+
+	if (hdr->oid <= WIFI_IF_NTFY_MAX) {
+		set_bit(hdr->oid, &iwm->wifi_ntfy[0]);
+		wake_up_interruptible(&iwm->wifi_ntfy_queue);
+	} else
+		return -EINVAL;
 
 	switch (hdr->oid) {
 	case UMAC_WIFI_IF_CMD_SET_PROFILE:
 		iwm->umac_profile_active = 1;
-		wake_up_interruptible(&iwm->mlme_queue);
 		break;
 	default:
 		break;
@@ -1010,6 +1026,7 @@ static int iwm_ntf_wifi_if_wrapper(struct iwm_priv *iwm, u8 *buf,
 static int iwm_ntf_card_state(struct iwm_priv *iwm, u8 *buf,
 			      unsigned long buf_size, struct iwm_wifi_cmd *cmd)
 {
+	struct wiphy *wiphy = iwm_to_wiphy(iwm);
 	struct iwm_lmac_card_state *state = (struct iwm_lmac_card_state *)
 				(buf + sizeof(struct iwm_umac_wifi_in_hdr));
 	u32 flags = le32_to_cpu(state->flags);
@@ -1018,10 +1035,7 @@ static int iwm_ntf_card_state(struct iwm_priv *iwm, u8 *buf,
 		 flags & IWM_CARD_STATE_HW_DISABLED ? "ON" : "OFF",
 		 flags & IWM_CARD_STATE_CTKILL_DISABLED ? "ON" : "OFF");
 
-	if (flags & IWM_CARD_STATE_HW_DISABLED)
-		set_bit(IWM_RADIO_RFKILL_HW, &iwm->radio);
-	else
-		clear_bit(IWM_RADIO_RFKILL_HW, &iwm->radio);
+	wiphy_rfkill_set_hw_state(wiphy, flags & IWM_CARD_STATE_HW_DISABLED);
 
 	return 0;
 }
@@ -1362,13 +1376,13 @@ static void iwm_rx_process_packet(struct iwm_priv *iwm,
 
 		skb->dev = iwm_to_ndev(iwm);
 		skb->protocol = eth_type_trans(skb, ndev);
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		skb->ip_summed = CHECKSUM_NONE;
 		memset(skb->cb, 0, sizeof(skb->cb));
 
 		ndev->stats.rx_packets++;
 		ndev->stats.rx_bytes += skb->len;
 
-		if (netif_rx(skb) == NET_RX_DROP) {
+		if (netif_rx_ni(skb) == NET_RX_DROP) {
 			IWM_ERR(iwm, "Packet dropped\n");
 			ndev->stats.rx_dropped++;
 		}

@@ -57,8 +57,8 @@
 
 #define _NETXEN_NIC_LINUX_MAJOR 4
 #define _NETXEN_NIC_LINUX_MINOR 0
-#define _NETXEN_NIC_LINUX_SUBVERSION 30
-#define NETXEN_NIC_LINUX_VERSIONID  "4.0.30"
+#define _NETXEN_NIC_LINUX_SUBVERSION 41
+#define NETXEN_NIC_LINUX_VERSIONID  "4.0.41"
 
 #define NETXEN_VERSION_CODE(a, b, c)	(((a) << 24) + ((b) << 16) + (c))
 #define _major(v)	(((v) >> 24) & 0xff)
@@ -143,18 +143,13 @@
 #define NX_ETHERMTU                    1500
 #define NX_MAX_ETHERHDR                32 /* This contains some padding */
 
-#define NX_RX_NORMAL_BUF_MAX_LEN       (NX_MAX_ETHERHDR + NX_ETHERMTU)
+#define NX_P2_RX_BUF_MAX_LEN           1760
+#define NX_P3_RX_BUF_MAX_LEN           (NX_MAX_ETHERHDR + NX_ETHERMTU)
 #define NX_P2_RX_JUMBO_BUF_MAX_LEN     (NX_MAX_ETHERHDR + P2_MAX_MTU)
 #define NX_P3_RX_JUMBO_BUF_MAX_LEN     (NX_MAX_ETHERHDR + P3_MAX_MTU)
 #define NX_CT_DEFAULT_RX_BUF_LEN	2048
 
-#define MAX_RX_BUFFER_LENGTH		1760
-#define MAX_RX_JUMBO_BUFFER_LENGTH 	8062
-#define MAX_RX_LRO_BUFFER_LENGTH	(8062)
-#define RX_DMA_MAP_LEN			(MAX_RX_BUFFER_LENGTH - 2)
-#define RX_JUMBO_DMA_MAP_LEN	\
-	(MAX_RX_JUMBO_BUFFER_LENGTH - 2)
-#define RX_LRO_DMA_MAP_LEN		(MAX_RX_LRO_BUFFER_LENGTH - 2)
+#define NX_RX_LRO_BUFFER_LENGTH		(8060)
 
 /*
  * Maximum number of ring contexts
@@ -200,13 +195,20 @@
 #define RCV_RING_JUMBO	1
 #define RCV_RING_LRO	2
 
-#define MAX_CMD_DESCRIPTORS		4096
-#define MAX_RCV_DESCRIPTORS		16384
-#define MAX_CMD_DESCRIPTORS_HOST	1024
-#define MAX_RCV_DESCRIPTORS_1G		2048
-#define MAX_RCV_DESCRIPTORS_10G		4096
-#define MAX_JUMBO_RCV_DESCRIPTORS	1024
+#define MIN_CMD_DESCRIPTORS		64
+#define MIN_RCV_DESCRIPTORS		64
+#define MIN_JUMBO_DESCRIPTORS		32
+
+#define MAX_CMD_DESCRIPTORS		1024
+#define MAX_RCV_DESCRIPTORS_1G		4096
+#define MAX_RCV_DESCRIPTORS_10G		8192
+#define MAX_JUMBO_RCV_DESCRIPTORS_1G	512
+#define MAX_JUMBO_RCV_DESCRIPTORS_10G	1024
 #define MAX_LRO_RCV_DESCRIPTORS		8
+
+#define DEFAULT_RCV_DESCRIPTORS_1G	2048
+#define DEFAULT_RCV_DESCRIPTORS_10G	4096
+
 #define NETXEN_CTX_SIGNATURE	0xdee0
 #define NETXEN_CTX_SIGNATURE_V2	0x0002dee0
 #define NETXEN_CTX_RESET	0xbad0
@@ -302,6 +304,10 @@ struct netxen_ring_ctx {
 #define FLAGS_IPSEC_SA_ADD	0x04
 #define FLAGS_IPSEC_SA_DELETE	0x08
 #define FLAGS_VLAN_TAGGED	0x10
+#define FLAGS_VLAN_OOB		0x40
+
+#define netxen_set_tx_vlan_tci(cmd_desc, v)	\
+	(cmd_desc)->vlan_TCI = cpu_to_le16(v);
 
 #define netxen_set_cmd_desc_port(cmd_desc, var)	\
 	((cmd_desc)->port_ctxid |= ((var) & 0x0F))
@@ -316,58 +322,33 @@ struct netxen_ring_ctx {
 	cpu_to_le16(((_flags) & 0x7f) | (((_opcode) & 0x3f) << 7))
 
 #define netxen_set_tx_frags_len(_desc, _frags, _len) \
-	(_desc)->num_of_buffers_total_length = \
+	(_desc)->nfrags__length = \
 	cpu_to_le32(((_frags) & 0xff) | (((_len) & 0xffffff) << 8))
 
 struct cmd_desc_type0 {
 	u8 tcp_hdr_offset;	/* For LSO only */
 	u8 ip_hdr_offset;	/* For LSO only */
-	/* Bit pattern: 0-6 flags, 7-12 opcode, 13-15 unused */
-	__le16 flags_opcode;
-	/* Bit pattern: 0-7 total number of segments,
-	   8-31 Total size of the packet */
-	__le32 num_of_buffers_total_length;
-	union {
-		struct {
-			__le32 addr_low_part2;
-			__le32 addr_high_part2;
-		};
-		__le64 addr_buffer2;
-	};
+	__le16 flags_opcode;	/* 15:13 unused, 12:7 opcode, 6:0 flags */
+	__le32 nfrags__length;	/* 31:8 total len, 7:0 frag count */
 
-	__le16 reference_handle;	/* changed to u16 to add mss */
-	__le16 mss;		/* passed by NDIS_PACKET for LSO */
-	/* Bit pattern 0-3 port, 0-3 ctx id */
-	u8 port_ctxid;
+	__le64 addr_buffer2;
+
+	__le16 reference_handle;
+	__le16 mss;
+	u8 port_ctxid;		/* 7:4 ctxid 3:0 port */
 	u8 total_hdr_length;	/* LSO only : MAC+IP+TCP Hdr size */
 	__le16 conn_id;		/* IPSec offoad only */
 
-	union {
-		struct {
-			__le32 addr_low_part3;
-			__le32 addr_high_part3;
-		};
-		__le64 addr_buffer3;
-	};
-	union {
-		struct {
-			__le32 addr_low_part1;
-			__le32 addr_high_part1;
-		};
-		__le64 addr_buffer1;
-	};
+	__le64 addr_buffer3;
+	__le64 addr_buffer1;
 
 	__le16 buffer_length[4];
 
-	union {
-		struct {
-			__le32 addr_low_part4;
-			__le32 addr_high_part4;
-		};
-		__le64 addr_buffer4;
-	};
+	__le64 addr_buffer4;
 
-	__le64 unused;
+	__le16 vlan_TCI;
+	__le16 reserved;
+	__le32 reserved2;
 
 } __attribute__ ((aligned(64)));
 
@@ -380,6 +361,7 @@ struct rcv_desc {
 };
 
 /* opcode field in status_desc */
+#define NETXEN_NIC_SYN_OFFLOAD  0x03
 #define NETXEN_NIC_RXPKT_DESC  0x04
 #define NETXEN_OLD_RXPKT_DESC  0x3f
 #define NETXEN_NIC_RESPONSE_DESC 0x05
@@ -1078,6 +1060,9 @@ typedef struct {
 
 #define NX_MAC_EVENT		0x1
 
+#define NX_IP_UP		2
+#define NX_IP_DOWN		3
+
 /*
  * Driver --> Firmware
  */
@@ -1132,6 +1117,9 @@ typedef struct {
 
 #define NX_FW_CAPABILITY_LINK_NOTIFICATION	(1 << 5)
 #define NX_FW_CAPABILITY_SWITCHING		(1 << 6)
+#define NX_FW_CAPABILITY_PEXQ			(1 << 7)
+#define NX_FW_CAPABILITY_BDG			(1 << 8)
+#define NX_FW_CAPABILITY_FVLANTX		(1 << 9)
 
 /* module types */
 #define LINKEVENT_MODULE_NOT_PRESENT			1
@@ -1315,28 +1303,10 @@ struct netxen_adapter {
 
 	nx_nic_intr_coalesce_t coal;
 
-	u32 fw_major;
+	u32 resv5;
 	u32 fw_version;
 	const struct firmware *fw;
 };
-
-/*
- * NetXen dma watchdog control structure
- *
- *	Bit 0		: enabled => R/O: 1 watchdog active, 0 inactive
- *	Bit 1		: disable_request => 1 req disable dma watchdog
- *	Bit 2		: enable_request =>  1 req enable dma watchdog
- *	Bit 3-31	: unused
- */
-
-#define netxen_set_dma_watchdog_disable_req(config_word) \
-	_netxen_set_bits(config_word, 1, 1, 1)
-#define netxen_set_dma_watchdog_enable_req(config_word) \
-	_netxen_set_bits(config_word, 2, 1, 1)
-#define netxen_get_dma_watchdog_enabled(config_word) \
-	((config_word) & 0x1)
-#define netxen_get_dma_watchdog_disabled(config_word) \
-	(((config_word) >> 1) & 0x1)
 
 int netxen_niu_xgbe_enable_phy_interrupts(struct netxen_adapter *adapter);
 int netxen_niu_gbe_enable_phy_interrupts(struct netxen_adapter *adapter);
@@ -1398,8 +1368,9 @@ unsigned long netxen_nic_pci_set_window_2M(struct netxen_adapter *adapter,
 		unsigned long long addr);
 
 /* Functions from netxen_nic_init.c */
-void netxen_free_adapter_offload(struct netxen_adapter *adapter);
-int netxen_initialize_adapter_offload(struct netxen_adapter *adapter);
+int netxen_init_dummy_dma(struct netxen_adapter *adapter);
+void netxen_free_dummy_dma(struct netxen_adapter *adapter);
+
 int netxen_phantom_init(struct netxen_adapter *adapter, int pegtune_val);
 int netxen_load_firmware(struct netxen_adapter *adapter);
 int netxen_need_fw_reset(struct netxen_adapter *adapter);
@@ -1443,6 +1414,7 @@ void netxen_p3_free_mac_list(struct netxen_adapter *adapter);
 int netxen_p3_nic_set_promisc(struct netxen_adapter *adapter, u32);
 int netxen_config_intr_coalesce(struct netxen_adapter *adapter);
 int netxen_config_rss(struct netxen_adapter *adapter, int enable);
+int netxen_config_ipaddr(struct netxen_adapter *adapter, u32 ip, int cmd);
 int netxen_linkevent_request(struct netxen_adapter *adapter, int enable);
 void netxen_advert_link_change(struct netxen_adapter *adapter, int linkup);
 
@@ -1454,6 +1426,9 @@ struct net_device_stats *netxen_nic_get_stats(struct net_device *netdev);
 
 void netxen_nic_update_cmd_producer(struct netxen_adapter *adapter,
 		struct nx_host_tx_ring *tx_ring);
+
+/* Functions from netxen_nic_main.c */
+int netxen_nic_reset_context(struct netxen_adapter *);
 
 /*
  * NetXen Board information
@@ -1504,56 +1479,6 @@ static inline void get_brd_name_by_type(u32 type, char *name)
 	if (!found)
 		name = "Unknown";
 }
-
-static inline int
-dma_watchdog_shutdown_request(struct netxen_adapter *adapter)
-{
-	u32 ctrl;
-
-	/* check if already inactive */
-	ctrl = adapter->hw_read_wx(adapter,
-			NETXEN_CAM_RAM(NETXEN_CAM_RAM_DMA_WATCHDOG_CTRL));
-
-	if (netxen_get_dma_watchdog_enabled(ctrl) == 0)
-		return 1;
-
-	/* Send the disable request */
-	netxen_set_dma_watchdog_disable_req(ctrl);
-	NXWR32(adapter, NETXEN_CAM_RAM(NETXEN_CAM_RAM_DMA_WATCHDOG_CTRL), ctrl);
-
-	return 0;
-}
-
-static inline int
-dma_watchdog_shutdown_poll_result(struct netxen_adapter *adapter)
-{
-	u32 ctrl;
-
-	ctrl = adapter->hw_read_wx(adapter,
-			NETXEN_CAM_RAM(NETXEN_CAM_RAM_DMA_WATCHDOG_CTRL));
-
-	return (netxen_get_dma_watchdog_enabled(ctrl) == 0);
-}
-
-static inline int
-dma_watchdog_wakeup(struct netxen_adapter *adapter)
-{
-	u32 ctrl;
-
-	ctrl = adapter->hw_read_wx(adapter,
-			NETXEN_CAM_RAM(NETXEN_CAM_RAM_DMA_WATCHDOG_CTRL));
-
-	if (netxen_get_dma_watchdog_enabled(ctrl))
-		return 1;
-
-	/* send the wakeup request */
-	netxen_set_dma_watchdog_enable_req(ctrl);
-
-	NXWR32(adapter, NETXEN_CAM_RAM(NETXEN_CAM_RAM_DMA_WATCHDOG_CTRL), ctrl);
-
-	return 0;
-}
-
 
 static inline u32 netxen_tx_avail(struct nx_host_tx_ring *tx_ring)
 {

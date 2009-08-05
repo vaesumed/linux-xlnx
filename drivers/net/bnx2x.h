@@ -160,7 +160,7 @@ struct sw_rx_page {
 #define PAGES_PER_SGE			(1 << PAGES_PER_SGE_SHIFT)
 #define SGE_PAGE_SIZE			PAGE_SIZE
 #define SGE_PAGE_SHIFT			PAGE_SHIFT
-#define SGE_PAGE_ALIGN(addr)		PAGE_ALIGN((typeof(PAGE_SIZE))addr)
+#define SGE_PAGE_ALIGN(addr)		PAGE_ALIGN((typeof(PAGE_SIZE))(addr))
 
 /* SGE ring related macros */
 #define NUM_RX_SGE_PAGES		2
@@ -1006,6 +1006,7 @@ void bnx2x_write_dmae(struct bnx2x *bp, dma_addr_t dma_addr, u32 dst_addr,
 int bnx2x_get_gpio(struct bnx2x *bp, int gpio_num, u8 port);
 int bnx2x_set_gpio(struct bnx2x *bp, int gpio_num, u32 mode, u8 port);
 int bnx2x_set_gpio_int(struct bnx2x *bp, int gpio_num, u32 mode, u8 port);
+u32 bnx2x_fw_command(struct bnx2x *bp, u32 command);
 
 static inline u32 reg_poll(struct bnx2x *bp, u32 reg, u32 expected, int ms,
 			   int wait)
