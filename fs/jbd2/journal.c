@@ -2442,11 +2442,6 @@ struct devname_cache {
 static struct devname_cache *devcache[1 << CACHE_SIZE_BITS];
 static DEFINE_SPINLOCK(devname_cache_lock);
 
-static void free_devcache(struct rcu_head *rcu)
-{
-	kfree(rcu);
-}
-
 const char *jbd2_dev_to_name(dev_t device)
 {
 	int	i = hash_32(device, CACHE_SIZE_BITS);
@@ -2475,7 +2470,7 @@ const char *jbd2_dev_to_name(dev_t device)
 			spin_unlock(&devname_cache_lock);
 			return ret;
 		}
-		call_rcu(&devcache[i]->rcu, free_devcache);
+		kfree_rcu(devcache[i], rcu);
 	}
 	devcache[i] = new_dev;
 	devcache[i]->device = device;
