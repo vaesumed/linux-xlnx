@@ -163,6 +163,11 @@ static struct samsung_keypad_platdata smdkv310_keypad_data __initdata = {
 	.cols		= 8,
 };
 
+static struct platform_device smdkv310_pcm_device = {
+	.name		= "samsung-smdk-pcm",
+	.id		= -1,
+};
+
 static struct i2c_board_info i2c_devs1[] __initdata = {
 	{I2C_BOARD_INFO("wm8994", 0x1a),},
 };
@@ -186,8 +191,10 @@ static struct platform_device *smdkv310_devices[] __initdata = {
 	&exynos4_device_pd[PD_TV],
 	&exynos4_device_pd[PD_GPS],
 	&exynos4_device_sysmmu,
+	&exynos4_device_pcm0,
 	&samsung_asoc_dma,
 	&smdkv310_smsc911x,
+	&smdkv310_pcm_device,
 };
 
 static void __init smdkv310_smsc911x_init(void)
