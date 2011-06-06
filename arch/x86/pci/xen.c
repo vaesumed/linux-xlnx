@@ -112,23 +112,10 @@ static int xen_register_pirq(u32 gsi, int triggering)
 	if (!xen_pv_domain())
 		return -1;
 
-	if (triggering == ACPI_EDGE_SENSITIVE) {
-		shareable = 0;
-		name = "ioapic-edge";
-	} else {
-		shareable = 1;
-		name = "ioapic-level";
-	}
 
 	pirq = xen_allocate_pirq_gsi(gsi);
 	if (pirq < 0)
 		goto out;
-
-	irq = xen_bind_pirq_gsi_to_irq(gsi, pirq, shareable, name);
-	if (irq < 0)
-		goto out;
-
-	printk(KERN_DEBUG "xen: --> pirq=%d -> irq=%d\n", pirq, irq);
 
 	map_irq.domid = DOMID_SELF;
 	map_irq.type = MAP_PIRQ_TYPE_GSI;
@@ -140,6 +127,20 @@ static int xen_register_pirq(u32 gsi, int triggering)
 		printk(KERN_WARNING "xen map irq failed %d\n", rc);
 		return -1;
 	}
+
+	if (triggering == ACPI_EDGE_SENSITIVE) {
+		shareable = 0;
+		name = "ioapic-edge";
+	} else {
+		shareable = 1;
+		name = "ioapic-level";
+	}
+
+	irq = xen_bind_pirq_gsi_to_irq(gsi, pirq, shareable, name);
+	if (irq < 0)
+		goto out;
+
+	printk(KERN_DEBUG "xen: --> pirq=%d -> irq=%d\n", pirq, irq);
 
 out:
 	return irq;
