@@ -484,6 +484,57 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 
 #endif /* #ifdef CONFIG_SMP */
 
+#ifndef CONFIG_64BIT
+
+/*
+ * Wrapper function to allow smp_call_function_single() to invoke RCU
+ * core processing on some other CPU.
+ */
+static void invoke_rcu_core_remote(void *unused)
+{
+	invoke_rcu_core();
+}
+
+/*
+ * Check a CPU to see if it is online, in dyntick-idle mode, and
+ * in danger of being too far behind the current grace period.
+ * If so, wake it up so as to make it catch up to the current
+ * grace period.  On a 32-bit system running through 500 grace
+ * periods per second, a given CPU would be awakened about once
+ * every 50 days.  On a 64-bit system, a given CPU would be
+ * awakened about every 500 million years, so we don't bother
+ * in that case.  If you happen to be manufacturing an extremely
+ * durable 64-bit SMP computer system, obtain a patch from the
+ * RCU maintainer.
+ */
+static void rcu_dyntick_kick_cpu(struct rcu_state *rsp)
+{
+	int cpu;
+	struct rcu_data *rdp;
+
+	cpu = rsp->dyntick_ovf_cpu;
+	rdp = per_cpu_ptr(rsp->rda, cpu);
+	if (cpu_online(cpu) && ULONG_CMP_LT(rsp->completed, rdp->completed)) {
+		if (smp_processor_id() == cpu)
+			invoke_rcu_core();
+		else
+			smp_call_function_single(cpu, invoke_rcu_core_remote,
+						 NULL, 1);
+	}
+	cpu = cpumask_next(cpu, cpu_online_mask);
+	if (cpu >= NR_CPUS)
+		cpu = cpumask_first(cpu_online_mask);
+	rsp->dyntick_ovf_cpu = cpu;
+}
+
+#else /* #ifndef CONFIG_64BIT */
+
+static void rcu_dyntick_kick_cpu(struct rcu_state *rsp)
+{
+}
+
+#endif /* #else #ifndef CONFIG_64BIT */
+
 #else /* #ifdef CONFIG_NO_HZ */
 
 #ifdef CONFIG_SMP
@@ -499,6 +550,10 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 }
 
 #endif /* #ifdef CONFIG_SMP */
+
+static void rcu_dyntick_kick_cpu(struct rcu_state *rsp)
+{
+}
 
 #endif /* #else #ifdef CONFIG_NO_HZ */
 
@@ -833,6 +888,7 @@ rcu_start_gp(struct rcu_state *rsp, unsigned long flags)
 	rsp->signaled = RCU_GP_INIT; /* Hold off force_quiescent_state. */
 	rsp->jiffies_force_qs = jiffies + RCU_JIFFIES_TILL_FORCE_QS;
 	record_gp_stall_check_time(rsp);
+	rcu_dyntick_kick_cpu(rsp);
 
 	/* Special-case the common single-level case. */
 	if (NUM_RCU_NODES == 1) {
