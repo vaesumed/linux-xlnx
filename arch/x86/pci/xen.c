@@ -405,8 +405,11 @@ static __init void xen_setup_acpi_sci(void)
 	return;
 }
 #endif
-static int __init pci_xen_initial_domain(void)
+
+int __init pci_xen_initial_domain(void)
 {
+	int pirq, irq;
+
 #ifdef CONFIG_PCI_MSI
 	x86_msi.setup_msi_irqs = xen_initdom_setup_msi_irqs;
 	x86_msi.teardown_msi_irq = xen_teardown_msi_irq;
@@ -415,15 +418,6 @@ static int __init pci_xen_initial_domain(void)
 	xen_setup_acpi_sci();
 	__acpi_register_gsi = acpi_register_gsi_xen;
 #endif
-	return 0;
-}
-
-void __init xen_setup_pirqs(void)
-{
-	int pirq, irq;
-
-	pci_xen_initial_domain();
-
 	if (0 == nr_ioapics) {
 		for (irq = 0; irq < NR_IRQS_LEGACY; irq++) {
 			pirq = xen_allocate_pirq_gsi(irq);
@@ -432,7 +426,7 @@ void __init xen_setup_pirqs(void)
 				break;
 			irq = xen_bind_pirq_gsi_to_irq(irq, pirq, 0, "xt-pic");
 		}
-		return;
+		return 0;
 	}
 #ifdef CONFIG_ACPI
 	/* Pre-allocate legacy irqs */
@@ -446,6 +440,7 @@ void __init xen_setup_pirqs(void)
 			trigger ? ACPI_LEVEL_SENSITIVE : ACPI_EDGE_SENSITIVE, true);
 	}
 #endif
+	return 0;
 }
 
 struct xen_device_domain_owner {
