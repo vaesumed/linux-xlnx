@@ -101,6 +101,7 @@ static int acpi_register_gsi_xen_hvm(struct device *dev, u32 gsi,
 #endif
 
 #ifdef CONFIG_XEN_DOM0
+#ifdef CONFIG_ACPI
 static int xen_register_pirq(u32 gsi, int triggering)
 {
 	int rc, pirq, irq = -1;
@@ -177,6 +178,7 @@ static int acpi_register_gsi_xen(struct device *dev, u32 gsi,
 {
 	return xen_register_gsi(gsi, trigger, polarity);
 }
+#endif
 #endif
 
 #if defined(CONFIG_PCI_MSI)
@@ -407,6 +409,7 @@ int __init pci_xen_hvm_init(void)
 }
 
 #ifdef CONFIG_XEN_DOM0
+#ifdef CONFIG_ACPI
 static __init void xen_setup_acpi_sci(void)
 {
 	int rc;
@@ -433,16 +436,17 @@ static __init void xen_setup_acpi_sci(void)
 
 	return;
 }
-
+#endif
 static int __init pci_xen_initial_domain(void)
 {
 #ifdef CONFIG_PCI_MSI
 	x86_msi.setup_msi_irqs = xen_initdom_setup_msi_irqs;
 	x86_msi.teardown_msi_irq = xen_teardown_msi_irq;
 #endif
+#ifdef CONFIG_ACPI
 	xen_setup_acpi_sci();
 	__acpi_register_gsi = acpi_register_gsi_xen;
-
+#endif
 	return 0;
 }
 
@@ -462,7 +466,7 @@ void __init xen_setup_pirqs(void)
 		}
 		return;
 	}
-
+#ifdef CONFIG_ACPI
 	/* Pre-allocate legacy irqs */
 	for (irq = 0; irq < NR_IRQS_LEGACY; irq++) {
 		int trigger, polarity;
@@ -473,6 +477,7 @@ void __init xen_setup_pirqs(void)
 		xen_register_pirq(irq,
 			trigger ? ACPI_LEVEL_SENSITIVE : ACPI_EDGE_SENSITIVE);
 	}
+#endif
 }
 
 struct xen_device_domain_owner {
