@@ -666,10 +666,8 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 	u32 stripe_unit;
 
 	if (!pnfs_generic_pg_test(pgio, prev, req))
-		return 0;
+		return false;
 
-	if (!pgio->pg_lseg)
-		return 1;
 	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
 	r_stripe = (u64)req->wb_index << PAGE_CACHE_SHIFT;
 	stripe_unit = FILELAYOUT_LSEG(pgio->pg_lseg)->stripe_unit;
