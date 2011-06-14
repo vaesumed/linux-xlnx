@@ -264,6 +264,7 @@ static void __init exynos4_timer_resources(void)
 	clk_enable(timerclk);
 
 	tmpdev.id = 2;
+	tmpdev.dev.init_name = "s3c24xx-pwm.2";
 	tin2 = clk_get(&tmpdev.dev, "pwm-tin");
 	if (IS_ERR(tin2))
 		panic("failed to get pwm-tin2 clock for system timer");
@@ -274,6 +275,7 @@ static void __init exynos4_timer_resources(void)
 	clk_enable(tin2);
 
 	tmpdev.id = 4;
+	tmpdev.dev.init_name = "s3c24xx-pwm.4";
 	tin4 = clk_get(&tmpdev.dev, "pwm-tin");
 	if (IS_ERR(tin4))
 		panic("failed to get pwm-tin4 clock for system timer");
