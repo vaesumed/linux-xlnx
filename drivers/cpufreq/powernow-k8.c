@@ -1079,8 +1079,10 @@ static int transition_frequency_fidvid(struct powernow_k8_data *data,
 	}
 
 	res = transition_fid_vid(data, fid, vid);
-	freqs.new = find_khz_freq_from_fid(data->currfid);
+	if (res)
+		return res;
 
+	freqs.new = find_khz_freq_from_fid(data->currfid);
 	for_each_cpu(i, data->available_cores) {
 		freqs.cpu = i;
 		cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
@@ -1112,6 +1114,9 @@ static int transition_frequency_pstate(struct powernow_k8_data *data,
 	}
 
 	res = transition_pstate(data, pstate);
+	if (res)
+		return res;
+
 	freqs.new = find_khz_freq_from_pstate(data->powernow_table, pstate);
 
 	for_each_cpu(i, data->available_cores) {
