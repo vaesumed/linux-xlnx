@@ -634,14 +634,16 @@ _pnfs_return_layout(struct inode *ino)
 
 	spin_lock(&ino->i_lock);
 	lo = nfsi->layout;
-	if (!lo || !mark_matching_lsegs_invalid(lo, &tmp_list, NULL)) {
+	if (!lo) {
 		spin_unlock(&ino->i_lock);
-		dprintk("%s: no layout segments to return\n", __func__);
-		goto out;
+		dprintk("%s: no layout to return\n", __func__);
+		return status;
 	}
 	stateid = nfsi->layout->plh_stateid;
 	/* Reference matched in nfs4_layoutreturn_release */
 	get_layout_hdr(lo);
+	mark_matching_lsegs_invalid(lo, &tmp_list, NULL);
+	lo->plh_block_lgets++;
 	spin_unlock(&ino->i_lock);
 	pnfs_free_lseg_list(&tmp_list);
 
@@ -650,6 +652,9 @@ _pnfs_return_layout(struct inode *ino)
 	lrp = kzalloc(sizeof(*lrp), GFP_KERNEL);
 	if (unlikely(lrp == NULL)) {
 		status = -ENOMEM;
+		set_bit(NFS_LAYOUT_RW_FAILED, &lo->plh_flags);
+		set_bit(NFS_LAYOUT_RO_FAILED, &lo->plh_flags);
+		put_layout_hdr(lo);
 		goto out;
 	}
 
@@ -887,7 +892,7 @@ pnfs_find_lseg(struct pnfs_layout_hdr *lo,
 			ret = get_lseg(lseg);
 			break;
 		}
-		if (cmp_layout(range, &lseg->pls_range) > 0)
+		if (lseg->pls_range.offset > range->offset)
 			break;
 	}
 
