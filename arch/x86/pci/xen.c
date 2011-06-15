@@ -377,7 +377,6 @@ int __init pci_xen_hvm_init(void)
 }
 
 #ifdef CONFIG_XEN_DOM0
-#ifdef CONFIG_ACPI
 static __init void xen_setup_acpi_sci(void)
 {
 	int rc;
@@ -404,7 +403,6 @@ static __init void xen_setup_acpi_sci(void)
 
 	return;
 }
-#endif
 
 int __init pci_xen_initial_domain(void)
 {
@@ -414,7 +412,6 @@ int __init pci_xen_initial_domain(void)
 	x86_msi.setup_msi_irqs = xen_initdom_setup_msi_irqs;
 	x86_msi.teardown_msi_irq = xen_teardown_msi_irq;
 #endif
-#ifdef CONFIG_ACPI
 	xen_setup_acpi_sci();
 	__acpi_register_gsi = acpi_register_gsi_xen;
 	/* Pre-allocate legacy irqs */
@@ -427,7 +424,6 @@ int __init pci_xen_initial_domain(void)
 		xen_register_pirq(irq,
 			trigger ? ACPI_LEVEL_SENSITIVE : ACPI_EDGE_SENSITIVE, true);
 	}
-#endif
 	if (0 == nr_ioapics) {
 		for (irq = 0; irq < NR_IRQS_LEGACY; irq++) {
 			pirq = xen_allocate_pirq_gsi(irq);
