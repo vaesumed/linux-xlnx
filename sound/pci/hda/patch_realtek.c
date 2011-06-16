@@ -3224,6 +3224,7 @@ static int alc_build_controls(struct hda_codec *codec)
 	}
 	if (spec->multiout.dig_out_nid) {
 		err = snd_hda_create_spdif_out_ctls(codec,
+						    spec->multiout.dig_out_nid,
 						    spec->multiout.dig_out_nid);
 		if (err < 0)
 			return err;
@@ -13316,9 +13317,8 @@ static void alc268_acer_lc_setup(struct hda_codec *codec)
 	struct alc_spec *spec = codec->spec;
 	spec->autocfg.hp_pins[0] = 0x15;
 	spec->autocfg.speaker_pins[0] = 0x14;
-	spec->automute_mixer_nid[0] = 0x0f;
 	spec->automute = 1;
-	spec->automute_mode = ALC_AUTOMUTE_MIXER;
+	spec->automute_mode = ALC_AUTOMUTE_AMP;
 	spec->ext_mic.pin = 0x18;
 	spec->ext_mic.mux_idx = 0;
 	spec->int_mic.pin = 0x12;
