@@ -480,10 +480,6 @@ static void atmel_nand_hwctl(struct mtd_info *mtd, int mode)
 	}
 }
 
-#ifdef CONFIG_MTD_CMDLINE_PARTS
-static const char *part_probes[] = { "cmdlinepart", NULL };
-#endif
-
 /*
  * Probe for the NAND device.
  */
@@ -495,8 +491,6 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 	struct resource *regs;
 	struct resource *mem;
 	int res;
-	struct mtd_partition *partitions = NULL;
-	int num_partitions = 0;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!mem) {
@@ -582,7 +576,7 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 
 	if (on_flash_bbt) {
 		printk(KERN_INFO "atmel_nand: Use On Flash BBT\n");
-		nand_chip->options |= NAND_USE_FLASH_BBT;
+		nand_chip->bbt_options |= NAND_BBT_USE_FLASH;
 	}
 
 	if (!cpu_has_dma())
@@ -654,27 +648,12 @@ static int __init atmel_nand_probe(struct platform_device *pdev)
 		goto err_scan_tail;
 	}
 
-#ifdef CONFIG_MTD_CMDLINE_PARTS
 	mtd->name = "atmel_nand";
-	num_partitions = parse_mtd_partitions(mtd, part_probes,
-					      &partitions, 0);
-#endif
-	if (num_partitions <= 0 && host->board->partition_info)
-		partitions = host->board->partition_info(mtd->size,
-							 &num_partitions);
-
-	if ((!partitions) || (num_partitions == 0)) {
-		printk(KERN_ERR "atmel_nand: No partitions defined, or unsupported device.\n");
-		res = -ENXIO;
-		goto err_no_partitions;
-	}
-
-	res = mtd_device_register(mtd, partitions, num_partitions);
+	res = mtd_device_parse_register(mtd, NULL, 0,
+			host->board->parts, host->board->num_parts);
 	if (!res)
 		return res;
 
-err_no_partitions:
-	nand_release(mtd);
 err_scan_tail:
 err_scan_ident:
 err_no_card:

@@ -94,8 +94,6 @@
 #define P4e_s(a)	(TF(a & NAND_Ecc_P4e)		<< 0)
 #define P4o_s(a)	(TF(a & NAND_Ecc_P4o)		<< 1)
 
-static const char *part_probes[] = { "cmdlinepart", NULL };
-
 /* oob info generated runtime depending on ecc algorithm and layout selected */
 static struct nand_ecclayout omap_oobinfo;
 /* Define some generic bad / good block scan pattern which are used
@@ -114,7 +112,6 @@ struct omap_nand_info {
 	struct nand_hw_control		controller;
 	struct omap_nand_platform_data	*pdata;
 	struct mtd_info			mtd;
-	struct mtd_partition		*parts;
 	struct nand_chip		nand;
 	struct platform_device		*pdev;
 
@@ -1103,13 +1100,8 @@ static int __devinit omap_nand_probe(struct platform_device *pdev)
 		goto out_release_mem_region;
 	}
 
-	err = parse_mtd_partitions(&info->mtd, part_probes, &info->parts, 0);
-	if (err > 0)
-		mtd_device_register(&info->mtd, info->parts, err);
-	else if (pdata->parts)
-		mtd_device_register(&info->mtd, pdata->parts, pdata->nr_parts);
-	else
-		mtd_device_register(&info->mtd, NULL, 0);
+	mtd_device_parse_register(&info->mtd, NULL, 0,
+			pdata->parts, pdata->nr_parts);
 
 	platform_set_drvdata(pdev, &info->mtd);
 

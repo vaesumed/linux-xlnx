@@ -219,27 +219,15 @@ typedef enum {
 #define NAND_CHIPOPTIONS_MSK	(0x0000ffff & ~NAND_NO_AUTOINCR)
 
 /* Non chip related options */
-/*
- * Use a flash based bad block table. OOB identifier is saved in OOB area.
- * This option is passed to the default bad block table function.
- */
-#define NAND_USE_FLASH_BBT	0x00010000
 /* This option skips the bbt scan during initialization. */
-#define NAND_SKIP_BBTSCAN	0x00020000
+#define NAND_SKIP_BBTSCAN	0x00010000
 /*
  * This option is defined if the board driver allocates its own buffers
  * (e.g. because it needs them DMA-coherent).
  */
-#define NAND_OWN_BUFFERS	0x00040000
+#define NAND_OWN_BUFFERS	0x00020000
 /* Chip may not exist, so silence any errors in scan */
-#define NAND_SCAN_SILENT_NODEV	0x00080000
-/*
- * If passed additionally to NAND_USE_FLASH_BBT then BBT code will not touch
- * the OOB area.
- */
-#define NAND_USE_FLASH_BBT_NO_OOB	0x00800000
-/* Create an empty BBT with no vendor information if the BBT is available */
-#define NAND_CREATE_EMPTY_BBT		0x01000000
+#define NAND_SCAN_SILENT_NODEV	0x00040000
 
 /* Options set by nand scan */
 /* Nand scan has allocated controller struct */
@@ -449,6 +437,9 @@ struct nand_buffers {
  * @options:		[BOARDSPECIFIC] various chip options. They can partly
  *			be set to inform nand_scan about special functionality.
  *			See the defines for further explanation.
+ * @bbt_options:	[INTERN] bad block specific options. All options used
+ *			here must come from bbm.h. By default, these options
+ *			will be copied to the appropriate nand_bbt_descr's.
  * @badblockpos:	[INTERN] position of the bad block marker in the oob
  *			area.
  * @badblockbits:	[INTERN] number of bits to left-shift the bad block
@@ -509,6 +500,7 @@ struct nand_chip {
 
 	int chip_delay;
 	unsigned int options;
+	unsigned int bbt_options;
 
 	int page_shift;
 	int phys_erase_shift;
@@ -625,8 +617,6 @@ struct platform_nand_chip {
 	int chip_delay;
 	unsigned int options;
 	const char **part_probe_types;
-	void (*set_parts)(uint64_t size, struct platform_nand_chip *chip);
-	void *priv;
 };
 
 /* Keep gcc happy */
