@@ -371,6 +371,10 @@ struct rcu_state {
 						/*  was running. */
 	unsigned long gpnum;			/* Current gp number. */
 	unsigned long completed;		/* # of last completed gp. */
+#ifdef CONFIG_NO_HZ
+	int dyntick_ovf_cpu;			/* Next CPU to poke if in */
+						/*  danger of GP overflow. */
+#endif /* #ifdef CONFIG_NO_HZ */
 
 	/* End of fields guarded by root rcu_node's lock. */
 
