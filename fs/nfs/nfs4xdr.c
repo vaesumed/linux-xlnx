@@ -255,7 +255,7 @@ static int nfs4_stat_to_errno(int);
 #define decode_fs_locations_maxsz \
 				(0)
 #define encode_secinfo_maxsz	(op_encode_hdr_maxsz + nfs4_name_maxsz)
-#define decode_secinfo_maxsz	(op_decode_hdr_maxsz + 4 + (NFS_MAX_SECFLAVORS * (16 + GSS_OID_MAX_LEN)))
+#define decode_secinfo_maxsz	(op_decode_hdr_maxsz + 1 + ((NFS_MAX_SECFLAVORS * (16 + GSS_OID_MAX_LEN)) / 4))
 
 #if defined(CONFIG_NFS_V4_1)
 #define NFS4_MAX_MACHINE_NAME_LEN (64)
@@ -343,6 +343,14 @@ static int nfs4_stat_to_errno(int);
 				1 /* FIXME: opaque lrf_body always empty at the moment */)
 #define decode_layoutreturn_maxsz (op_decode_hdr_maxsz + \
 				1 + decode_stateid_maxsz)
+#define encode_secinfo_no_name_maxsz (op_encode_hdr_maxsz + 1)
+#define decode_secinfo_no_name_maxsz decode_secinfo_maxsz
+#define encode_test_stateid_maxsz	(op_encode_hdr_maxsz + 2 + \
+					 XDR_QUADLEN(NFS4_STATEID_SIZE))
+#define decode_test_stateid_maxsz	(op_decode_hdr_maxsz + 2 + 1)
+#define encode_free_stateid_maxsz	(op_encode_hdr_maxsz + 1 + \
+					 XDR_QUADLEN(NFS4_STATEID_SIZE))
+#define decode_free_stateid_maxsz	(op_decode_hdr_maxsz + 1)
 #else /* CONFIG_NFS_V4_1 */
 #define encode_sequence_maxsz	0
 #define decode_sequence_maxsz	0
@@ -772,6 +780,26 @@ static int nfs4_stat_to_errno(int);
 				decode_sequence_maxsz + \
 				decode_putfh_maxsz + \
 				decode_layoutreturn_maxsz)
+#define NFS4_enc_secinfo_no_name_sz	(compound_encode_hdr_maxsz + \
+					encode_sequence_maxsz + \
+					encode_putrootfh_maxsz +\
+					encode_secinfo_no_name_maxsz)
+#define NFS4_dec_secinfo_no_name_sz	(compound_decode_hdr_maxsz + \
+					decode_sequence_maxsz + \
+					decode_putrootfh_maxsz + \
+					decode_secinfo_no_name_maxsz)
+#define NFS4_enc_test_stateid_sz	(compound_encode_hdr_maxsz + \
+					 encode_sequence_maxsz + \
+					 encode_test_stateid_maxsz)
+#define NFS4_dec_test_stateid_sz	(compound_decode_hdr_maxsz + \
+					 decode_sequence_maxsz + \
+					 decode_test_stateid_maxsz)
+#define NFS4_enc_free_stateid_sz	(compound_encode_hdr_maxsz + \
+					 encode_sequence_maxsz + \
+					 encode_free_stateid_maxsz)
+#define NFS4_dec_free_stateid_sz	(compound_decode_hdr_maxsz + \
+					 decode_sequence_maxsz + \
+					 decode_free_stateid_maxsz)
 
 const u32 nfs41_maxwrite_overhead = ((RPC_MAX_HEADER_WITH_AUTH +
 				      compound_encode_hdr_maxsz +
@@ -1725,7 +1753,7 @@ static void encode_create_session(struct xdr_stream *xdr,
 	*p++ = cpu_to_be32(args->flags);			/*flags */
 
 	/* Fore Channel */
-	*p++ = cpu_to_be32(args->fc_attrs.headerpadsz);	/* header padding size */
+	*p++ = cpu_to_be32(0);				/* header padding size */
 	*p++ = cpu_to_be32(args->fc_attrs.max_rqst_sz);	/* max req size */
 	*p++ = cpu_to_be32(args->fc_attrs.max_resp_sz);	/* max resp size */
 	*p++ = cpu_to_be32(max_resp_sz_cached);		/* Max resp sz cached */
@@ -1734,7 +1762,7 @@ static void encode_create_session(struct xdr_stream *xdr,
 	*p++ = cpu_to_be32(0);				/* rdmachannel_attrs */
 
 	/* Back Channel */
-	*p++ = cpu_to_be32(args->fc_attrs.headerpadsz);	/* header padding size */
+	*p++ = cpu_to_be32(0);				/* header padding size */
 	*p++ = cpu_to_be32(args->bc_attrs.max_rqst_sz);	/* max req size */
 	*p++ = cpu_to_be32(args->bc_attrs.max_resp_sz);	/* max resp size */
 	*p++ = cpu_to_be32(args->bc_attrs.max_resp_sz_cached);	/* Max resp sz cached */
@@ -1937,6 +1965,46 @@ encode_layoutreturn(struct xdr_stream *xdr,
 	}
 	hdr->nops++;
 	hdr->replen += decode_layoutreturn_maxsz;
+}
+
+static int
+encode_secinfo_no_name(struct xdr_stream *xdr,
+		       const struct nfs41_secinfo_no_name_args *args,
+		       struct compound_hdr *hdr)
+{
+	__be32 *p;
+	p = reserve_space(xdr, 8);
+	*p++ = cpu_to_be32(OP_SECINFO_NO_NAME);
+	*p++ = cpu_to_be32(args->style);
+	hdr->nops++;
+	hdr->replen += decode_secinfo_no_name_maxsz;
+	return 0;
+}
+
+static void encode_test_stateid(struct xdr_stream *xdr,
+				struct nfs41_test_stateid_args *args,
+				struct compound_hdr *hdr)
+{
+	__be32 *p;
+
+	p = reserve_space(xdr, 8 + NFS4_STATEID_SIZE);
+	*p++ = cpu_to_be32(OP_TEST_STATEID);
+	*p++ = cpu_to_be32(1);
+	xdr_encode_opaque_fixed(p, args->stateid->data, NFS4_STATEID_SIZE);
+	hdr->nops++;
+	hdr->replen += decode_test_stateid_maxsz;
+}
+
+static void encode_free_stateid(struct xdr_stream *xdr,
+				struct nfs41_free_stateid_args *args,
+				struct compound_hdr *hdr)
+{
+	__be32 *p;
+	p = reserve_space(xdr, 4 + NFS4_STATEID_SIZE);
+	*p++ = cpu_to_be32(OP_FREE_STATEID);
+	xdr_encode_opaque_fixed(p, args->stateid->data, NFS4_STATEID_SIZE);
+	hdr->nops++;
+	hdr->replen += decode_free_stateid_maxsz;
 }
 #endif /* CONFIG_NFS_V4_1 */
 
@@ -2788,6 +2856,59 @@ static void nfs4_xdr_enc_layoutreturn(struct rpc_rqst *req,
 	encode_sequence(xdr, &args->seq_args, &hdr);
 	encode_putfh(xdr, NFS_FH(args->inode), &hdr);
 	encode_layoutreturn(xdr, args, &hdr);
+	encode_nops(&hdr);
+}
+
+/*
+ * Encode SECINFO_NO_NAME request
+ */
+static int nfs4_xdr_enc_secinfo_no_name(struct rpc_rqst *req,
+					struct xdr_stream *xdr,
+					struct nfs41_secinfo_no_name_args *args)
+{
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	encode_compound_hdr(xdr, req, &hdr);
+	encode_sequence(xdr, &args->seq_args, &hdr);
+	encode_putrootfh(xdr, &hdr);
+	encode_secinfo_no_name(xdr, args, &hdr);
+	encode_nops(&hdr);
+	return 0;
+}
+
+/*
+ *  Encode TEST_STATEID request
+ */
+static void nfs4_xdr_enc_test_stateid(struct rpc_rqst *req,
+				      struct xdr_stream *xdr,
+				      struct nfs41_test_stateid_args *args)
+{
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	encode_compound_hdr(xdr, req, &hdr);
+	encode_sequence(xdr, &args->seq_args, &hdr);
+	encode_test_stateid(xdr, args, &hdr);
+	encode_nops(&hdr);
+}
+
+/*
+ *  Encode FREE_STATEID request
+ */
+static void nfs4_xdr_enc_free_stateid(struct rpc_rqst *req,
+				     struct xdr_stream *xdr,
+				     struct nfs41_free_stateid_args *args)
+{
+	struct compound_hdr hdr = {
+		.minorversion = nfs4_xdr_minorversion(&args->seq_args),
+	};
+
+	encode_compound_hdr(xdr, req, &hdr);
+	encode_sequence(xdr, &args->seq_args, &hdr);
+	encode_free_stateid(xdr, args, &hdr);
 	encode_nops(&hdr);
 }
 #endif /* CONFIG_NFS_V4_1 */
@@ -4977,10 +5098,16 @@ static int decode_exchange_id(struct xdr_stream *xdr,
 	if (unlikely(status))
 		return status;
 
-	/* Throw away server_scope */
+	/* Save server_scope */
 	status = decode_opaque_inline(xdr, &dummy, &dummy_str);
 	if (unlikely(status))
 		return status;
+
+	if (unlikely(dummy > NFS4_OPAQUE_LIMIT))
+		return -EIO;
+
+	memcpy(res->server_scope->server_scope, dummy_str, dummy);
+	res->server_scope->server_scope_sz = dummy;
 
 	/* Throw away Implementation id array */
 	status = decode_opaque_inline(xdr, &dummy, &dummy_str);
@@ -4997,12 +5124,14 @@ static int decode_chan_attrs(struct xdr_stream *xdr,
 			     struct nfs4_channel_attrs *attrs)
 {
 	__be32 *p;
-	u32 nr_attrs;
+	u32 nr_attrs, val;
 
 	p = xdr_inline_decode(xdr, 28);
 	if (unlikely(!p))
 		goto out_overflow;
-	attrs->headerpadsz = be32_to_cpup(p++);
+	val = be32_to_cpup(p++);	/* headerpadsz */
+	if (val)
+		return -EINVAL;		/* no support for header padding yet */
 	attrs->max_rqst_sz = be32_to_cpup(p++);
 	attrs->max_resp_sz = be32_to_cpup(p++);
 	attrs->max_resp_sz_cached = be32_to_cpup(p++);
@@ -5316,6 +5445,55 @@ static int decode_layoutcommit(struct xdr_stream *xdr,
 			goto out_overflow;
 	}
 	return 0;
+out_overflow:
+	print_overflow_msg(__func__, xdr);
+	return -EIO;
+}
+
+static int decode_test_stateid(struct xdr_stream *xdr,
+			       struct nfs41_test_stateid_res *res)
+{
+	__be32 *p;
+	int status;
+	int num_res;
+
+	status = decode_op_hdr(xdr, OP_TEST_STATEID);
+	if (status)
+		return status;
+
+	p = xdr_inline_decode(xdr, 4);
+	if (unlikely(!p))
+		goto out_overflow;
+	num_res = be32_to_cpup(p++);
+	if (num_res != 1)
+		goto out;
+
+	p = xdr_inline_decode(xdr, 4);
+	if (unlikely(!p))
+		goto out_overflow;
+	res->status = be32_to_cpup(p++);
+	return res->status;
+out_overflow:
+	print_overflow_msg(__func__, xdr);
+out:
+	return -EIO;
+}
+
+static int decode_free_stateid(struct xdr_stream *xdr,
+			       struct nfs41_free_stateid_res *res)
+{
+	__be32 *p;
+	int status;
+
+	status = decode_op_hdr(xdr, OP_FREE_STATEID);
+	if (status)
+		return status;
+
+	p = xdr_inline_decode(xdr, 4);
+	if (unlikely(!p))
+		goto out_overflow;
+	res->status = be32_to_cpup(p++);
+	return res->status;
 out_overflow:
 	print_overflow_msg(__func__, xdr);
 	return -EIO;
@@ -6459,6 +6637,72 @@ static int nfs4_xdr_dec_layoutcommit(struct rpc_rqst *rqstp,
 out:
 	return status;
 }
+
+/*
+ * Decode SECINFO_NO_NAME response
+ */
+static int nfs4_xdr_dec_secinfo_no_name(struct rpc_rqst *rqstp,
+					struct xdr_stream *xdr,
+					struct nfs4_secinfo_res *res)
+{
+	struct compound_hdr hdr;
+	int status;
+
+	status = decode_compound_hdr(xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_putrootfh(xdr);
+	if (status)
+		goto out;
+	status = decode_secinfo(xdr, res);
+out:
+	return status;
+}
+
+/*
+ * Decode TEST_STATEID response
+ */
+static int nfs4_xdr_dec_test_stateid(struct rpc_rqst *rqstp,
+				     struct xdr_stream *xdr,
+				     struct nfs41_test_stateid_res *res)
+{
+	struct compound_hdr hdr;
+	int status;
+
+	status = decode_compound_hdr(xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_test_stateid(xdr, res);
+out:
+	return status;
+}
+
+/*
+ * Decode FREE_STATEID response
+ */
+static int nfs4_xdr_dec_free_stateid(struct rpc_rqst *rqstp,
+				     struct xdr_stream *xdr,
+				     struct nfs41_free_stateid_res *res)
+{
+	struct compound_hdr hdr;
+	int status;
+
+	status = decode_compound_hdr(xdr, &hdr);
+	if (status)
+		goto out;
+	status = decode_sequence(xdr, &res->seq_res, rqstp);
+	if (status)
+		goto out;
+	status = decode_free_stateid(xdr, res);
+out:
+	return status;
+}
 #endif /* CONFIG_NFS_V4_1 */
 
 /**
@@ -6661,6 +6905,9 @@ struct rpc_procinfo	nfs4_procedures[] = {
 	PROC(LAYOUTGET,		enc_layoutget,		dec_layoutget),
 	PROC(LAYOUTCOMMIT,	enc_layoutcommit,	dec_layoutcommit),
 	PROC(LAYOUTRETURN,	enc_layoutreturn,	dec_layoutreturn),
+	PROC(SECINFO_NO_NAME,	enc_secinfo_no_name,	dec_secinfo_no_name),
+	PROC(TEST_STATEID,	enc_test_stateid,	dec_test_stateid),
+	PROC(FREE_STATEID,	enc_free_stateid,	dec_free_stateid),
 #endif /* CONFIG_NFS_V4_1 */
 };
 

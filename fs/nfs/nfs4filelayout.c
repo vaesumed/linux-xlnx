@@ -343,8 +343,7 @@ filelayout_read_pagelist(struct nfs_read_data *data)
 		set_bit(lo_fail_bit(IOMODE_READ), &lseg->pls_layout->plh_flags);
 		return PNFS_NOT_ATTEMPTED;
 	}
-	dprintk("%s USE DS:ip %x %hu\n", __func__,
-		ntohl(ds->ds_ip_addr), ntohs(ds->ds_port));
+	dprintk("%s USE DS: %s\n", __func__, ds->ds_remotestr);
 
 	/* No multipath support. Use first DS */
 	data->ds_clp = ds->ds_clp;
@@ -383,9 +382,9 @@ filelayout_write_pagelist(struct nfs_write_data *data, int sync)
 		set_bit(lo_fail_bit(IOMODE_READ), &lseg->pls_layout->plh_flags);
 		return PNFS_NOT_ATTEMPTED;
 	}
-	dprintk("%s ino %lu sync %d req %Zu@%llu DS:%x:%hu\n", __func__,
+	dprintk("%s ino %lu sync %d req %Zu@%llu DS: %s\n", __func__,
 		data->inode->i_ino, sync, (size_t) data->args.count, offset,
-		ntohl(ds->ds_ip_addr), ntohs(ds->ds_port));
+		ds->ds_remotestr);
 
 	data->write_done_cb = filelayout_write_done_cb;
 	data->ds_clp = ds->ds_clp;
@@ -427,6 +426,14 @@ filelayout_check_layout(struct pnfs_layout_hdr *lo,
 	struct nfs_server *nfss = NFS_SERVER(lo->plh_inode);
 
 	dprintk("--> %s\n", __func__);
+
+	/* FIXME: remove this check when layout segment support is added */
+	if (lgr->range.offset != 0 ||
+	    lgr->range.length != NFS4_MAX_UINT64) {
+		dprintk("%s Only whole file layouts supported. Use MDS i/o\n",
+			__func__);
+		goto out;
+	}
 
 	if (fl->pattern_offset > lgr->range.offset) {
 		dprintk("%s pattern_offset %lld too large\n",
@@ -552,13 +559,18 @@ filelayout_decode_layout(struct pnfs_layout_hdr *flo,
 		__func__, nfl_util, fl->num_fh, fl->first_stripe_index,
 		fl->pattern_offset);
 
-	if (!fl->num_fh)
+	/* Note that a zero value for num_fh is legal for STRIPE_SPARSE.
+	 * Futher checking is done in filelayout_check_layout */
+	if (fl->num_fh < 0 || fl->num_fh >
+	    max(NFS4_PNFS_MAX_STRIPE_CNT, NFS4_PNFS_MAX_MULTI_CNT))
 		goto out_err;
 
-	fl->fh_array = kzalloc(fl->num_fh * sizeof(struct nfs_fh *),
-			       gfp_flags);
-	if (!fl->fh_array)
-		goto out_err;
+	if (fl->num_fh > 0) {
+		fl->fh_array = kzalloc(fl->num_fh * sizeof(struct nfs_fh *),
+				       gfp_flags);
+		if (!fl->fh_array)
+			goto out_err;
+	}
 
 	for (i = 0; i < fl->num_fh; i++) {
 		/* Do we want to use a mempool here? */
@@ -654,7 +666,7 @@ filelayout_alloc_lseg(struct pnfs_layout_hdr *layoutid,
  * return true  : coalesce page
  * return false : don't coalesce page
  */
-bool
+static bool
 filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 		   struct nfs_page *req)
 {
@@ -662,10 +674,8 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 	u32 stripe_unit;
 
 	if (!pnfs_generic_pg_test(pgio, prev, req))
-		return 0;
+		return false;
 
-	if (!pgio->pg_lseg)
-		return 1;
 	p_stripe = (u64)prev->wb_index << PAGE_CACHE_SHIFT;
 	r_stripe = (u64)req->wb_index << PAGE_CACHE_SHIFT;
 	stripe_unit = FILELAYOUT_LSEG(pgio->pg_lseg)->stripe_unit;
@@ -675,6 +685,53 @@ filelayout_pg_test(struct nfs_pageio_descriptor *pgio, struct nfs_page *prev,
 
 	return (p_stripe == r_stripe);
 }
+
+void
+filelayout_pg_init_read(struct nfs_pageio_descriptor *pgio,
+			struct nfs_page *req)
+{
+	BUG_ON(pgio->pg_lseg != NULL);
+
+	pgio->pg_lseg = pnfs_update_layout(pgio->pg_inode,
+					   req->wb_context,
+					   0,
+					   NFS4_MAX_UINT64,
+					   IOMODE_READ,
+					   GFP_KERNEL);
+	/* If no lseg, fall back to read through mds */
+	if (pgio->pg_lseg == NULL)
+		nfs_pageio_init_read_mds(pgio, pgio->pg_inode);
+}
+
+void
+filelayout_pg_init_write(struct nfs_pageio_descriptor *pgio,
+			 struct nfs_page *req)
+{
+	BUG_ON(pgio->pg_lseg != NULL);
+
+	pgio->pg_lseg = pnfs_update_layout(pgio->pg_inode,
+					   req->wb_context,
+					   0,
+					   NFS4_MAX_UINT64,
+					   IOMODE_RW,
+					   GFP_NOFS);
+	/* If no lseg, fall back to write through mds */
+	if (pgio->pg_lseg == NULL)
+		nfs_pageio_init_write_mds(pgio, pgio->pg_inode,
+					  pgio->pg_ioflags);
+}
+
+static const struct nfs_pageio_ops filelayout_pg_read_ops = {
+	.pg_init = filelayout_pg_init_read,
+	.pg_test = filelayout_pg_test,
+	.pg_doio = nfs_generic_pg_readpages,
+};
+
+static const struct nfs_pageio_ops filelayout_pg_write_ops = {
+	.pg_init = filelayout_pg_init_write,
+	.pg_test = filelayout_pg_test,
+	.pg_doio = nfs_generic_pg_writepages,
+};
 
 static bool filelayout_mark_pnfs_commit(struct pnfs_layout_segment *lseg)
 {
@@ -873,7 +930,8 @@ static struct pnfs_layoutdriver_type filelayout_type = {
 	.owner			= THIS_MODULE,
 	.alloc_lseg		= filelayout_alloc_lseg,
 	.free_lseg		= filelayout_free_lseg,
-	.pg_test		= filelayout_pg_test,
+	.pg_read_ops		= &filelayout_pg_read_ops,
+	.pg_write_ops		= &filelayout_pg_write_ops,
 	.mark_pnfs_commit	= filelayout_mark_pnfs_commit,
 	.choose_commit_list	= filelayout_choose_commit_list,
 	.commit_pagelist	= filelayout_commit_pagelist,
