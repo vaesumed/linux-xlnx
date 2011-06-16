@@ -45,7 +45,7 @@
 #define SD1_EN_GPIO (GPIO_PORTB + 25)
 #define OTG_PHY_RESET_GPIO (GPIO_PORTB + 23)
 #define SPI2_SS0 (GPIO_PORTD + 21)
-#define EXPIO_PARENT_INT	(MXC_INTERNAL_IRQS + GPIO_PORTC + 28)
+#define EXPIO_PARENT_INT	gpio_to_irq(IMX_GPIO_NR(3, 28))
 
 static const int mx27pdk_pins[] __initconst = {
 	/* UART1 */
@@ -267,6 +267,8 @@ static const struct imxi2c_platform_data mx27_3ds_i2c0_data __initconst = {
 
 static void __init mx27pdk_init(void)
 {
+	imx27_soc_init();
+
 	mxc_gpio_setup_multiple_pins(mx27pdk_pins, ARRAY_SIZE(mx27pdk_pins),
 		"mx27pdk");
 	mx27_3ds_sdhc1_enable_level_translator();
