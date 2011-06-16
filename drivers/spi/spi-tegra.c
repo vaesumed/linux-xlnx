@@ -498,14 +498,14 @@ static int __init spi_tegra_probe(struct platform_device *pdev)
 		goto err0;
 	}
 
-	if (!request_mem_region(r->start, (r->end - r->start) + 1,
+	if (!request_mem_region(r->start, resource_size(r),
 				dev_name(&pdev->dev))) {
 		ret = -EBUSY;
 		goto err0;
 	}
 
 	tspi->phys = r->start;
-	tspi->base = ioremap(r->start, r->end - r->start + 1);
+	tspi->base = ioremap(r->start, resource_size(r));
 	if (!tspi->base) {
 		dev_err(&pdev->dev, "can't ioremap iomem\n");
 		ret = -ENOMEM;
@@ -546,6 +546,7 @@ static int __init spi_tegra_probe(struct platform_device *pdev)
 	tspi->rx_dma_req.req_sel = spi_tegra_req_sels[pdev->id];
 	tspi->rx_dma_req.dev = tspi;
 
+	master->dev.of_node = pdev->dev.of_node;
 	ret = spi_register_master(master);
 
 	if (ret < 0)
@@ -563,7 +564,7 @@ err3:
 err2:
 	iounmap(tspi->base);
 err1:
-	release_mem_region(r->start, (r->end - r->start) + 1);
+	release_mem_region(r->start, resource_size(r));
 err0:
 	spi_master_put(master);
 	return ret;
@@ -588,17 +589,28 @@ static int __devexit spi_tegra_remove(struct platform_device *pdev)
 	iounmap(tspi->base);
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	release_mem_region(r->start, (r->end - r->start) + 1);
+	release_mem_region(r->start, resource_size(r));
 
 	return 0;
 }
 
 MODULE_ALIAS("platform:spi_tegra");
 
+#ifdef CONFIG_OF
+static struct of_device_id spi_tegra_of_match_table[] __devinitdata = {
+	{ .compatible = "nvidia,tegra250-spi", },
+	{}
+};
+MODULE_DEVICE_TABLE(of, spi_tegra_of_match_table);
+#else /* CONFIG_OF */
+#define spi_tegra_of_match_table NULL
+#endif /* CONFIG_OF */
+
 static struct platform_driver spi_tegra_driver = {
 	.driver = {
 		.name =		"spi_tegra",
 		.owner =	THIS_MODULE,
+		.of_match_table = spi_tegra_of_match_table,
 	},
 	.remove =	__devexit_p(spi_tegra_remove),
 };
