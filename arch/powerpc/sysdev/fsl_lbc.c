@@ -200,6 +200,10 @@ static int __devinit fsl_lbc_ctrl_init(struct fsl_lbc_ctrl *ctrl,
 	if (of_device_is_compatible(node, "fsl,elbc"))
 		clrsetbits_be32(&lbc->lbcr, LBCR_BMT, LBCR_BMTPS);
 
+	/* Set the monitor timeout value to the maximum for erratum A001 */
+	if (of_device_is_compatible(node, "fsl,elbc"))
+		clrsetbits_be32(&lbc->lbcr, LBCR_BMT, LBCR_BMTPS);
+
 	return 0;
 }
 
