@@ -1,5 +1,5 @@
 /*
- *  pca953x.c - 4/8/16 bit I/O ports
+ *  PCA953x 4/8/16 bit I/O ports
  *
  *  Copyright (C) 2005 Ben Gardner <bgardner@wabtec.com>
  *  Copyright (C) 2007 Marvell International Ltd.
@@ -437,7 +437,7 @@ static irqreturn_t pca953x_irq_handler(int irq, void *devid)
 
 	do {
 		level = __ffs(pending);
-		generic_handle_irq(level + chip->irq_base);
+		handle_nested_irq(level + chip->irq_base);
 
 		pending &= ~(1 << level);
 	} while (pending);
@@ -474,15 +474,19 @@ static int pca953x_irq_setup(struct pca953x_chip *chip,
 		 * this purpose.
 		 */
 		chip->irq_stat &= chip->reg_direction;
-		chip->irq_base = pdata->irq_base;
 		mutex_init(&chip->irq_lock);
+
+		chip->irq_base = irq_alloc_descs(-1, pdata->irq_base, chip->gpio_chip.ngpio, -1);
+		if (chip->irq_base < 0)
+			goto out_failed;
 
 		for (lvl = 0; lvl < chip->gpio_chip.ngpio; lvl++) {
 			int irq = lvl + chip->irq_base;
 
+			irq_clear_status_flags(irq, IRQ_NOREQUEST);
 			irq_set_chip_data(irq, chip);
-			irq_set_chip_and_handler(irq, &pca953x_irq_chip,
-						 handle_simple_irq);
+			irq_set_chip(irq, &pca953x_irq_chip);
+			irq_set_nested_thread(irq, true);
 #ifdef CONFIG_ARM
 			set_irq_flags(irq, IRQF_VALID);
 #else
@@ -493,8 +497,7 @@ static int pca953x_irq_setup(struct pca953x_chip *chip,
 		ret = request_threaded_irq(client->irq,
 					   NULL,
 					   pca953x_irq_handler,
-					   IRQF_TRIGGER_RISING |
-					   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					   IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 					   dev_name(&client->dev), chip);
 		if (ret) {
 			dev_err(&client->dev, "failed to request irq %d\n",
