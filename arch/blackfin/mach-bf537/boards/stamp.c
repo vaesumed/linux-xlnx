@@ -533,16 +533,6 @@ static struct flash_platform_data bfin_spi_flash_data = {
 /* SPI flash chip (m25p64) */
 static struct bfin5xx_spi_chip spi_flash_chip_info = {
 	.enable_dma = 0,         /* use dma transfer with this chip*/
-	.bits_per_word = 8,
-};
-#endif
-
-#if defined(CONFIG_BFIN_SPI_ADC) \
-	|| defined(CONFIG_BFIN_SPI_ADC_MODULE)
-/* SPI ADC chip */
-static struct bfin5xx_spi_chip spi_adc_chip_info = {
-	.enable_dma = 1,         /* use dma transfer with this chip*/
-	.bits_per_word = 16,
 };
 #endif
 
@@ -554,28 +544,8 @@ static struct bfin5xx_spi_chip ad1836_spi_chip_info = {
 };
 #endif
 
-#if defined(CONFIG_SND_BF5XX_SOC_AD193X) \
-	|| defined(CONFIG_SND_BF5XX_SOC_AD193X_MODULE)
-static struct bfin5xx_spi_chip ad1938_spi_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 8,
-};
-#endif
-
-#if defined(CONFIG_SND_BF5XX_SOC_ADAV80X) \
-	|| defined(CONFIG_SND_BF5XX_SOC_ADAV80X_MODULE)
-static struct bfin5xx_spi_chip adav801_spi_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 8,
-};
-#endif
-
 #if defined(CONFIG_INPUT_AD714X_SPI) || defined(CONFIG_INPUT_AD714X_SPI_MODULE)
 #include <linux/input/ad714x.h>
-static struct bfin5xx_spi_chip ad7147_spi_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 16,
-};
 
 static struct ad714x_slider_plat ad7147_spi_slider_plat[] = {
 	{
@@ -714,7 +684,6 @@ static unsigned short ad2s1210_platform_data[] = {
 
 static struct bfin5xx_spi_chip ad2s1210_spi_chip_info = {
 	.enable_dma = 0,
-	.bits_per_word = 8,
 };
 #endif
 
@@ -735,7 +704,6 @@ static unsigned short ad7816_platform_data[] = {
 
 static struct bfin5xx_spi_chip ad7816_spi_chip_info = {
 	.enable_dma = 0,
-	.bits_per_word = 8,
 };
 #endif
 
@@ -749,7 +717,6 @@ static unsigned long adt7310_platform_data[3] = {
 
 static struct bfin5xx_spi_chip adt7310_spi_chip_info = {
 	.enable_dma = 0,
-	.bits_per_word = 8,
 };
 #endif
 
@@ -757,11 +724,6 @@ static struct bfin5xx_spi_chip adt7310_spi_chip_info = {
 static unsigned short ad7298_platform_data[] = {
 	GPIO_PF7, /* busy_pin */
 	0,
-};
-
-static struct bfin5xx_spi_chip ad7298_spi_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 16,
 };
 #endif
 
@@ -773,7 +735,6 @@ static unsigned long adt7316_spi_data[2] = {
 
 static struct bfin5xx_spi_chip adt7316_spi_chip_info = {
 	.enable_dma = 0,
-	.bits_per_word = 8,
 };
 #endif
 
@@ -800,18 +761,12 @@ static struct mmc_spi_platform_data bfin_mmc_spi_pdata = {
 
 static struct bfin5xx_spi_chip  mmc_spi_chip_info = {
 	.enable_dma = 0,
-	.bits_per_word = 8,
 	.pio_interrupt = 0,
 };
 #endif
 
 #if defined(CONFIG_TOUCHSCREEN_AD7877) || defined(CONFIG_TOUCHSCREEN_AD7877_MODULE)
 #include <linux/spi/ad7877.h>
-static struct bfin5xx_spi_chip spi_ad7877_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 16,
-};
-
 static const struct ad7877_platform_data bfin_ad7877_ts_info = {
 	.model			= 7877,
 	.vref_delay_usecs	= 50,	/* internal, no capacitor */
@@ -883,31 +838,9 @@ static const struct adxl34x_platform_data adxl34x_info = {
 };
 #endif
 
-#if defined(CONFIG_TOUCHSCREEN_AD7879_SPI) || defined(CONFIG_TOUCHSCREEN_AD7879_SPI_MODULE)
-static struct bfin5xx_spi_chip spi_ad7879_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 16,
-};
-#endif
-
-#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE)
-static struct bfin5xx_spi_chip spidev_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 8,
-};
-#endif
-
-#if defined(CONFIG_FB_BFIN_LQ035Q1) || defined(CONFIG_FB_BFIN_LQ035Q1_MODULE)
-static struct bfin5xx_spi_chip lq035q1_spi_chip_info = {
-	.enable_dma	= 0,
-	.bits_per_word	= 8,
-};
-#endif
-
 #if defined(CONFIG_ENC28J60) || defined(CONFIG_ENC28J60_MODULE)
 static struct bfin5xx_spi_chip enc28j60_spi_chip_info = {
 	.enable_dma	= 1,
-	.bits_per_word	= 8,
 };
 #endif
 
@@ -959,10 +892,6 @@ static inline void adf702x_mac_init(void) {}
 
 #if defined(CONFIG_TOUCHSCREEN_ADS7846) || defined(CONFIG_TOUCHSCREEN_ADS7846_MODULE)
 #include <linux/spi/ads7846.h>
-static struct bfin5xx_spi_chip ad7873_spi_chip_info = {
-	.bits_per_word	= 8,
-};
-
 static int ads7873_get_pendown_state(void)
 {
 	return gpio_get_value(GPIO_PF6);
@@ -1009,21 +938,12 @@ static struct flash_platform_data bfin_spi_dataflash_data = {
 /* DataFlash chip */
 static struct bfin5xx_spi_chip data_flash_chip_info = {
 	.enable_dma = 0,         /* use dma transfer with this chip*/
-	.bits_per_word = 8,
-};
-#endif
-
-#if defined(CONFIG_INPUT_ADXL34X_SPI) || defined(CONFIG_INPUT_ADXL34X_SPI_MODULE)
-static struct bfin5xx_spi_chip spi_adxl34x_chip_info = {
-	.enable_dma = 0,         /* use dma transfer with this chip*/
-	.bits_per_word = 8,
 };
 #endif
 
 #if defined(CONFIG_AD7476) || defined(CONFIG_AD7476_MODULE)
 static struct bfin5xx_spi_chip spi_ad7476_chip_info = {
 	.enable_dma = 0,         /* use dma transfer with this chip*/
-	.bits_per_word = 8,
 };
 #endif
 
@@ -1053,17 +973,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.mode = SPI_MODE_3,
 	},
 #endif
-#if defined(CONFIG_BFIN_SPI_ADC) \
-	|| defined(CONFIG_BFIN_SPI_ADC_MODULE)
-	{
-		.modalias = "bfin_spi_adc", /* Name of spi_driver for this device */
-		.max_speed_hz = 6250000,     /* max spi clock (SCK) speed in HZ */
-		.bus_num = 0, /* Framework bus number */
-		.chip_select = 1, /* Framework chip select. */
-		.platform_data = NULL, /* No spi_driver specific config */
-		.controller_data = &spi_adc_chip_info,
-	},
-#endif
 
 #if defined(CONFIG_SND_BF5XX_SOC_AD183X) \
 	|| defined(CONFIG_SND_BF5XX_SOC_AD183X_MODULE)
@@ -1084,7 +993,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz = 3125000,     /* max spi clock (SCK) speed in HZ */
 		.bus_num = 0,
 		.chip_select = 5,
-		.controller_data = &ad1938_spi_chip_info,
 		.mode = SPI_MODE_3,
 	},
 #endif
@@ -1095,7 +1003,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz = 3125000,     /* max spi clock (SCK) speed in HZ */
 		.bus_num = 0,
 		.chip_select = 1,
-		.controller_data = &adav801_spi_chip_info,
 		.mode = SPI_MODE_3,
 	},
 #endif
@@ -1109,7 +1016,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.chip_select = 5,
 		.mode = SPI_MODE_3,
 		.platform_data = &ad7147_spi_platform_data,
-		.controller_data = &ad7147_spi_chip_info,
 	},
 #endif
 
@@ -1188,7 +1094,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.bus_num = 0,
 		.chip_select = 4,            /* CS, change it for your board */
 		.platform_data = ad7298_platform_data,
-		.controller_data = &ad7298_spi_chip_info,
 		.mode = SPI_MODE_3,
 	},
 #endif
@@ -1225,7 +1130,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz	= 12500000,     /* max spi clock (SCK) speed in HZ */
 		.bus_num	= 0,
 		.chip_select  = 1,
-		.controller_data = &spi_ad7877_chip_info,
 	},
 #endif
 #if defined(CONFIG_TOUCHSCREEN_AD7879_SPI) || defined(CONFIG_TOUCHSCREEN_AD7879_SPI_MODULE)
@@ -1236,7 +1140,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz = 5000000,     /* max spi clock (SCK) speed in HZ */
 		.bus_num = 0,
 		.chip_select = 1,
-		.controller_data = &spi_ad7879_chip_info,
 		.mode = SPI_CPHA | SPI_CPOL,
 	},
 #endif
@@ -1246,7 +1149,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz = 3125000,     /* max spi clock (SCK) speed in HZ */
 		.bus_num = 0,
 		.chip_select = 1,
-		.controller_data = &spidev_chip_info,
 	},
 #endif
 #if defined(CONFIG_FB_BFIN_LQ035Q1) || defined(CONFIG_FB_BFIN_LQ035Q1_MODULE)
@@ -1255,7 +1157,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz = 20000000,     /* max spi clock (SCK) speed in HZ */
 		.bus_num = 0,
 		.chip_select = 2,
-		.controller_data = &lq035q1_spi_chip_info,
 		.mode = SPI_CPHA | SPI_CPOL,
 	},
 #endif
@@ -1278,7 +1179,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.max_speed_hz	= 5000000,    /* max spi clock (SCK) speed in HZ */
 		.bus_num	= 0,
 		.chip_select	= 2,
-		.controller_data = &spi_adxl34x_chip_info,
 		.mode = SPI_MODE_3,
 	},
 #endif
@@ -1300,7 +1200,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.bus_num = 0,
 		.irq = IRQ_PF6,
 		.chip_select = GPIO_PF10 + MAX_CTRL_CS,	/* GPIO controlled SSEL */
-		.controller_data = &ad7873_spi_chip_info,
 		.platform_data = &ad7873_pdata,
 		.mode = SPI_MODE_0,
 	},
