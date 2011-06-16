@@ -405,10 +405,8 @@ vmxnet3_tq_cleanup(struct vmxnet3_tx_queue *tq,
 
 	while (tq->tx_ring.next2comp != tq->tx_ring.next2fill) {
 		struct vmxnet3_tx_buf_info *tbi;
-		union Vmxnet3_GenericDesc *gdesc;
 
 		tbi = tq->buf_info + tq->tx_ring.next2comp;
-		gdesc = tq->tx_ring.base + tq->tx_ring.next2comp;
 
 		vmxnet3_unmap_tx_buf(tbi, adapter->pdev);
 		if (tbi->skb) {
@@ -2864,7 +2862,7 @@ vmxnet3_probe_device(struct pci_dev *pdev,
 		.ndo_set_mac_address = vmxnet3_set_mac_addr,
 		.ndo_change_mtu = vmxnet3_change_mtu,
 		.ndo_set_features = vmxnet3_set_features,
-		.ndo_get_stats = vmxnet3_get_stats,
+		.ndo_get_stats64 = vmxnet3_get_stats64,
 		.ndo_tx_timeout = vmxnet3_tx_timeout,
 		.ndo_set_multicast_list = vmxnet3_set_mc,
 		.ndo_vlan_rx_register = vmxnet3_vlan_rx_register,

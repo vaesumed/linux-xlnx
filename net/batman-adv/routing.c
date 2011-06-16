@@ -65,7 +65,7 @@ void slide_own_bcast_window(struct hard_iface *hard_iface)
 }
 
 static void update_TT(struct bat_priv *bat_priv, struct orig_node *orig_node,
-		       unsigned char *tt_buff, int tt_buff_len)
+		      const unsigned char *tt_buff, int tt_buff_len)
 {
 	if ((tt_buff_len != orig_node->tt_buff_len) ||
 	    ((tt_buff_len > 0) &&
@@ -82,10 +82,9 @@ static void update_TT(struct bat_priv *bat_priv, struct orig_node *orig_node,
 	}
 }
 
-static void update_route(struct bat_priv *bat_priv,
-			 struct orig_node *orig_node,
+static void update_route(struct bat_priv *bat_priv, struct orig_node *orig_node,
 			 struct neigh_node *neigh_node,
-			 unsigned char *tt_buff, int tt_buff_len)
+			 const unsigned char *tt_buff, int tt_buff_len)
 {
 	struct neigh_node *curr_router;
 
@@ -109,7 +108,7 @@ static void update_route(struct bat_priv *bat_priv,
 				    tt_buff, tt_buff_len);
 
 	/* route changed */
-	} else {
+	} else if (neigh_node && curr_router) {
 		bat_dbg(DBG_ROUTES, bat_priv,
 			"Changing route towards: %pM "
 			"(now via %pM - was via %pM)\n",
@@ -133,9 +132,8 @@ static void update_route(struct bat_priv *bat_priv,
 		neigh_node_free_ref(curr_router);
 }
 
-
 void update_routes(struct bat_priv *bat_priv, struct orig_node *orig_node,
-		   struct neigh_node *neigh_node, unsigned char *tt_buff,
+		   struct neigh_node *neigh_node, const unsigned char *tt_buff,
 		   int tt_buff_len)
 {
 	struct neigh_node *router = NULL;
@@ -348,9 +346,9 @@ out:
 }
 
 /* copy primary address for bonding */
-static void bonding_save_primary(struct orig_node *orig_node,
+static void bonding_save_primary(const struct orig_node *orig_node,
 				 struct orig_node *orig_neigh_node,
-				 struct batman_packet *batman_packet)
+				 const struct batman_packet *batman_packet)
 {
 	if (!(batman_packet->flags & PRIMARIES_FIRST_HOP))
 		return;
@@ -358,12 +356,11 @@ static void bonding_save_primary(struct orig_node *orig_node,
 	memcpy(orig_neigh_node->primary_addr, orig_node->orig, ETH_ALEN);
 }
 
-static void update_orig(struct bat_priv *bat_priv,
-			struct orig_node *orig_node,
-			struct ethhdr *ethhdr,
-			struct batman_packet *batman_packet,
+static void update_orig(struct bat_priv *bat_priv, struct orig_node *orig_node,
+			const struct ethhdr *ethhdr,
+			const struct batman_packet *batman_packet,
 			struct hard_iface *if_incoming,
-			unsigned char *tt_buff, int tt_buff_len,
+			const unsigned char *tt_buff, int tt_buff_len,
 			char is_duplicate)
 {
 	struct neigh_node *neigh_node = NULL, *tmp_neigh_node = NULL;
@@ -531,9 +528,9 @@ static int window_protected(struct bat_priv *bat_priv,
  *  -1 the packet is old and has been received while the seqno window
  *     was protected. Caller should drop it.
  */
-static char count_real_packets(struct ethhdr *ethhdr,
-			       struct batman_packet *batman_packet,
-			       struct hard_iface *if_incoming)
+static char count_real_packets(const struct ethhdr *ethhdr,
+			       const struct batman_packet *batman_packet,
+			       const struct hard_iface *if_incoming)
 {
 	struct bat_priv *bat_priv = netdev_priv(if_incoming->soft_iface);
 	struct orig_node *orig_node;
@@ -595,9 +592,9 @@ out:
 	return ret;
 }
 
-void receive_bat_packet(struct ethhdr *ethhdr,
+void receive_bat_packet(const struct ethhdr *ethhdr,
 			struct batman_packet *batman_packet,
-			unsigned char *tt_buff, int tt_buff_len,
+			const unsigned char *tt_buff, int tt_buff_len,
 			struct hard_iface *if_incoming)
 {
 	struct bat_priv *bat_priv = netdev_priv(if_incoming->soft_iface);
@@ -664,7 +661,7 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 				hard_iface->net_dev->dev_addr))
 			is_my_oldorig = 1;
 
-		if (compare_eth(ethhdr->h_source, broadcast_addr))
+		if (is_broadcast_ether_addr(ethhdr->h_source))
 			is_broadcast = 1;
 	}
 	rcu_read_unlock();
@@ -701,17 +698,16 @@ void receive_bat_packet(struct ethhdr *ethhdr,
 
 		/* neighbor has to indicate direct link and it has to
 		 * come via the corresponding interface */
-		/* if received seqno equals last send seqno save new
-		 * seqno for bidirectional check */
+		/* save packet seqno for bidirectional check */
 		if (has_directlink_flag &&
 		    compare_eth(if_incoming->net_dev->dev_addr,
-				batman_packet->orig) &&
-		    (batman_packet->seqno - if_incoming_seqno + 2 == 0)) {
+				batman_packet->orig)) {
 			offset = if_incoming->if_num * NUM_WORDS;
 
 			spin_lock_bh(&orig_neigh_node->ogm_cnt_lock);
 			word = &(orig_neigh_node->bcast_own[offset]);
-			bit_mark(word, 0);
+			bit_mark(word,
+				 if_incoming_seqno - batman_packet->seqno - 2);
 			orig_neigh_node->bcast_own_sum[if_incoming->if_num] =
 				bit_packet_count(word);
 			spin_unlock_bh(&orig_neigh_node->ogm_cnt_lock);
@@ -1077,7 +1073,7 @@ out:
  * This method rotates the bonding list and increases the
  * returned router's refcount. */
 static struct neigh_node *find_bond_router(struct orig_node *primary_orig,
-					   struct hard_iface *recv_if)
+					   const struct hard_iface *recv_if)
 {
 	struct neigh_node *tmp_neigh_node;
 	struct neigh_node *router = NULL, *first_candidate = NULL;
@@ -1128,7 +1124,7 @@ out:
  *
  * Increases the returned router's refcount */
 static struct neigh_node *find_ifalter_router(struct orig_node *primary_orig,
-					      struct hard_iface *recv_if)
+					      const struct hard_iface *recv_if)
 {
 	struct neigh_node *tmp_neigh_node;
 	struct neigh_node *router = NULL, *first_candidate = NULL;
@@ -1176,7 +1172,7 @@ static struct neigh_node *find_ifalter_router(struct orig_node *primary_orig,
  * refcount.*/
 struct neigh_node *find_router(struct bat_priv *bat_priv,
 			       struct orig_node *orig_node,
-			       struct hard_iface *recv_if)
+			       const struct hard_iface *recv_if)
 {
 	struct orig_node *primary_orig_node;
 	struct orig_node *router_orig;
@@ -1240,6 +1236,9 @@ struct neigh_node *find_router(struct bat_priv *bat_priv,
 		router = find_ifalter_router(primary_orig_node, recv_if);
 
 return_router:
+	if (router && router->if_incoming->if_status != IF_ACTIVE)
+		goto err_unlock;
+
 	rcu_read_unlock();
 	return router;
 err_unlock:
@@ -1357,7 +1356,7 @@ out:
 int recv_unicast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
 	struct unicast_packet *unicast_packet;
-	int hdr_size = sizeof(struct unicast_packet);
+	int hdr_size = sizeof(*unicast_packet);
 
 	if (check_unicast_packet(skb, hdr_size) < 0)
 		return NET_RX_DROP;
@@ -1377,7 +1376,7 @@ int recv_ucast_frag_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 {
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
 	struct unicast_frag_packet *unicast_packet;
-	int hdr_size = sizeof(struct unicast_frag_packet);
+	int hdr_size = sizeof(*unicast_packet);
 	struct sk_buff *new_skb = NULL;
 	int ret;
 
@@ -1413,7 +1412,7 @@ int recv_bcast_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct orig_node *orig_node = NULL;
 	struct bcast_packet *bcast_packet;
 	struct ethhdr *ethhdr;
-	int hdr_size = sizeof(struct bcast_packet);
+	int hdr_size = sizeof(*bcast_packet);
 	int ret = NET_RX_DROP;
 	int32_t seq_diff;
 
@@ -1491,7 +1490,7 @@ int recv_vis_packet(struct sk_buff *skb, struct hard_iface *recv_if)
 	struct vis_packet *vis_packet;
 	struct ethhdr *ethhdr;
 	struct bat_priv *bat_priv = netdev_priv(recv_if->soft_iface);
-	int hdr_size = sizeof(struct vis_packet);
+	int hdr_size = sizeof(*vis_packet);
 
 	/* keep skb linear */
 	if (skb_linearize(skb) < 0)

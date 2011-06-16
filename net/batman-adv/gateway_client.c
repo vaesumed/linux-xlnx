@@ -86,7 +86,7 @@ static void gw_select(struct bat_priv *bat_priv, struct gw_node *new_gw_node)
 	if (new_gw_node && !atomic_inc_not_zero(&new_gw_node->refcount))
 		new_gw_node = NULL;
 
-	curr_gw_node = bat_priv->curr_gw;
+	curr_gw_node = rcu_dereference_protected(bat_priv->curr_gw, 1);
 	rcu_assign_pointer(bat_priv->curr_gw, new_gw_node);
 
 	if (curr_gw_node)
@@ -273,11 +273,10 @@ static void gw_node_add(struct bat_priv *bat_priv,
 	struct gw_node *gw_node;
 	int down, up;
 
-	gw_node = kmalloc(sizeof(struct gw_node), GFP_ATOMIC);
+	gw_node = kzalloc(sizeof(*gw_node), GFP_ATOMIC);
 	if (!gw_node)
 		return;
 
-	memset(gw_node, 0, sizeof(struct gw_node));
 	INIT_HLIST_NODE(&gw_node->list);
 	gw_node->orig_node = orig_node;
 	atomic_set(&gw_node->refcount, 1);
@@ -323,7 +322,7 @@ void gw_node_update(struct bat_priv *bat_priv,
 
 		gw_node->deleted = 0;
 
-		if (new_gwflags == 0) {
+		if (new_gwflags == NO_FLAGS) {
 			gw_node->deleted = jiffies;
 			bat_dbg(DBG_BATMAN, bat_priv,
 				"Gateway %pM removed from gateway list\n",
@@ -336,7 +335,7 @@ void gw_node_update(struct bat_priv *bat_priv,
 		goto unlock;
 	}
 
-	if (new_gwflags == 0)
+	if (new_gwflags == NO_FLAGS)
 		goto unlock;
 
 	gw_node_add(bat_priv, orig_node, new_gwflags);
@@ -353,7 +352,7 @@ unlock:
 
 void gw_node_delete(struct bat_priv *bat_priv, struct orig_node *orig_node)
 {
-	return gw_node_update(bat_priv, orig_node, 0);
+	gw_node_update(bat_priv, orig_node, 0);
 }
 
 void gw_node_purge(struct bat_priv *bat_priv)
@@ -394,8 +393,8 @@ void gw_node_purge(struct bat_priv *bat_priv)
 /**
  * fails if orig_node has no router
  */
-static int _write_buffer_text(struct bat_priv *bat_priv,
-			      struct seq_file *seq, struct gw_node *gw_node)
+static int _write_buffer_text(struct bat_priv *bat_priv, struct seq_file *seq,
+			      const struct gw_node *gw_node)
 {
 	struct gw_node *curr_gw;
 	struct neigh_node *router;
@@ -509,7 +508,7 @@ int gw_is_target(struct bat_priv *bat_priv, struct sk_buff *skb)
 	/* check for ip header */
 	switch (ntohs(ethhdr->h_proto)) {
 	case ETH_P_IP:
-		if (!pskb_may_pull(skb, header_len + sizeof(struct iphdr)))
+		if (!pskb_may_pull(skb, header_len + sizeof(*iphdr)))
 			return 0;
 		iphdr = (struct iphdr *)(skb->data + header_len);
 		header_len += iphdr->ihl * 4;
@@ -520,10 +519,10 @@ int gw_is_target(struct bat_priv *bat_priv, struct sk_buff *skb)
 
 		break;
 	case ETH_P_IPV6:
-		if (!pskb_may_pull(skb, header_len + sizeof(struct ipv6hdr)))
+		if (!pskb_may_pull(skb, header_len + sizeof(*ipv6hdr)))
 			return 0;
 		ipv6hdr = (struct ipv6hdr *)(skb->data + header_len);
-		header_len += sizeof(struct ipv6hdr);
+		header_len += sizeof(*ipv6hdr);
 
 		/* check for udp header */
 		if (ipv6hdr->nexthdr != IPPROTO_UDP)
@@ -534,10 +533,10 @@ int gw_is_target(struct bat_priv *bat_priv, struct sk_buff *skb)
 		return 0;
 	}
 
-	if (!pskb_may_pull(skb, header_len + sizeof(struct udphdr)))
+	if (!pskb_may_pull(skb, header_len + sizeof(*udphdr)))
 		return 0;
 	udphdr = (struct udphdr *)(skb->data + header_len);
-	header_len += sizeof(struct udphdr);
+	header_len += sizeof(*udphdr);
 
 	/* check for bootp port */
 	if ((ntohs(ethhdr->h_proto) == ETH_P_IP) &&

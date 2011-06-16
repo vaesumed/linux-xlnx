@@ -1090,6 +1090,7 @@ static int emac_dev_xmit(struct sk_buff *skb, struct net_device *ndev)
 			dev_err(emac_dev, "DaVinci EMAC: desc submit failed");
 		goto fail_tx;
 	}
+	skb_tx_timestamp(skb);
 
 	return NETDEV_TX_OK;
 
@@ -1489,14 +1490,14 @@ static void emac_adjust_link(struct net_device *ndev)
  */
 static int emac_devioctl(struct net_device *ndev, struct ifreq *ifrq, int cmd)
 {
-	dev_warn(&ndev->dev, "DaVinci EMAC: ioctl not supported\n");
+	struct emac_priv *priv = netdev_priv(ndev);
 
 	if (!(netif_running(ndev)))
 		return -EINVAL;
 
 	/* TODO: Add phy read and write and private statistics get feature */
 
-	return -EOPNOTSUPP;
+	return phy_mii_ioctl(priv->phydev, ifrq, cmd);
 }
 
 static int match_first_device(struct device *dev, void *data)

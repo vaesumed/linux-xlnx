@@ -1118,10 +1118,10 @@
 #define  TG3_CPMU_EEEMD_EEE_ENABLE	 0x00100000
 #define TG3_CPMU_EEE_DBTMR1		0x000036b4
 #define  TG3_CPMU_DBTMR1_PCIEXIT_2047US	 0x07ff0000
-#define  TG3_CPMU_DBTMR1_LNKIDLE_2047US	 0x000070ff
+#define  TG3_CPMU_DBTMR1_LNKIDLE_2047US	 0x000007ff
 #define TG3_CPMU_EEE_DBTMR2		0x000036b8
 #define  TG3_CPMU_DBTMR2_APE_TX_2047US	 0x07ff0000
-#define  TG3_CPMU_DBTMR2_TXIDXEQ_2047US	 0x000070ff
+#define  TG3_CPMU_DBTMR2_TXIDXEQ_2047US	 0x000007ff
 #define TG3_CPMU_EEE_LNKIDL_CTRL	0x000036bc
 #define  TG3_CPMU_EEE_LNKIDL_PCIE_NL0	 0x01000000
 #define  TG3_CPMU_EEE_LNKIDL_UART_IDL	 0x00000004
@@ -2152,14 +2152,6 @@
 
 
 /*** Tigon3 specific PHY MII registers. ***/
-#define  TG3_BMCR_SPEED1000		0x0040
-
-#define MII_TG3_CTRL			0x09 /* 1000-baseT control register */
-#define  MII_TG3_CTRL_ADV_1000_HALF	0x0100
-#define  MII_TG3_CTRL_ADV_1000_FULL	0x0200
-#define  MII_TG3_CTRL_AS_MASTER		0x0800
-#define  MII_TG3_CTRL_ENABLE_AS_MASTER	0x1000
-
 #define MII_TG3_MMD_CTRL		0x0d /* MMD Access Control register */
 #define MII_TG3_MMD_CTRL_DATA_NOINC	0x4000
 #define MII_TG3_MMD_ADDRESS		0x0e /* MMD Address Data register */
@@ -2800,6 +2792,7 @@ struct tg3_napi {
 	struct tg3			*tp;
 	struct tg3_hw_status		*hw_status;
 
+	u32				chk_msi_cnt;
 	u32				last_tag;
 	u32				last_irq_tag;
 	u32				int_mbox;
@@ -2807,6 +2800,7 @@ struct tg3_napi {
 
 	u32				consmbox ____cacheline_aligned;
 	u32				rx_rcb_ptr;
+	u32				last_rx_cons;
 	u16				*rx_rcb_prod_idx;
 	struct tg3_rx_prodring_set	prodring;
 	struct tg3_rx_buffer_desc	*rx_rcb;
@@ -2814,6 +2808,7 @@ struct tg3_napi {
 	u32				tx_prod	____cacheline_aligned;
 	u32				tx_cons;
 	u32				tx_pending;
+	u32				last_tx_cons;
 	u32				prodmbox;
 	struct tg3_tx_buffer_desc	*tx_ring;
 	struct ring_info		*tx_buffers;
@@ -2893,8 +2888,6 @@ enum TG3_FLAGS {
 	TG3_FLAG_NO_NVRAM,
 	TG3_FLAG_ENABLE_RSS,
 	TG3_FLAG_ENABLE_TSS,
-	TG3_FLAG_4G_DMA_BNDRY_BUG,
-	TG3_FLAG_40BIT_DMA_LIMIT_BUG,
 	TG3_FLAG_SHORT_DMA_BUG,
 	TG3_FLAG_USE_JUMBO_BDFLAG,
 	TG3_FLAG_L1PLLPD_EN,

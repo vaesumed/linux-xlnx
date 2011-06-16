@@ -362,8 +362,8 @@ static void populate_lancer_stats(struct be_adapter *adapter)
 	drvs->rx_priority_pause_frames = 0;
 	drvs->pmem_fifo_overflow_drop = 0;
 	drvs->rx_pause_frames =
-		make_64bit_val(pport_stats->rx_pause_frames_lo,
-				 pport_stats->rx_pause_frames_hi);
+		make_64bit_val(pport_stats->rx_pause_frames_hi,
+				 pport_stats->rx_pause_frames_lo);
 	drvs->rx_crc_errors = make_64bit_val(pport_stats->rx_crc_errors_hi,
 						pport_stats->rx_crc_errors_lo);
 	drvs->rx_control_frames =
@@ -2925,11 +2925,8 @@ static void be_netdev_init(struct net_device *netdev)
 	netdev->features |= netdev->hw_features |
 		NETIF_F_HW_VLAN_RX | NETIF_F_HW_VLAN_FILTER;
 
-	netdev->vlan_features |= NETIF_F_SG | NETIF_F_TSO |
+	netdev->vlan_features |= NETIF_F_SG | NETIF_F_TSO | NETIF_F_TSO6 |
 		NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM;
-
-	if (lancer_chip(adapter))
-		netdev->vlan_features |= NETIF_F_TSO6;
 
 	netdev->flags |= IFF_MULTICAST;
 
@@ -3396,6 +3393,11 @@ static int __devinit be_probe(struct pci_dev *pdev,
 	}
 
 	dev_info(&pdev->dev, "%s port %d\n", nic_name(pdev), adapter->port_num);
+	/* By default all priorities are enabled.
+	 * Needed in case of no GRP5 evt support
+	 */
+	adapter->vlan_prio_bmap = 0xff;
+
 	schedule_delayed_work(&adapter->work, msecs_to_jiffies(100));
 	return 0;
 
