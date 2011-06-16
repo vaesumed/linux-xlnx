@@ -25,6 +25,12 @@
 #include <linux/hw_breakpoint.h>
 
 
+static int ptrace_trapping_sleep_fn(void *flags)
+{
+	schedule();
+	return 0;
+}
+
 /*
  * ptrace a task: make the debugger its new parent and
  * move it to the ptrace list.
@@ -77,13 +83,13 @@ void __ptrace_unlink(struct task_struct *child)
 	spin_lock(&child->sighand->siglock);
 
 	/*
-	 * Reinstate GROUP_STOP_PENDING if group stop is in effect and
+	 * Reinstate JOBCTL_STOP_PENDING if group stop is in effect and
 	 * @child isn't dead.
 	 */
 	if (!(child->flags & PF_EXITING) &&
 	    (child->signal->flags & SIGNAL_STOP_STOPPED ||
 	     child->signal->group_stop_count))
-		child->group_stop |= GROUP_STOP_PENDING;
+		child->jobctl |= JOBCTL_STOP_PENDING;
 
 	/*
 	 * If transition to TASK_STOPPED is pending or in TASK_TRACED, kick
@@ -91,16 +97,30 @@ void __ptrace_unlink(struct task_struct *child)
 	 * is in TASK_TRACED; otherwise, we might unduly disrupt
 	 * TASK_KILLABLE sleeps.
 	 */
-	if (child->group_stop & GROUP_STOP_PENDING || task_is_traced(child))
+	if (child->jobctl & JOBCTL_STOP_PENDING || task_is_traced(child))
 		signal_wake_up(child, task_is_traced(child));
 
 	spin_unlock(&child->sighand->siglock);
 }
 
-/*
- * Check that we have indeed attached to the thing..
+/**
+ * ptrace_check_attach - check whether ptracee is ready for ptrace operation
+ * @child: ptracee to check for
+ * @ignore_state: don't check whether @child is currently %TASK_TRACED
+ *
+ * Check whether @child is being ptraced by %current and ready for further
+ * ptrace operations.  If @ignore_state is %false, @child also should be in
+ * %TASK_TRACED state and on return the child is guaranteed to be traced
+ * and not executing.  If @ignore_state is %true, @child can be in any
+ * state.
+ *
+ * CONTEXT:
+ * Grabs and releases tasklist_lock and @child->sighand->siglock.
+ *
+ * RETURNS:
+ * 0 on success, -ESRCH if %child is not ready.
  */
-int ptrace_check_attach(struct task_struct *child, int kill)
+int ptrace_check_attach(struct task_struct *child, bool ignore_state)
 {
 	int ret = -ESRCH;
 
@@ -119,13 +139,13 @@ int ptrace_check_attach(struct task_struct *child, int kill)
 		 */
 		spin_lock_irq(&child->sighand->siglock);
 		WARN_ON_ONCE(task_is_stopped(child));
-		if (task_is_traced(child) || kill)
+		if (task_is_traced(child) || ignore_state)
 			ret = 0;
 		spin_unlock_irq(&child->sighand->siglock);
 	}
 	read_unlock(&tasklist_lock);
 
-	if (!ret && !kill)
+	if (!ret && !ignore_state)
 		ret = wait_task_inactive(child, TASK_TRACED) ? 0 : -ESRCH;
 
 	/* All systems go.. */
@@ -184,7 +204,6 @@ bool ptrace_may_access(struct task_struct *task, unsigned int mode)
 
 static int ptrace_attach(struct task_struct *task)
 {
-	bool wait_trap = false;
 	int retval;
 
 	audit_ptrace(task);
@@ -227,7 +246,7 @@ static int ptrace_attach(struct task_struct *task)
 	spin_lock(&task->sighand->siglock);
 
 	/*
-	 * If the task is already STOPPED, set GROUP_STOP_PENDING and
+	 * If the task is already STOPPED, set JOBCTL_STOP_PENDING and
 	 * TRAPPING, and kick it so that it transits to TRACED.  TRAPPING
 	 * will be cleared if the child completes the transition or any
 	 * event which clears the group stop states happens.  We'll wait
@@ -243,11 +262,10 @@ static int ptrace_attach(struct task_struct *task)
 	 * The following task_is_stopped() test is safe as both transitions
 	 * in and out of STOPPED are protected by siglock.
 	 */
-	if (task_is_stopped(task)) {
-		task->group_stop |= GROUP_STOP_PENDING | GROUP_STOP_TRAPPING;
+	if (task_is_stopped(task) &&
+	    task_set_jobctl_pending(task,
+				    JOBCTL_STOP_PENDING | JOBCTL_TRAPPING))
 		signal_wake_up(task, 1);
-		wait_trap = true;
-	}
 
 	spin_unlock(&task->sighand->siglock);
 
@@ -257,9 +275,9 @@ unlock_tasklist:
 unlock_creds:
 	mutex_unlock(&task->signal->cred_guard_mutex);
 out:
-	if (wait_trap)
-		wait_event(current->signal->wait_chldexit,
-			   !(task->group_stop & GROUP_STOP_TRAPPING));
+	if (!retval)
+		wait_on_bit(&task->jobctl, JOBCTL_TRAPPING_BIT,
+			    ptrace_trapping_sleep_fn, TASK_UNINTERRUPTIBLE);
 	return retval;
 }
 
