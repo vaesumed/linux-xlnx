@@ -1,13 +1,23 @@
 /*
- *  linux/arch/arm/mm/proc-v7.S
+ * arch/arm/mm/proc-v7lpae.S
  *
- *  Copyright (C) 2001 Deep Blue Solutions Ltd.
+ * Copyright (C) 2001 Deep Blue Solutions Ltd.
+ * Copyright (C) 2011 ARM Ltd.
+ * Author: Catalin Marinas <catalin.marinas@arm.com>
+ *   based on arch/arm/mm/proc-v7.S
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- *  This is the "shell" of the ARMv7 processor support.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 #include <linux/init.h>
 #include <linux/linkage.h>
@@ -19,24 +29,24 @@
 
 #include "proc-macros.S"
 
-#define TTB_S		(1 << 1)
-#define TTB_RGN_NC	(0 << 3)
-#define TTB_RGN_OC_WBWA	(1 << 3)
-#define TTB_RGN_OC_WT	(2 << 3)
-#define TTB_RGN_OC_WB	(3 << 3)
-#define TTB_NOS		(1 << 5)
-#define TTB_IRGN_NC	((0 << 0) | (0 << 6))
-#define TTB_IRGN_WBWA	((0 << 0) | (1 << 6))
-#define TTB_IRGN_WT	((1 << 0) | (0 << 6))
-#define TTB_IRGN_WB	((1 << 0) | (1 << 6))
+#define TTB_IRGN_NC	(0 << 8)
+#define TTB_IRGN_WBWA	(1 << 8)
+#define TTB_IRGN_WT	(2 << 8)
+#define TTB_IRGN_WB	(3 << 8)
+#define TTB_RGN_NC	(0 << 10)
+#define TTB_RGN_OC_WBWA	(1 << 10)
+#define TTB_RGN_OC_WT	(2 << 10)
+#define TTB_RGN_OC_WB	(3 << 10)
+#define TTB_S		(3 << 12)
+#define TTB_EAE		(1 << 31)
 
 /* PTWs cacheable, inner WB not shareable, outer WB not shareable */
-#define TTB_FLAGS_UP	TTB_IRGN_WB|TTB_RGN_OC_WB
-#define PMD_FLAGS_UP	PMD_SECT_WB
+#define TTB_FLAGS_UP	(TTB_IRGN_WB|TTB_RGN_OC_WB)
+#define PMD_FLAGS_UP	(PMD_SECT_WB)
 
 /* PTWs cacheable, inner WBWA shareable, outer WBWA not shareable */
-#define TTB_FLAGS_SMP	TTB_IRGN_WBWA|TTB_S|TTB_NOS|TTB_RGN_OC_WBWA
-#define PMD_FLAGS_SMP	PMD_SECT_WBWA|PMD_SECT_S
+#define TTB_FLAGS_SMP	(TTB_IRGN_WBWA|TTB_S|TTB_RGN_OC_WBWA)
+#define PMD_FLAGS_SMP	(PMD_SECT_WBWA|PMD_SECT_S)
 
 ENTRY(cpu_v7_proc_init)
 	mov	pc, lr
@@ -103,28 +113,9 @@ ENTRY(cpu_v7_switch_mm)
 #ifdef CONFIG_MMU
 	ldr	r1, [r1, #MM_CONTEXT_ID]	@ get mm->context.id
 	mov	r2, #0
-#ifdef CONFIG_ARM_LPAE
 	and	r3, r1, #0xff
 	mov	r3, r3, lsl #(48 - 32)		@ ASID
 	mcrr	p15, 0, r0, r3, c2		@ set TTB 0
-#else	/* !CONFIG_ARM_LPAE */
-	ALT_SMP(orr	r0, r0, #TTB_FLAGS_SMP)
-	ALT_UP(orr	r0, r0, #TTB_FLAGS_UP)
-#ifdef CONFIG_ARM_ERRATA_430973
-	mcr	p15, 0, r2, c7, c5, 6		@ flush BTAC/BTB
-#endif
-#ifdef CONFIG_ARM_ERRATA_754322
-	dsb
-#endif
-	mcr	p15, 0, r2, c13, c0, 1		@ set reserved context ID
-	isb
-	mcr	p15, 0, r0, c2, c0, 0		@ set TTB 0
-	isb
-#ifdef CONFIG_ARM_ERRATA_754322
-	dsb
-#endif
-	mcr	p15, 0, r1, c13, c0, 1		@ set context ID
-#endif	/* CONFIG_ARM_LPAE */
 	isb
 #endif
 	mov	pc, lr
@@ -142,38 +133,11 @@ ENDPROC(cpu_v7_switch_mm)
  */
 ENTRY(cpu_v7_set_pte_ext)
 #ifdef CONFIG_MMU
-	str	r1, [r0]			@ linux version
-
-	bic	r3, r1, #0x000003f0
-	bic	r3, r3, #PTE_TYPE_MASK
-	orr	r3, r3, r2
-	orr	r3, r3, #PTE_EXT_AP0 | 2
-
-	tst	r1, #1 << 4
-	orrne	r3, r3, #PTE_EXT_TEX(1)
-
-	eor	r1, r1, #L_PTE_DIRTY
-	tst	r1, #L_PTE_RDONLY | L_PTE_DIRTY
-	orrne	r3, r3, #PTE_EXT_APX
-
-	tst	r1, #L_PTE_USER
-	orrne	r3, r3, #PTE_EXT_AP1
-#ifdef CONFIG_CPU_USE_DOMAINS
-	@ allow kernel read/write access to read-only user pages
-	tstne	r3, #PTE_EXT_APX
-	bicne	r3, r3, #PTE_EXT_APX | PTE_EXT_AP0
-#endif
-
-	tst	r1, #L_PTE_XN
-	orrne	r3, r3, #PTE_EXT_XN
-
-	tst	r1, #L_PTE_YOUNG
-	tstne	r1, #L_PTE_PRESENT
-	moveq	r3, #0
-
- ARM(	str	r3, [r0, #2048]! )
- THUMB(	add	r0, r0, #2048 )
- THUMB(	str	r3, [r0] )
+	tst	r2, #L_PTE_PRESENT
+	beq	1f
+	tst	r3, #1 << (55 - 32)		@ L_PTE_DIRTY
+	orreq	r2, #L_PTE_RDONLY
+1:	strd	r2, r3, [r0]
 	mcr	p15, 0, r0, c7, c10, 1		@ flush_pte
 #endif
 	mov	pc, lr
@@ -184,51 +148,41 @@ cpu_v7_name:
 	.align
 
 	/*
-	 * Memory region attributes with SCTLR.TRE=1
+	 * Memory region attributes for LPAE (defined in pgtable-3level.h):
 	 *
-	 *   n = TEX[0],C,B
-	 *   TR = PRRR[2n+1:2n]		- memory type
-	 *   IR = NMRR[2n+1:2n]		- inner cacheable property
-	 *   OR = NMRR[2n+17:2n+16]	- outer cacheable property
+	 *   n = AttrIndx[2:0]
 	 *
-	 *			n	TR	IR	OR
-	 *   UNCACHED		000	00
-	 *   BUFFERABLE		001	10	00	00
-	 *   WRITETHROUGH	010	10	10	10
-	 *   WRITEBACK		011	10	11	11
-	 *   reserved		110
-	 *   WRITEALLOC		111	10	01	01
-	 *   DEV_SHARED		100	01
-	 *   DEV_NONSHARED	100	01
-	 *   DEV_WC		001	10
-	 *   DEV_CACHED		011	10
-	 *
-	 * Other attributes:
-	 *
-	 *   DS0 = PRRR[16] = 0		- device shareable property
-	 *   DS1 = PRRR[17] = 1		- device shareable property
-	 *   NS0 = PRRR[18] = 0		- normal shareable property
-	 *   NS1 = PRRR[19] = 1		- normal shareable property
-	 *   NOS = PRRR[24+n] = 1	- not outer shareable
+	 *			n	MAIR
+	 *   UNCACHED		000	00000000
+	 *   BUFFERABLE		001	01000100
+	 *   DEV_WC		001	01000100
+	 *   WRITETHROUGH	010	10101010
+	 *   WRITEBACK		011	11101110
+	 *   DEV_CACHED		011	11101110
+	 *   DEV_SHARED		100	00000100
+	 *   DEV_NONSHARED	100	00000100
+	 *   unused		101
+	 *   unused		110
+	 *   WRITEALLOC		111	11111111
 	 */
-.equ	PRRR,	0xff0a81a8
-.equ	NMRR,	0x40e040e0
+.equ	MAIR0,	0xeeaa4400			@ MAIR0
+.equ	MAIR1,	0xff000004			@ MAIR1
 
 /* Suspend/resume support: derived from arch/arm/mach-s5pv210/sleep.S */
 .globl	cpu_v7_suspend_size
-.equ	cpu_v7_suspend_size, 4 * 8
+.equ	cpu_v7_suspend_size, 4 * 10
 #ifdef CONFIG_PM_SLEEP
 ENTRY(cpu_v7_do_suspend)
 	stmfd	sp!, {r4 - r11, lr}
 	mrc	p15, 0, r4, c13, c0, 0	@ FCSE/PID
 	mrc	p15, 0, r5, c13, c0, 1	@ Context ID
 	mrc	p15, 0, r6, c3, c0, 0	@ Domain ID
-	mrc	p15, 0, r7, c2, c0, 0	@ TTB 0
-	mrc	p15, 0, r8, c2, c0, 1	@ TTB 1
+	mrrc	p15, 0, r7, r8, c2	@ TTB 0
+	mrrc	p15, 1, r2, r3, c2	@ TTB 1
 	mrc	p15, 0, r9, c1, c0, 0	@ Control register
 	mrc	p15, 0, r10, c1, c0, 1	@ Auxiliary control register
 	mrc	p15, 0, r11, c1, c0, 2	@ Co-processor access control
-	stmia	r0, {r4 - r11}
+	stmia	r0, {r2 - r11}
 	ldmfd	sp!, {r4 - r11, pc}
 ENDPROC(cpu_v7_do_suspend)
 
@@ -236,19 +190,19 @@ ENTRY(cpu_v7_do_resume)
 	mov	ip, #0
 	mcr	p15, 0, ip, c8, c7, 0	@ invalidate TLBs
 	mcr	p15, 0, ip, c7, c5, 0	@ invalidate I cache
-	ldmia	r0, {r4 - r11}
+	ldmia	r0, {r2 - r11}
 	mcr	p15, 0, r4, c13, c0, 0	@ FCSE/PID
 	mcr	p15, 0, r5, c13, c0, 1	@ Context ID
 	mcr	p15, 0, r6, c3, c0, 0	@ Domain ID
-	mcr	p15, 0, r7, c2, c0, 0	@ TTB 0
-	mcr	p15, 0, r8, c2, c0, 1	@ TTB 1
+	mcrr	p15, 0, r7, r8, c2	@ TTB 0
+	mcrr	p15, 1, r2, r3, c2	@ TTB 1
 	mcr	p15, 0, ip, c2, c0, 2	@ TTB control register
 	mcr	p15, 0, r10, c1, c0, 1	@ Auxiliary control register
 	mcr	p15, 0, r11, c1, c0, 2	@ Co-processor access control
-	ldr	r4, =PRRR		@ PRRR
-	ldr	r5, =NMRR		@ NMRR
-	mcr	p15, 0, r4, c10, c2, 0	@ write PRRR
-	mcr	p15, 0, r5, c10, c2, 1	@ write NMRR
+	ldr	r4, =MAIR0
+	ldr	r5, =MAIR1
+	mcr	p15, 0, r4, c10, c2, 0	@ write MAIR0
+	mcr	p15, 0, r5, c10, c2, 1	@ write MAIR1
 	isb
 	mov	r0, r9			@ control register
 	mov	r2, r7, lsr #14		@ get TTB0 base
@@ -270,24 +224,23 @@ cpu_resume_l1_flags:
  *	__v7_setup
  *
  *	Initialise TLB, Caches, and MMU state ready to switch the MMU
- *	on.  Return in r0 the new CP15 C1 control register setting.
+ *	on. Return in r0 the new CP15 C1 control register setting.
  *
- *	We automatically detect if we have a Harvard cache, and use the
- *	Harvard cache control instructions insead of the unified cache
- *	control instructions.
- *
- *	This should be able to cover all ARMv7 cores.
+ *	This should be able to cover all ARMv7 cores with LPAE.
  *
  *	It is assumed that:
  *	- cache type register is implemented
  */
-__v7_ca9mp_setup:
+__v7_ca15mp_setup:
+	mov	r10, #0
+1:
 #ifdef CONFIG_SMP
 	ALT_SMP(mrc	p15, 0, r0, c1, c0, 1)
 	ALT_UP(mov	r0, #(1 << 6))		@ fake it for UP
 	tst	r0, #(1 << 6)			@ SMP/nAMP mode enabled?
-	orreq	r0, r0, #(1 << 6) | (1 << 0)	@ Enable SMP/nAMP mode and
-	mcreq	p15, 0, r0, c1, c0, 1		@ TLB ops broadcasting
+	orreq	r0, r0, #(1 << 6)		@ Enable SMP/nAMP mode
+	orreq	r0, r0, r10			@ Enable CPU-specific SMP bits
+	mcreq	p15, 0, r0, c1, c0, 1
 #endif
 __v7_setup:
 	adr	r12, __v7_setup_stack		@ the local stack
@@ -295,92 +248,47 @@ __v7_setup:
 	bl	v7_flush_dcache_all
 	ldmia	r12, {r0-r5, r7, r9, r11, lr}
 
-	mrc	p15, 0, r0, c0, c0, 0		@ read main ID register
-	and	r10, r0, #0xff000000		@ ARM?
-	teq	r10, #0x41000000
-	bne	3f
-	and	r5, r0, #0x00f00000		@ variant
-	and	r6, r0, #0x0000000f		@ revision
-	orr	r6, r6, r5, lsr #20-4		@ combine variant and revision
-	ubfx	r0, r0, #4, #12			@ primary part number
-
-	/* Cortex-A8 Errata */
-	ldr	r10, =0x00000c08		@ Cortex-A8 primary part number
-	teq	r0, r10
-	bne	2f
-#ifdef CONFIG_ARM_ERRATA_430973
-	teq	r5, #0x00100000			@ only present in r1p*
-	mrceq	p15, 0, r10, c1, c0, 1		@ read aux control register
-	orreq	r10, r10, #(1 << 6)		@ set IBE to 1
-	mcreq	p15, 0, r10, c1, c0, 1		@ write aux control register
-#endif
-#ifdef CONFIG_ARM_ERRATA_458693
-	teq	r6, #0x20			@ only present in r2p0
-	mrceq	p15, 0, r10, c1, c0, 1		@ read aux control register
-	orreq	r10, r10, #(1 << 5)		@ set L1NEON to 1
-	orreq	r10, r10, #(1 << 9)		@ set PLDNOP to 1
-	mcreq	p15, 0, r10, c1, c0, 1		@ write aux control register
-#endif
-#ifdef CONFIG_ARM_ERRATA_460075
-	teq	r6, #0x20			@ only present in r2p0
-	mrceq	p15, 1, r10, c9, c0, 2		@ read L2 cache aux ctrl register
-	tsteq	r10, #1 << 22
-	orreq	r10, r10, #(1 << 22)		@ set the Write Allocate disable bit
-	mcreq	p15, 1, r10, c9, c0, 2		@ write the L2 cache aux ctrl register
-#endif
-	b	3f
-
-	/* Cortex-A9 Errata */
-2:	ldr	r10, =0x00000c09		@ Cortex-A9 primary part number
-	teq	r0, r10
-	bne	3f
-#ifdef CONFIG_ARM_ERRATA_742230
-	cmp	r6, #0x22			@ only present up to r2p2
-	mrcle	p15, 0, r10, c15, c0, 1		@ read diagnostic register
-	orrle	r10, r10, #1 << 4		@ set bit #4
-	mcrle	p15, 0, r10, c15, c0, 1		@ write diagnostic register
-#endif
-#ifdef CONFIG_ARM_ERRATA_742231
-	teq	r6, #0x20			@ present in r2p0
-	teqne	r6, #0x21			@ present in r2p1
-	teqne	r6, #0x22			@ present in r2p2
-	mrceq	p15, 0, r10, c15, c0, 1		@ read diagnostic register
-	orreq	r10, r10, #1 << 12		@ set bit #12
-	orreq	r10, r10, #1 << 22		@ set bit #22
-	mcreq	p15, 0, r10, c15, c0, 1		@ write diagnostic register
-#endif
-#ifdef CONFIG_ARM_ERRATA_743622
-	teq	r6, #0x20			@ present in r2p0
-	teqne	r6, #0x21			@ present in r2p1
-	teqne	r6, #0x22			@ present in r2p2
-	mrceq	p15, 0, r10, c15, c0, 1		@ read diagnostic register
-	orreq	r10, r10, #1 << 6		@ set bit #6
-	mcreq	p15, 0, r10, c15, c0, 1		@ write diagnostic register
-#endif
-#ifdef CONFIG_ARM_ERRATA_751472
-	cmp	r6, #0x30			@ present prior to r3p0
-	mrclt	p15, 0, r10, c15, c0, 1		@ read diagnostic register
-	orrlt	r10, r10, #1 << 11		@ set bit #11
-	mcrlt	p15, 0, r10, c15, c0, 1		@ write diagnostic register
-#endif
-
-3:	mov	r10, #0
-#ifdef HARVARD_CACHE
+	mov	r10, #0
 	mcr	p15, 0, r10, c7, c5, 0		@ I+BTB cache invalidate
-#endif
 	dsb
 #ifdef CONFIG_MMU
 	mcr	p15, 0, r10, c8, c7, 0		@ invalidate I + D TLBs
+	mov	r5, #TTB_EAE
+	ALT_SMP(orr	r5, r5, #TTB_FLAGS_SMP)
+	ALT_SMP(orr	r5, r5, #TTB_FLAGS_SMP << 16)
+	ALT_UP(orr	r5, r5, #TTB_FLAGS_UP)
+	ALT_UP(orr	r5, r5, #TTB_FLAGS_UP << 16)
+	mrc	p15, 0, r10, c2, c0, 2
+	orr	r10, r10, r5
+#if PHYS_OFFSET <= PAGE_OFFSET
+	/*
+	 * TTBR0/TTBR1 split (PAGE_OFFSET):
+	 *   0x40000000: T0SZ = 2, T1SZ = 0 (not used)
+	 *   0x80000000: T0SZ = 0, T1SZ = 1
+	 *   0xc0000000: T0SZ = 0, T1SZ = 2
+	 *
+	 * Only use this feature if PAGE_OFFSET <=  PAGE_OFFSET, otherwise
+	 * booting secondary CPUs would end up using TTBR1 for the identity
+	 * mapping set up in TTBR0.
+	 */
+	orr	r10, r10, #(((PAGE_OFFSET >> 30) - 1) << 16)	@ TTBCR.T1SZ
+#endif
 	mcr	p15, 0, r10, c2, c0, 2		@ TTB control register
-	ALT_SMP(orr	r4, r4, #TTB_FLAGS_SMP)
-	ALT_UP(orr	r4, r4, #TTB_FLAGS_UP)
-	ALT_SMP(orr	r8, r8, #TTB_FLAGS_SMP)
-	ALT_UP(orr	r8, r8, #TTB_FLAGS_UP)
-	mcr	p15, 0, r8, c2, c0, 1		@ load TTB1
-	ldr	r5, =PRRR			@ PRRR
-	ldr	r6, =NMRR			@ NMRR
-	mcr	p15, 0, r5, c10, c2, 0		@ write PRRR
-	mcr	p15, 0, r6, c10, c2, 1		@ write NMRR
+	mov	r5, #0
+#if defined CONFIG_VMSPLIT_2G
+	/* PAGE_OFFSET == 0x80000000, T1SZ == 1 */
+	add	r6, r8, #1 << 4			@ skip two L1 entries
+#elif defined CONFIG_VMSPLIT_3G
+	/* PAGE_OFFSET == 0xc0000000, T1SZ == 2 */
+	add	r6, r8, #4096 * (1 + 3)		@ only L2 used, skip pgd+3*pmd
+#else
+	mov	r6, r8
+#endif
+	mcrr	p15, 1, r6, r5, c2		@ load TTBR1
+	ldr	r5, =MAIR0
+	ldr	r6, =MAIR1
+	mcr	p15, 0, r5, c10, c2, 0		@ write MAIR0
+	mcr	p15, 0, r6, c10, c2, 1		@ write MAIR1
 #endif
 	adr	r5, v7_crval
 	ldmia	r5, {r5, r6}
@@ -391,7 +299,7 @@ __v7_setup:
 	orr     r5, r5, #(1 << 10)              @ set SW bit in "clear"
 	bic     r6, r6, #(1 << 10)              @ clear it in "mmuset"
 #endif
-   	mrc	p15, 0, r0, c1, c0, 0		@ read control register
+	mrc	p15, 0, r0, c1, c0, 0		@ read control register
 	bic	r0, r0, r5			@ clear bits them
 	orr	r0, r0, r6			@ set them
  THUMB(	orr	r0, r0, #1 << 30	)	@ Thumb exceptions
@@ -399,14 +307,14 @@ __v7_setup:
 ENDPROC(__v7_setup)
 
 	/*   AT
-	 *  TFR   EV X F   I D LR    S
-	 * .EEE ..EE PUI. .T.T 4RVI ZWRS BLDP WCAM
+	 *  TFR   EV X F   IHD LR    S
+	 * .EEE ..EE PUI. .TAT 4RVI ZWRS BLDP WCAM
 	 * rxxx rrxx xxx0 0101 xxxx xxxx x111 xxxx < forced
-	 *    1    0 110       0011 1100 .111 1101 < we want
+	 *   11    0 110    1  0011 1100 .111 1101 < we want
 	 */
 	.type	v7_crval, #object
 v7_crval:
-	crval	clear=0x0120c302, mmuset=0x10c03c7d, ucset=0x00c01c7c
+	crval	clear=0x0120c302, mmuset=0x30c23c7d, ucset=0x00c01c7c
 
 __v7_setup_stack:
 	.space	4 * 11				@ 11 registers
@@ -444,25 +352,29 @@ cpu_elf_name:
 
 	.section ".proc.info.init", #alloc, #execinstr
 
-	.type   __v7_ca9mp_proc_info, #object
-__v7_ca9mp_proc_info:
-	.long	0x410fc090		@ Required ID value
+	.type	__v7_ca15mp_proc_info, #object
+__v7_ca15mp_proc_info:
+	.long	0x410fc0f0		@ Required ID value
 	.long	0xff0ffff0		@ Mask for ID
 	ALT_SMP(.long \
 		PMD_TYPE_SECT | \
 		PMD_SECT_AP_WRITE | \
 		PMD_SECT_AP_READ | \
+		PMD_SECT_AF | \
 		PMD_FLAGS_SMP)
 	ALT_UP(.long \
 		PMD_TYPE_SECT | \
 		PMD_SECT_AP_WRITE | \
 		PMD_SECT_AP_READ | \
+		PMD_SECT_AF | \
 		PMD_FLAGS_UP)
+		/* PMD_SECT_XN is set explicitly in head.S for LPAE */
 	.long   PMD_TYPE_SECT | \
 		PMD_SECT_XN | \
 		PMD_SECT_AP_WRITE | \
-		PMD_SECT_AP_READ
-	W(b)	__v7_ca9mp_setup
+		PMD_SECT_AP_READ | \
+		PMD_SECT_AF
+	b	__v7_ca15mp_setup
 	.long	cpu_arch_name
 	.long	cpu_elf_name
 	.long	HWCAP_SWP|HWCAP_HALF|HWCAP_THUMB|HWCAP_FAST_MULT|HWCAP_EDSP|HWCAP_TLS
@@ -471,7 +383,7 @@ __v7_ca9mp_proc_info:
 	.long	v7wbi_tlb_fns
 	.long	v6_user_fns
 	.long	v7_cache_fns
-	.size	__v7_ca9mp_proc_info, . - __v7_ca9mp_proc_info
+	.size	__v7_ca15mp_proc_info, . - __v7_ca15mp_proc_info
 
 	/*
 	 * Match any ARMv7 processor core.
@@ -484,16 +396,20 @@ __v7_proc_info:
 		PMD_TYPE_SECT | \
 		PMD_SECT_AP_WRITE | \
 		PMD_SECT_AP_READ | \
+		PMD_SECT_AF | \
 		PMD_FLAGS_SMP)
 	ALT_UP(.long \
 		PMD_TYPE_SECT | \
 		PMD_SECT_AP_WRITE | \
 		PMD_SECT_AP_READ | \
+		PMD_SECT_AF | \
 		PMD_FLAGS_UP)
+		/* PMD_SECT_XN is set explicitly in head.S for LPAE */
 	.long   PMD_TYPE_SECT | \
 		PMD_SECT_XN | \
 		PMD_SECT_AP_WRITE | \
-		PMD_SECT_AP_READ
+		PMD_SECT_AP_READ | \
+		PMD_SECT_AF
 	W(b)	__v7_setup
 	.long	cpu_arch_name
 	.long	cpu_elf_name
