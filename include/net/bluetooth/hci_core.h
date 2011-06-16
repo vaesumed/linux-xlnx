@@ -178,6 +178,8 @@ struct hci_dev {
 
 	__u16			init_last_cmd;
 
+	struct crypto_blkcipher	*tfm;
+
 	struct inquiry_cache	inq_cache;
 	struct hci_conn_hash	conn_hash;
 	struct list_head	blacklist;
@@ -248,6 +250,7 @@ struct hci_conn {
 	__u8		power_save;
 	__u16		disc_timeout;
 	unsigned long	pend;
+	__u8		ltk[16];
 
 	__u8		remote_cap;
 	__u8		remote_oob;
@@ -743,6 +746,9 @@ static inline void hci_encrypt_cfm(struct hci_conn *conn, __u8 status,
 	if (conn->sec_level == BT_SECURITY_SDP)
 		conn->sec_level = BT_SECURITY_LOW;
 
+	if (conn->pending_sec_level > conn->sec_level)
+		conn->sec_level = conn->pending_sec_level;
+
 	hci_proto_encrypt_cfm(conn, status, encrypt);
 
 	read_lock_bh(&hci_cb_list_lock);
@@ -860,4 +866,9 @@ void hci_req_complete(struct hci_dev *hdev, __u16 cmd, int result);
 
 void hci_le_conn_update(struct hci_conn *conn, u16 min, u16 max,
 					u16 latency, u16 to_multiplier);
+void hci_le_start_enc(struct hci_conn *conn, __le16 ediv, __u8 rand[8],
+							__u8 ltk[16]);
+void hci_le_ltk_reply(struct hci_conn *conn, u8 ltk[16]);
+void hci_le_ltk_neg_reply(struct hci_conn *conn);
+
 #endif /* __HCI_CORE_H */

@@ -287,6 +287,10 @@ struct l2cap_chan {
 
 	struct l2cap_conn	*conn;
 
+	__u8		state;
+
+	atomic_t	refcnt;
+
 	__le16		psm;
 	__u16		dcid;
 	__u16		scid;
@@ -354,6 +358,18 @@ struct l2cap_chan {
 
 	struct list_head list;
 	struct list_head global_l;
+
+	void		*data;
+	struct l2cap_ops *ops;
+};
+
+struct l2cap_ops {
+	char		*name;
+
+	struct l2cap_chan	*(*new_connection) (void *data);
+	int			(*recv) (void *data, struct sk_buff *skb);
+	void			(*close) (void *data);
+	void			(*state_change) (void *data, int state);
 };
 
 struct l2cap_conn {
@@ -378,6 +394,15 @@ struct l2cap_conn {
 	__u8		tx_ident;
 
 	__u8		disc_reason;
+
+	__u8		preq[7]; /* SMP Pairing Request */
+	__u8		prsp[7]; /* SMP Pairing Response */
+	__u8		prnd[16]; /* SMP Pairing Random */
+	__u8		pcnf[16]; /* SMP Pairing Confirm */
+	__u8		tk[16]; /* SMP Temporary Key */
+	__u8		smp_key_size;
+
+	struct timer_list security_timer;
 
 	struct list_head chan_l;
 	rwlock_t	chan_lock;
@@ -423,12 +448,17 @@ struct l2cap_pinfo {
 #define L2CAP_CONN_RNR_SENT        0x0200
 #define L2CAP_CONN_SAR_RETRY       0x0400
 
-#define __mod_retrans_timer() mod_timer(&chan->retrans_timer, \
-		jiffies +  msecs_to_jiffies(L2CAP_DEFAULT_RETRANS_TO));
-#define __mod_monitor_timer() mod_timer(&chan->monitor_timer, \
-		jiffies + msecs_to_jiffies(L2CAP_DEFAULT_MONITOR_TO));
-#define __mod_ack_timer() mod_timer(&chan->ack_timer, \
-		jiffies + msecs_to_jiffies(L2CAP_DEFAULT_ACK_TO));
+#define __set_chan_timer(c, t) l2cap_set_timer(c, &c->chan_timer, (t))
+#define __clear_chan_timer(c) l2cap_clear_timer(c, &c->chan_timer)
+#define __set_retrans_timer(c) l2cap_set_timer(c, &c->retrans_timer, \
+		L2CAP_DEFAULT_RETRANS_TO);
+#define __clear_retrans_timer(c) l2cap_clear_timer(c, &c->retrans_timer)
+#define __set_monitor_timer(c) l2cap_set_timer(c, &c->monitor_timer, \
+		L2CAP_DEFAULT_MONITOR_TO);
+#define __clear_monitor_timer(c) l2cap_clear_timer(c, &c->monitor_timer)
+#define __set_ack_timer(c) l2cap_set_timer(c, &chan->ack_timer, \
+		L2CAP_DEFAULT_ACK_TO);
+#define __clear_ack_timer(c) l2cap_clear_timer(c, &c->ack_timer)
 
 static inline int l2cap_tx_window_full(struct l2cap_chan *ch)
 {
@@ -458,11 +488,6 @@ int __l2cap_wait_ack(struct sock *sk);
 
 int l2cap_add_psm(struct l2cap_chan *chan, bdaddr_t *src, __le16 psm);
 int l2cap_add_scid(struct l2cap_chan *chan,  __u16 scid);
-
-void l2cap_sock_kill(struct sock *sk);
-void l2cap_sock_init(struct sock *sk, struct sock *parent);
-struct sock *l2cap_sock_alloc(struct net *net, struct socket *sock,
-							int proto, gfp_t prio);
 
 struct l2cap_chan *l2cap_chan_create(struct sock *sk);
 void l2cap_chan_close(struct l2cap_chan *chan, int reason);
