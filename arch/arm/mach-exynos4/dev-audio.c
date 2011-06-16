@@ -187,6 +187,11 @@ static int exynos4_pcm_cfg_gpio(struct platform_device *pdev)
 
 static struct s3c_audio_pdata s3c_pcm_pdata = {
 	.cfg_gpio = exynos4_pcm_cfg_gpio,
+	.type = {
+		.pcm = {
+			.quirks = QUIRK_NO_DIV,
+		},
+	},
 };
 
 static struct resource exynos4_pcm0_resource[] = {
