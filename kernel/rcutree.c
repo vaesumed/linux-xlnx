@@ -162,8 +162,10 @@ void rcu_bh_qs(int cpu)
  */
 void rcu_note_context_switch(int cpu)
 {
+	trace_rcu_utilization("Start context switch");
 	rcu_sched_qs(cpu);
 	rcu_preempt_note_context_switch(cpu);
+	trace_rcu_utilization("End context switch");
 }
 EXPORT_SYMBOL_GPL(rcu_note_context_switch);
 
@@ -330,8 +332,10 @@ void rcu_enter_nohz(void)
 	struct rcu_dynticks *rdtp;
 
 	local_irq_save(flags);
+	trace_rcu_utilization("Start enter nohz");
 	rdtp = &__get_cpu_var(rcu_dynticks);
 	if (--rdtp->dynticks_nesting) {
+		trace_rcu_utilization("End enter nohz");
 		local_irq_restore(flags);
 		return;
 	}
@@ -348,6 +352,7 @@ void rcu_enter_nohz(void)
 	     __get_cpu_var(rcu_bh_data).nxtlist ||
 	     rcu_preempt_needs_cpu(smp_processor_id())))
 		set_need_resched();
+	trace_rcu_utilization("End enter nohz");
 }
 
 /*
@@ -362,8 +367,10 @@ void rcu_exit_nohz(void)
 	struct rcu_dynticks *rdtp;
 
 	local_irq_save(flags);
+	trace_rcu_utilization("Start exit nohz");
 	rdtp = &__get_cpu_var(rcu_dynticks);
 	if (rdtp->dynticks_nesting++) {
+		trace_rcu_utilization("End exit nohz");
 		local_irq_restore(flags);
 		return;
 	}
@@ -372,6 +379,7 @@ void rcu_exit_nohz(void)
 	/* CPUs seeing atomic_inc() must see later RCU read-side crit sects */
 	smp_mb__after_atomic_inc();  /* See above. */
 	WARN_ON_ONCE(!(atomic_read(&rdtp->dynticks) & 0x1));
+	trace_rcu_utilization("End exit nohz");
 	local_irq_restore(flags);
 }
 
@@ -1309,6 +1317,7 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
  */
 void rcu_check_callbacks(int cpu, int user)
 {
+	trace_rcu_utilization("Start scheduler-tick");
 	if (user ||
 	    (idle_cpu(cpu) && rcu_scheduler_active &&
 	     !in_softirq() && hardirq_count() <= (1 << HARDIRQ_SHIFT))) {
@@ -1342,6 +1351,7 @@ void rcu_check_callbacks(int cpu, int user)
 	rcu_preempt_check_callbacks(cpu);
 	if (rcu_pending(cpu))
 		invoke_rcu_core();
+	trace_rcu_utilization("End scheduler-tick");
 }
 
 #ifdef CONFIG_SMP
@@ -1403,10 +1413,14 @@ static void force_quiescent_state(struct rcu_state *rsp, int relaxed)
 	unsigned long flags;
 	struct rcu_node *rnp = rcu_get_root(rsp);
 
-	if (!rcu_gp_in_progress(rsp))
+	trace_rcu_utilization("Start fqs");
+	if (!rcu_gp_in_progress(rsp)) {
+		trace_rcu_utilization("End fqs");
 		return;  /* No grace period in progress, nothing to force. */
+	}
 	if (!raw_spin_trylock_irqsave(&rsp->fqslock, flags)) {
 		rsp->n_force_qs_lh++; /* Inexact, can lose counts.  Tough! */
+		trace_rcu_utilization("End fqs");
 		return;	/* Someone else is already on the job. */
 	}
 	if (relaxed && ULONG_CMP_GE(rsp->jiffies_force_qs, jiffies))
@@ -1455,11 +1469,13 @@ static void force_quiescent_state(struct rcu_state *rsp, int relaxed)
 		raw_spin_unlock(&rsp->fqslock); /* irqs remain disabled */
 		rsp->fqs_need_gp = 0;
 		rcu_start_gp(rsp, flags); /* releases rnp->lock */
+		trace_rcu_utilization("End fqs");
 		return;
 	}
 	raw_spin_unlock(&rnp->lock);  /* irqs remain disabled */
 unlock_fqs_ret:
 	raw_spin_unlock_irqrestore(&rsp->fqslock, flags);
+	trace_rcu_utilization("End fqs");
 }
 
 #else /* #ifdef CONFIG_SMP */
@@ -1515,6 +1531,7 @@ __rcu_process_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
  */
 static void rcu_process_callbacks(struct softirq_action *unused)
 {
+	trace_rcu_utilization("Start RCU core");
 	__rcu_process_callbacks(&rcu_sched_state,
 				&__get_cpu_var(rcu_sched_data));
 	__rcu_process_callbacks(&rcu_bh_state, &__get_cpu_var(rcu_bh_data));
@@ -1522,6 +1539,7 @@ static void rcu_process_callbacks(struct softirq_action *unused)
 
 	/* If we are last CPU on way to dyntick-idle mode, accelerate it. */
 	rcu_needs_cpu_flush();
+	trace_rcu_utilization("End RCU core");
 }
 
 /*
@@ -1942,6 +1960,7 @@ static int __cpuinit rcu_cpu_notify(struct notifier_block *self,
 	struct rcu_data *rdp = per_cpu_ptr(rcu_state->rda, cpu);
 	struct rcu_node *rnp = rdp->mynode;
 
+	trace_rcu_utilization("Start CPU hotplug");
 	switch (action) {
 	case CPU_UP_PREPARE:
 	case CPU_UP_PREPARE_FROZEN:
@@ -1977,6 +1996,7 @@ static int __cpuinit rcu_cpu_notify(struct notifier_block *self,
 	default:
 		break;
 	}
+	trace_rcu_utilization("End CPU hotplug");
 	return NOTIFY_OK;
 }
 
