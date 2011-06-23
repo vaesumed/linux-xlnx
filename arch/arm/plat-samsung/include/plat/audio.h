@@ -46,6 +46,13 @@ struct samsung_i2s {
 	const char **src_clk;
 };
 
+struct samsung_pcm {
+/* If the PCM block has no internal prescalar or MUX */
+#define QUIRK_NO_DIV		(1 << 0)
+	/* Quirks of the PCM controller */
+	u32 quirks;
+};
+
 /**
  * struct s3c_audio_pdata - common platform data for audio device drivers
  * @cfg_gpio: Callback function to setup mux'ed pins in I2S/PCM/AC97 mode
@@ -54,5 +61,6 @@ struct s3c_audio_pdata {
 	int (*cfg_gpio)(struct platform_device *);
 	union {
 		struct samsung_i2s i2s;
+		struct samsung_pcm pcm;
 	} type;
 };

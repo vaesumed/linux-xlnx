@@ -84,8 +84,6 @@ static struct platform_driver s3c2400_serial_driver = {
 	},
 };
 
-s3c24xx_console_init(&s3c2400_serial_driver, &s3c2400_uart_inf);
-
 static inline int s3c2400_serial_init(void)
 {
 	return s3c24xx_serial_init(&s3c2400_serial_driver, &s3c2400_uart_inf);
