@@ -241,6 +241,14 @@ static inline void destroy_rcu_head_on_stack(struct rcu_head *head)
 }
 #endif	/* #else !CONFIG_DEBUG_OBJECTS_RCU_HEAD */
 
+
+#if defined(CONFIG_PROVE_RCU) && defined(CONFIG_NO_HZ)
+extern bool rcu_check_extended_qs(void);
+#else
+static inline bool rcu_check_extended_qs(void) { return false; }
+#endif
+
+
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 
 extern struct lockdep_map rcu_lock_map;
@@ -277,6 +285,10 @@ static inline int rcu_read_lock_held(void)
 {
 	if (!debug_lockdep_rcu_enabled())
 		return 1;
+
+	if (rcu_check_extended_qs())
+		return 0;
+
 	return lock_is_held(&rcu_lock_map);
 }
 
@@ -308,6 +320,10 @@ static inline int rcu_read_lock_sched_held(void)
 
 	if (!debug_lockdep_rcu_enabled())
 		return 1;
+
+	if (rcu_check_extended_qs())
+		return 0;
+
 	if (debug_locks)
 		lockdep_opinion = lock_is_held(&rcu_sched_lock_map);
 	return lockdep_opinion || preempt_count() != 0 || irqs_disabled();
