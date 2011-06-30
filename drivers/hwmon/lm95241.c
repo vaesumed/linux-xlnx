@@ -101,7 +101,7 @@ struct lm95241_data {
 static int TempFromReg(u8 val_h, u8 val_l)
 {
 	if (val_h & 0x80)
-		return val_h - 0x100;
+		return (val_h - 0x100) * 1000;
 	return val_h * 1000 + val_l * 1000 / 256;
 }
 
