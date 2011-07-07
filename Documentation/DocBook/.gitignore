@@ -8,4 +8,5 @@
 *.dvi
 *.log
 *.out
-media/
+media-indices.tmpl
+media-entities.tmpl
