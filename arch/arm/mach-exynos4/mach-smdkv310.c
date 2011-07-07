@@ -78,9 +78,7 @@ static struct s3c2410_uartcfg smdkv310_uartcfgs[] __initdata = {
 };
 
 static struct s3c_sdhci_platdata smdkv310_hsmmc0_pdata __initdata = {
-	.cd_type		= S3C_SDHCI_CD_GPIO,
-	.ext_cd_gpio		= EXYNOS4_GPK0(2),
-	.ext_cd_gpio_invert	= 1,
+	.cd_type		= S3C_SDHCI_CD_INTERNAL,
 	.clk_type		= S3C_SDHCI_CLK_DIV_EXTERNAL,
 #ifdef CONFIG_EXYNOS4_SDHCI_CH0_8BIT
 	.max_width		= 8,
@@ -96,9 +94,7 @@ static struct s3c_sdhci_platdata smdkv310_hsmmc1_pdata __initdata = {
 };
 
 static struct s3c_sdhci_platdata smdkv310_hsmmc2_pdata __initdata = {
-	.cd_type		= S3C_SDHCI_CD_GPIO,
-	.ext_cd_gpio		= EXYNOS4_GPK2(2),
-	.ext_cd_gpio_invert	= 1,
+	.cd_type		= S3C_SDHCI_CD_INTERNAL,
 	.clk_type		= S3C_SDHCI_CLK_DIV_EXTERNAL,
 #ifdef CONFIG_EXYNOS4_SDHCI_CH2_8BIT
 	.max_width		= 8,
@@ -163,6 +159,11 @@ static struct samsung_keypad_platdata smdkv310_keypad_data __initdata = {
 	.cols		= 8,
 };
 
+static struct platform_device smdkv310_pcm_device = {
+	.name		= "samsung-smdk-pcm",
+	.id		= -1,
+};
+
 static struct i2c_board_info i2c_devs1[] __initdata = {
 	{I2C_BOARD_INFO("wm8994", 0x1a),},
 };
@@ -186,8 +187,10 @@ static struct platform_device *smdkv310_devices[] __initdata = {
 	&exynos4_device_pd[PD_TV],
 	&exynos4_device_pd[PD_GPS],
 	&exynos4_device_sysmmu,
+	&exynos4_device_pcm0,
 	&samsung_asoc_dma,
 	&smdkv310_smsc911x,
+	&smdkv310_pcm_device,
 };
 
 static void __init smdkv310_smsc911x_init(void)

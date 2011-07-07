@@ -370,10 +370,10 @@ static void __init s5p_clocksource_init(void)
 
 	clock_rate = clk_get_rate(tin_source);
 
-	init_sched_clock(&cd, s5p_update_sched_clock, 32, clock_rate);
-
 	s5p_time_setup(timer_source.source_id, TCNT_MAX);
 	s5p_time_start(timer_source.source_id, PERIODIC);
+
+	init_sched_clock(&cd, s5p_update_sched_clock, 32, clock_rate);
 
 	if (clocksource_register_hz(&time_clocksource, clock_rate))
 		panic("%s: can't register clocksource\n", time_clocksource.name);
@@ -384,12 +384,17 @@ static void __init s5p_timer_resources(void)
 
 	unsigned long event_id = timer_source.event_id;
 	unsigned long source_id = timer_source.source_id;
+	char devname[15];
 
 	timerclk = clk_get(NULL, "timers");
 	if (IS_ERR(timerclk))
 		panic("failed to get timers clock for timer");
 
 	clk_enable(timerclk);
+
+	sprintf(devname, "s3c24xx-pwm.%lu", event_id);
+	s3c_device_timer[event_id].id = event_id;
+	s3c_device_timer[event_id].dev.init_name = devname;
 
 	tin_event = clk_get(&s3c_device_timer[event_id].dev, "pwm-tin");
 	if (IS_ERR(tin_event))
@@ -400,6 +405,10 @@ static void __init s5p_timer_resources(void)
 		panic("failed to get pwm-tdiv clock for event timer");
 
 	clk_enable(tin_event);
+
+	sprintf(devname, "s3c24xx-pwm.%lu", source_id);
+	s3c_device_timer[source_id].id = source_id;
+	s3c_device_timer[source_id].dev.init_name = devname;
 
 	tin_source = clk_get(&s3c_device_timer[source_id].dev, "pwm-tin");
 	if (IS_ERR(tin_source))

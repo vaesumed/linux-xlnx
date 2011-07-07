@@ -142,6 +142,11 @@ static struct platform_device smdkc210_smsc911x = {
 	},
 };
 
+static struct platform_device smdkc210_pcm_device = {
+	.name		= "samsung-smdk-pcm",
+	.id		= -1,
+};
+
 static struct i2c_board_info i2c_devs1[] __initdata = {
 	{I2C_BOARD_INFO("wm8994", 0x1a),},
 };
@@ -156,6 +161,7 @@ static struct platform_device *smdkc210_devices[] __initdata = {
 	&s3c_device_wdt,
 	&exynos4_device_ac97,
 	&exynos4_device_i2s0,
+	&exynos4_device_pcm0,
 	&exynos4_device_pd[PD_MFC],
 	&exynos4_device_pd[PD_G3D],
 	&exynos4_device_pd[PD_LCD0],
@@ -166,6 +172,7 @@ static struct platform_device *smdkc210_devices[] __initdata = {
 	&exynos4_device_sysmmu,
 	&samsung_asoc_dma,
 	&smdkc210_smsc911x,
+	&smdkc210_pcm_device,
 };
 
 static void __init smdkc210_smsc911x_init(void)
