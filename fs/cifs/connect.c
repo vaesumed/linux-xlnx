@@ -2831,14 +2831,11 @@ is_path_accessible(int xid, struct cifs_tcon *tcon,
 }
 
 void
-cifs_cleanup_volume_info(struct smb_vol **pvolume_info)
+cifs_cleanup_volume_info(struct smb_vol *volume_info)
 {
-	struct smb_vol *volume_info;
-
-	if (!pvolume_info || !*pvolume_info)
+	if (!volume_info)
 		return;
 
-	volume_info = *pvolume_info;
 	kfree(volume_info->username);
 	kzfree(volume_info->password);
 	kfree(volume_info->UNC);
@@ -2847,7 +2844,6 @@ cifs_cleanup_volume_info(struct smb_vol **pvolume_info)
 	kfree(volume_info->iocharset);
 	kfree(volume_info->prepath);
 	kfree(volume_info);
-	*pvolume_info = NULL;
 	return;
 }
 
@@ -2855,19 +2851,28 @@ cifs_cleanup_volume_info(struct smb_vol **pvolume_info)
 /* build_path_to_root returns full path to root when
  * we do not have an exiting connection (tcon) */
 static char *
-build_unc_path_to_root(const struct smb_vol *volume_info,
+build_unc_path_to_root(const struct smb_vol *vol,
 		const struct cifs_sb_info *cifs_sb)
 {
-	char *full_path;
+	char *full_path, *pos;
+	unsigned int pplen = vol->prepath ? strlen(vol->prepath) : 0;
+	unsigned int unc_len = strnlen(vol->UNC, MAX_TREE_SIZE + 1);
 
-	int unc_len = strnlen(volume_info->UNC, MAX_TREE_SIZE + 1);
-	full_path = kmalloc(unc_len + 1, GFP_KERNEL);
+	full_path = kmalloc(unc_len + pplen + 1, GFP_KERNEL);
 	if (full_path == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	strncpy(full_path, volume_info->UNC, unc_len);
-	full_path[unc_len] = 0; /* add trailing null */
+	strncpy(full_path, vol->UNC, unc_len);
+	pos = full_path + unc_len;
+
+	if (pplen) {
+		strncpy(pos, vol->prepath, pplen);
+		pos += pplen;
+	}
+
+	*pos = '\0'; /* add trailing null */
 	convert_delimiter(full_path, CIFS_DIR_SEP(cifs_sb));
+	cFYI(1, "%s: full_path=%s", __func__, full_path);
 	return full_path;
 }
 
@@ -2981,7 +2986,7 @@ int cifs_setup_volume_info(struct smb_vol **pvolume_info, char *mount_data,
 	*pvolume_info = volume_info;
 	return rc;
 out:
-	cifs_cleanup_volume_info(&volume_info);
+	cifs_cleanup_volume_info(volume_info);
 	return rc;
 }
 
@@ -3012,7 +3017,6 @@ try_mount_again:
 		else if (pSesInfo)
 			cifs_put_smb_ses(pSesInfo);
 
-		cifs_cleanup_volume_info(&volume_info);
 		FreeXid(xid);
 	}
 #endif
