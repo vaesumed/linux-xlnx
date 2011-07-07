@@ -233,9 +233,9 @@ static ssize_t mtd_read(struct file *file, char __user *buf, size_t count,loff_t
 		default:
 			ret = mtd->read(mtd, *ppos, len, &retlen, kbuf);
 		}
-		/* Nand returns -EBADMSG on ecc errors, but it returns
+		/* Nand returns -EBADMSG on ECC errors, but it returns
 		 * the data. For our userspace tools it is important
-		 * to dump areas with ecc errors !
+		 * to dump areas with ECC errors!
 		 * For kernel internal usage it also might return -EUCLEAN
 		 * to signal the caller that a bitflip has occurred and has
 		 * been corrected by the ECC algorithm.
@@ -320,6 +320,7 @@ static ssize_t mtd_write(struct file *file, const char __user *buf, size_t count
 			ops.mode = MTD_OOB_RAW;
 			ops.datbuf = kbuf;
 			ops.oobbuf = NULL;
+			ops.ooboffs = 0;
 			ops.len = len;
 
 			ret = mtd->write_oob(mtd, *ppos, &ops);
@@ -472,6 +473,22 @@ static int mtd_do_readoob(struct mtd_info *mtd, uint64_t start,
 		ret = -EFAULT;
 
 	kfree(ops.oobbuf);
+
+	/*
+	 * NAND returns -EBADMSG on ECC errors, but it returns the OOB
+	 * data. For our userspace tools it is important to dump areas
+	 * with ECC errors!
+	 * For kernel internal usage it also might return -EUCLEAN
+	 * to signal the caller that a bitflip has occured and has
+	 * been corrected by the ECC algorithm.
+	 *
+	 * Note: currently the standard NAND function, nand_read_oob_std,
+	 * does not calculate ECC for the OOB area, so do not rely on
+	 * this behavior unless you have replaced it with your own.
+	 */
+	if (ret == -EUCLEAN || ret == -EBADMSG)
+		return 0;
+
 	return ret;
 }
 
@@ -882,7 +899,7 @@ static int mtd_ioctl(struct file *file, u_int cmd, u_long arg)
 	}
 #endif
 
-	/* This ioctl is being deprecated - it truncates the ecc layout */
+	/* This ioctl is being deprecated - it truncates the ECC layout */
 	case ECCGETLAYOUT:
 	{
 		struct nand_ecclayout_user *usrlay;
