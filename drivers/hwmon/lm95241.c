@@ -101,7 +101,7 @@ struct lm95241_data {
 static int TempFromReg(u8 val_h, u8 val_l)
 {
 	if (val_h & 0x80)
-		return val_h - 0x100;
+		return (val_h - 0x100) * 1000;
 	return val_h * 1000 + val_l * 1000 / 256;
 }
 
@@ -330,24 +330,19 @@ static int lm95241_detect(struct i2c_client *new_client,
 			  struct i2c_board_info *info)
 {
 	struct i2c_adapter *adapter = new_client->adapter;
-	int address = new_client->addr;
 	const char *name;
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE_DATA))
 		return -ENODEV;
 
-	if ((i2c_smbus_read_byte_data(new_client, LM95241_REG_R_MAN_ID)
-	     == MANUFACTURER_ID)
-	    && (i2c_smbus_read_byte_data(new_client, LM95241_REG_R_CHIP_ID)
-		>= DEFAULT_REVISION)) {
-		name = DEVNAME;
-	} else {
-		dev_dbg(&adapter->dev, "LM95241 detection failed at 0x%02x\n",
-			address);
+	if (i2c_smbus_read_byte_data(new_client, LM95241_REG_R_MAN_ID)
+	    != MANUFACTURER_ID
+	    || i2c_smbus_read_byte_data(new_client, LM95241_REG_R_CHIP_ID)
+	    != DEFAULT_REVISION)
 		return -ENODEV;
-	}
 
-	/* Fill the i2c board info */
+	name = DEVNAME;
+
 	strlcpy(info->type, name, I2C_NAME_SIZE);
 	return 0;
 }
