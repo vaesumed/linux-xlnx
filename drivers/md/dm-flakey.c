@@ -25,43 +25,98 @@ struct flakey_c {
 	sector_t start;
 	unsigned up_interval;
 	unsigned down_interval;
+	unsigned long flags;
 };
 
+enum feature_flag_bits {
+	DROP_WRITES
+};
+
+static int parse_features(struct dm_arg_set *as, struct flakey_c *fc,
+			  struct dm_target *ti)
+{
+	int r;
+	unsigned argc;
+	const char *arg_name;
+
+	static struct dm_arg _args[] = {
+		{0, 1, "invalid number of feature args"},
+	};
+
+	/* No feature arguments supplied. */
+	if (!as->argc)
+		return 0;
+
+	r = dm_read_arg_group(_args, as, &argc, &ti->error);
+	if (r)
+		return -EINVAL;
+
+	while (argc && !r) {
+		arg_name = dm_shift_arg(as);
+		argc--;
+
+		if (!strcasecmp(arg_name, "drop_writes")) {
+			set_bit(DROP_WRITES, &fc->flags);
+			continue;
+		}
+
+		ti->error = "Unrecognised flakey feature request";
+		r = -EINVAL;
+	}
+
+	return r;
+}
+
 /*
- * Construct a flakey mapping: <dev_path> <offset> <up interval> <down interval>
+ * Construct a flakey mapping:
+ * <dev_path> <offset> <up interval> <down interval> [<#feature args> [<arg>]*]
+ *
+ *   Feature args:
+ *     [drop_writes]
  */
 static int flakey_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 {
-	struct flakey_c *fc;
-	unsigned long long tmp;
+	static struct dm_arg _args[] = {
+		{0, UINT_MAX, "dm-flakey: Invalid up interval"},
+		{0, UINT_MAX, "dm-flakey: Invalid down interval"},
+	};
 
-	if (argc != 4) {
+	int r;
+	struct flakey_c *fc;
+	unsigned long long tmpll;
+	struct dm_arg_set as;
+	const char *devname;
+
+	as.argc = argc;
+	as.argv = argv;
+
+	if (argc < 4) {
 		ti->error = "dm-flakey: Invalid argument count";
 		return -EINVAL;
 	}
 
-	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
+	fc = kzalloc(sizeof(*fc), GFP_KERNEL);
 	if (!fc) {
 		ti->error = "dm-flakey: Cannot allocate linear context";
 		return -ENOMEM;
 	}
 	fc->start_time = jiffies;
 
-	if (sscanf(argv[1], "%llu", &tmp) != 1) {
+	devname = dm_shift_arg(&as);
+
+	if (sscanf(dm_shift_arg(&as), "%llu", &tmpll) != 1) {
 		ti->error = "dm-flakey: Invalid device sector";
 		goto bad;
 	}
-	fc->start = tmp;
+	fc->start = tmpll;
 
-	if (sscanf(argv[2], "%u", &fc->up_interval) != 1) {
-		ti->error = "dm-flakey: Invalid up interval";
+	r = dm_read_arg(_args, &as, &fc->up_interval, &ti->error);
+	if (r)
 		goto bad;
-	}
 
-	if (sscanf(argv[3], "%u", &fc->down_interval) != 1) {
-		ti->error = "dm-flakey: Invalid down interval";
+	r = dm_read_arg(_args, &as, &fc->down_interval, &ti->error);
+	if (r)
 		goto bad;
-	}
 
 	if (!(fc->up_interval + fc->down_interval)) {
 		ti->error = "dm-flakey: Total (up + down) interval is zero";
@@ -73,12 +128,17 @@ static int flakey_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		goto bad;
 	}
 
-	if (dm_get_device(ti, argv[0], dm_table_get_mode(ti->table), &fc->dev)) {
+	r = parse_features(&as, fc, ti);
+	if (r)
+		goto bad;
+
+	if (dm_get_device(ti, devname, dm_table_get_mode(ti->table), &fc->dev)) {
 		ti->error = "dm-flakey: Device lookup failed";
 		goto bad;
 	}
 
 	ti->num_flush_requests = 1;
+	ti->num_discard_requests = 1;
 	ti->private = fc;
 	return 0;
 
@@ -99,7 +159,7 @@ static sector_t flakey_map_sector(struct dm_target *ti, sector_t bi_sector)
 {
 	struct flakey_c *fc = ti->private;
 
-	return fc->start + (bi_sector - ti->begin);
+	return fc->start + dm_target_offset(ti, bi_sector);
 }
 
 static void flakey_map_bio(struct dm_target *ti, struct bio *bio)
@@ -116,12 +176,31 @@ static int flakey_map(struct dm_target *ti, struct bio *bio,
 {
 	struct flakey_c *fc = ti->private;
 	unsigned elapsed;
+	unsigned rw;
 
 	/* Are we alive ? */
 	elapsed = (jiffies - fc->start_time) / HZ;
-	if (elapsed % (fc->up_interval + fc->down_interval) >= fc->up_interval)
-		return -EIO;
+	if (elapsed % (fc->up_interval + fc->down_interval) >= fc->up_interval) {
+		rw = bio_data_dir(bio);
 
+		/*
+		 * Drop writes.  Map reads as normal.
+		 */
+		if (test_bit(DROP_WRITES, &fc->flags)) {
+			if (rw == WRITE) {
+				bio_endio(bio, 0);
+				return DM_MAPIO_SUBMITTED;
+			}
+			goto map_bio;
+		}
+
+		/*
+		 * Default setting errors all I/O.
+		 */
+		return -EIO;
+	}
+
+map_bio:
 	flakey_map_bio(ti, bio);
 
 	return DM_MAPIO_REMAPPED;
@@ -130,7 +209,9 @@ static int flakey_map(struct dm_target *ti, struct bio *bio,
 static int flakey_status(struct dm_target *ti, status_type_t type,
 			 char *result, unsigned int maxlen)
 {
+	unsigned sz = 0;
 	struct flakey_c *fc = ti->private;
+	unsigned drop_writes;
 
 	switch (type) {
 	case STATUSTYPE_INFO:
@@ -138,9 +219,14 @@ static int flakey_status(struct dm_target *ti, status_type_t type,
 		break;
 
 	case STATUSTYPE_TABLE:
-		snprintf(result, maxlen, "%s %llu %u %u", fc->dev->name,
-			 (unsigned long long)fc->start, fc->up_interval,
-			 fc->down_interval);
+		DMEMIT("%s %llu %u %u ", fc->dev->name,
+		       (unsigned long long)fc->start, fc->up_interval,
+		       fc->down_interval);
+
+		drop_writes = test_bit(DROP_WRITES, &fc->flags);
+		DMEMIT("%u ", drop_writes);
+		if (drop_writes)
+			DMEMIT("drop_writes ");
 		break;
 	}
 	return 0;
@@ -177,7 +263,7 @@ static int flakey_iterate_devices(struct dm_target *ti, iterate_devices_callout_
 
 static struct target_type flakey_target = {
 	.name   = "flakey",
-	.version = {1, 1, 0},
+	.version = {1, 2, 0},
 	.module = THIS_MODULE,
 	.ctr    = flakey_ctr,
 	.dtr    = flakey_dtr,
