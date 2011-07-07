@@ -864,6 +864,8 @@ static int nfs_write_rpcsetup(struct nfs_page *req,
 
 	data->args.fh     = NFS_FH(inode);
 	data->args.offset = req_offset(req) + offset;
+	/* pnfs_set_layoutcommit needs this */
+	data->mds_offset = data->args.offset;
 	data->args.pgbase = req->wb_pgbase + offset;
 	data->args.pages  = data->pagevec;
 	data->args.count  = count;
@@ -914,7 +916,7 @@ static int nfs_flush_multi(struct nfs_pageio_descriptor *desc)
 	unsigned int offset;
 	int requests = 0;
 	int ret = 0;
-	struct pnfs_layout_segment *lseg;
+	struct pnfs_layout_segment *lseg = desc->pg_lseg;
 	LIST_HEAD(list);
 
 	nfs_list_remove_request(req);
@@ -938,10 +940,6 @@ static int nfs_flush_multi(struct nfs_pageio_descriptor *desc)
 	} while (nbytes != 0);
 	atomic_set(&req->wb_complete, requests);
 
-	BUG_ON(desc->pg_lseg);
-	lseg = pnfs_update_layout(desc->pg_inode, req->wb_context,
-				  req_offset(req), desc->pg_count,
-				  IOMODE_RW, GFP_NOFS);
 	ClearPageError(page);
 	offset = 0;
 	nbytes = desc->pg_count;
@@ -974,8 +972,15 @@ out_bad:
 		nfs_writedata_free(data);
 	}
 	nfs_redirty_request(req);
+	put_lseg(lseg);
+	desc->pg_lseg = NULL;
 	return -ENOMEM;
 }
+
+static const struct nfs_pageio_ops nfs_flush_multi_ops = {
+	.pg_test = nfs_generic_pg_test,
+	.pg_doio = nfs_flush_multi,
+};
 
 /*
  * Create an RPC task for the given write request and kick it.
@@ -1014,10 +1019,6 @@ static int nfs_flush_one(struct nfs_pageio_descriptor *desc)
 		*pages++ = req->wb_page;
 	}
 	req = nfs_list_entry(data->pages.next);
-	if ((!lseg) && list_is_singular(&data->pages))
-		lseg = pnfs_update_layout(desc->pg_inode, req->wb_context,
-					  req_offset(req), desc->pg_count,
-					  IOMODE_RW, GFP_NOFS);
 
 	if ((desc->pg_ioflags & FLUSH_COND_STABLE) &&
 	    (desc->pg_moreio || NFS_I(desc->pg_inode)->ncommit))
@@ -1031,15 +1032,32 @@ out:
 	return ret;
 }
 
+int nfs_generic_pg_writepages(struct nfs_pageio_descriptor *desc)
+{
+	if (desc->pg_bsize < PAGE_CACHE_SIZE)
+		return nfs_flush_multi(desc);
+	return nfs_flush_one(desc);
+}
+EXPORT_SYMBOL_GPL(nfs_generic_pg_writepages);
+
+static const struct nfs_pageio_ops nfs_pageio_write_ops = {
+	.pg_test = nfs_generic_pg_test,
+	.pg_doio = nfs_generic_pg_writepages,
+};
+
+void nfs_pageio_init_write_mds(struct nfs_pageio_descriptor *pgio,
+				  struct inode *inode, int ioflags)
+{
+	nfs_pageio_init(pgio, inode, &nfs_pageio_write_ops,
+				NFS_SERVER(inode)->wsize, ioflags);
+}
+EXPORT_SYMBOL_GPL(nfs_pageio_init_write_mds);
+
 static void nfs_pageio_init_write(struct nfs_pageio_descriptor *pgio,
 				  struct inode *inode, int ioflags)
 {
-	size_t wsize = NFS_SERVER(inode)->wsize;
-
-	if (wsize < PAGE_CACHE_SIZE)
-		nfs_pageio_init(pgio, inode, nfs_flush_multi, wsize, ioflags);
-	else
-		nfs_pageio_init(pgio, inode, nfs_flush_one, wsize, ioflags);
+	if (!pnfs_pageio_init_write(pgio, inode, ioflags))
+		nfs_pageio_init_write_mds(pgio, inode, ioflags);
 }
 
 /*
