@@ -942,10 +942,8 @@ int ecryptfs_truncate(struct dentry *dentry, loff_t new_length)
 }
 
 static int
-ecryptfs_permission(struct inode *inode, int mask, unsigned int flags)
+ecryptfs_permission(struct inode *inode, int mask)
 {
-	if (flags & IPERM_FLAG_RCU)
-		return -ECHILD;
 	return inode_permission(ecryptfs_inode_to_lower(inode), mask);
 }
 

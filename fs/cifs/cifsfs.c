@@ -223,7 +223,7 @@ cifs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	return 0;
 }
 
-static int cifs_permission(struct inode *inode, int mask, unsigned int flags)
+static int cifs_permission(struct inode *inode, int mask)
 {
 	struct cifs_sb_info *cifs_sb;
 
@@ -238,7 +238,7 @@ static int cifs_permission(struct inode *inode, int mask, unsigned int flags)
 		on the client (above and beyond ACL on servers) for
 		servers which do not support setting and viewing mode bits,
 		so allowing client to check permissions is useful */
-		return generic_permission(inode, mask, flags, NULL);
+		return generic_permission(inode, mask);
 }
 
 static struct kmem_cache *cifs_inode_cachep;
