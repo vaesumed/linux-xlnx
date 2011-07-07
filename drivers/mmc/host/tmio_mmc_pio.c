@@ -46,40 +46,6 @@
 
 #include "tmio_mmc.h"
 
-static u16 sd_ctrl_read16(struct tmio_mmc_host *host, int addr)
-{
-	return readw(host->ctl + (addr << host->bus_shift));
-}
-
-static void sd_ctrl_read16_rep(struct tmio_mmc_host *host, int addr,
-		u16 *buf, int count)
-{
-	readsw(host->ctl + (addr << host->bus_shift), buf, count);
-}
-
-static u32 sd_ctrl_read32(struct tmio_mmc_host *host, int addr)
-{
-	return readw(host->ctl + (addr << host->bus_shift)) |
-	       readw(host->ctl + ((addr + 2) << host->bus_shift)) << 16;
-}
-
-static void sd_ctrl_write16(struct tmio_mmc_host *host, int addr, u16 val)
-{
-	writew(val, host->ctl + (addr << host->bus_shift));
-}
-
-static void sd_ctrl_write16_rep(struct tmio_mmc_host *host, int addr,
-		u16 *buf, int count)
-{
-	writesw(host->ctl + (addr << host->bus_shift), buf, count);
-}
-
-static void sd_ctrl_write32(struct tmio_mmc_host *host, int addr, u32 val)
-{
-	writew(val, host->ctl + (addr << host->bus_shift));
-	writew(val >> 16, host->ctl + ((addr + 2) << host->bus_shift));
-}
-
 void tmio_mmc_enable_mmc_irqs(struct tmio_mmc_host *host, u32 i)
 {
 	u32 mask = sd_ctrl_read32(host, CTL_IRQ_MASK) & ~(i & TMIO_MASK_IRQ);
@@ -603,58 +569,46 @@ irqreturn_t tmio_mmc_irq(int irq, void *devid)
 	pr_debug_status(status);
 	pr_debug_status(ireg);
 
-	if (!ireg) {
-		tmio_mmc_disable_mmc_irqs(host, status & ~irq_mask);
-
-		pr_warning("tmio_mmc: Spurious irq, disabling! "
-			"0x%08x 0x%08x 0x%08x\n", status, irq_mask, ireg);
-		pr_debug_status(status);
-
+	/* Card insert / remove attempts */
+	if (ireg & (TMIO_STAT_CARD_INSERT | TMIO_STAT_CARD_REMOVE)) {
+		tmio_mmc_ack_mmc_irqs(host, TMIO_STAT_CARD_INSERT |
+			TMIO_STAT_CARD_REMOVE);
+		mmc_detect_change(host->mmc, msecs_to_jiffies(100));
 		goto out;
 	}
 
-	while (ireg) {
-		/* Card insert / remove attempts */
-		if (ireg & (TMIO_STAT_CARD_INSERT | TMIO_STAT_CARD_REMOVE)) {
-			tmio_mmc_ack_mmc_irqs(host, TMIO_STAT_CARD_INSERT |
-				TMIO_STAT_CARD_REMOVE);
-			mmc_detect_change(host->mmc, msecs_to_jiffies(100));
-		}
-
-		/* CRC and other errors */
-/*		if (ireg & TMIO_STAT_ERR_IRQ)
- *			handled |= tmio_error_irq(host, irq, stat);
+	/* CRC and other errors */
+/*	if (ireg & TMIO_STAT_ERR_IRQ)
+ *		handled |= tmio_error_irq(host, irq, stat);
  */
 
-		/* Command completion */
-		if (ireg & (TMIO_STAT_CMDRESPEND | TMIO_STAT_CMDTIMEOUT)) {
-			tmio_mmc_ack_mmc_irqs(host,
-				     TMIO_STAT_CMDRESPEND |
-				     TMIO_STAT_CMDTIMEOUT);
-			tmio_mmc_cmd_irq(host, status);
-		}
-
-		/* Data transfer */
-		if (ireg & (TMIO_STAT_RXRDY | TMIO_STAT_TXRQ)) {
-			tmio_mmc_ack_mmc_irqs(host, TMIO_STAT_RXRDY | TMIO_STAT_TXRQ);
-			tmio_mmc_pio_irq(host);
-		}
-
-		/* Data transfer completion */
-		if (ireg & TMIO_STAT_DATAEND) {
-			tmio_mmc_ack_mmc_irqs(host, TMIO_STAT_DATAEND);
-			tmio_mmc_data_irq(host);
-		}
-
-		/* Check status - keep going until we've handled it all */
-		status = sd_ctrl_read32(host, CTL_STATUS);
-		irq_mask = sd_ctrl_read32(host, CTL_IRQ_MASK);
-		ireg = status & TMIO_MASK_IRQ & ~irq_mask;
-
-		pr_debug("Status at end of loop: %08x\n", status);
-		pr_debug_status(status);
+	/* Command completion */
+	if (ireg & (TMIO_STAT_CMDRESPEND | TMIO_STAT_CMDTIMEOUT)) {
+		tmio_mmc_ack_mmc_irqs(host,
+			     TMIO_STAT_CMDRESPEND |
+			     TMIO_STAT_CMDTIMEOUT);
+		tmio_mmc_cmd_irq(host, status);
+		goto out;
 	}
-	pr_debug("MMC IRQ end\n");
+
+	/* Data transfer */
+	if (ireg & (TMIO_STAT_RXRDY | TMIO_STAT_TXRQ)) {
+		tmio_mmc_ack_mmc_irqs(host, TMIO_STAT_RXRDY | TMIO_STAT_TXRQ);
+		tmio_mmc_pio_irq(host);
+		goto out;
+	}
+
+	/* Data transfer completion */
+	if (ireg & TMIO_STAT_DATAEND) {
+		tmio_mmc_ack_mmc_irqs(host, TMIO_STAT_DATAEND);
+		tmio_mmc_data_irq(host);
+		goto out;
+	}
+
+	pr_warning("tmio_mmc: Spurious irq, disabling! "
+		"0x%08x 0x%08x 0x%08x\n", status, irq_mask, ireg);
+	pr_debug_status(status);
+	tmio_mmc_disable_mmc_irqs(host, status & ~irq_mask);
 
 out:
 	return IRQ_HANDLED;
