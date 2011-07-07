@@ -84,6 +84,10 @@ struct dentry *kvm_debugfs_dir;
 
 static long kvm_vcpu_ioctl(struct file *file, unsigned int ioctl,
 			   unsigned long arg);
+#ifdef CONFIG_COMPAT
+static long kvm_vcpu_compat_ioctl(struct file *file, unsigned int ioctl,
+				  unsigned long arg);
+#endif
 static int hardware_enable_all(void);
 static void hardware_disable_all(void);
 
@@ -1345,7 +1349,7 @@ int kvm_write_guest_page(struct kvm *kvm, gfn_t gfn, const void *data,
 	addr = gfn_to_hva(kvm, gfn);
 	if (kvm_is_error_hva(addr))
 		return -EFAULT;
-	r = copy_to_user((void __user *)addr + offset, data, len);
+	r = __copy_to_user((void __user *)addr + offset, data, len);
 	if (r)
 		return -EFAULT;
 	mark_page_dirty(kvm, gfn);
@@ -1405,7 +1409,7 @@ int kvm_write_guest_cached(struct kvm *kvm, struct gfn_to_hva_cache *ghc,
 	if (kvm_is_error_hva(ghc->hva))
 		return -EFAULT;
 
-	r = copy_to_user((void __user *)ghc->hva, data, len);
+	r = __copy_to_user((void __user *)ghc->hva, data, len);
 	if (r)
 		return -EFAULT;
 	mark_page_dirty_in_slot(kvm, ghc->memslot, ghc->gpa >> PAGE_SHIFT);
@@ -1586,7 +1590,9 @@ static int kvm_vcpu_release(struct inode *inode, struct file *filp)
 static struct file_operations kvm_vcpu_fops = {
 	.release        = kvm_vcpu_release,
 	.unlocked_ioctl = kvm_vcpu_ioctl,
-	.compat_ioctl   = kvm_vcpu_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl   = kvm_vcpu_compat_ioctl,
+#endif
 	.mmap           = kvm_vcpu_mmap,
 	.llseek		= noop_llseek,
 };
@@ -1615,18 +1621,18 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 
 	r = kvm_arch_vcpu_setup(vcpu);
 	if (r)
-		return r;
+		goto vcpu_destroy;
 
 	mutex_lock(&kvm->lock);
 	if (atomic_read(&kvm->online_vcpus) == KVM_MAX_VCPUS) {
 		r = -EINVAL;
-		goto vcpu_destroy;
+		goto unlock_vcpu_destroy;
 	}
 
 	kvm_for_each_vcpu(r, v, kvm)
 		if (v->vcpu_id == id) {
 			r = -EEXIST;
-			goto vcpu_destroy;
+			goto unlock_vcpu_destroy;
 		}
 
 	BUG_ON(kvm->vcpus[atomic_read(&kvm->online_vcpus)]);
@@ -1636,7 +1642,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 	r = create_vcpu_fd(vcpu);
 	if (r < 0) {
 		kvm_put_kvm(kvm);
-		goto vcpu_destroy;
+		goto unlock_vcpu_destroy;
 	}
 
 	kvm->vcpus[atomic_read(&kvm->online_vcpus)] = vcpu;
@@ -1650,8 +1656,9 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 	mutex_unlock(&kvm->lock);
 	return r;
 
-vcpu_destroy:
+unlock_vcpu_destroy:
 	mutex_unlock(&kvm->lock);
+vcpu_destroy:
 	kvm_arch_vcpu_destroy(vcpu);
 	return r;
 }
@@ -1873,6 +1880,50 @@ out:
 	kfree(kvm_sregs);
 	return r;
 }
+
+#ifdef CONFIG_COMPAT
+static long kvm_vcpu_compat_ioctl(struct file *filp,
+				  unsigned int ioctl, unsigned long arg)
+{
+	struct kvm_vcpu *vcpu = filp->private_data;
+	void __user *argp = compat_ptr(arg);
+	int r;
+
+	if (vcpu->kvm->mm != current->mm)
+		return -EIO;
+
+	switch (ioctl) {
+	case KVM_SET_SIGNAL_MASK: {
+		struct kvm_signal_mask __user *sigmask_arg = argp;
+		struct kvm_signal_mask kvm_sigmask;
+		compat_sigset_t csigset;
+		sigset_t sigset;
+
+		if (argp) {
+			r = -EFAULT;
+			if (copy_from_user(&kvm_sigmask, argp,
+					   sizeof kvm_sigmask))
+				goto out;
+			r = -EINVAL;
+			if (kvm_sigmask.len != sizeof csigset)
+				goto out;
+			r = -EFAULT;
+			if (copy_from_user(&csigset, sigmask_arg->sigset,
+					   sizeof csigset))
+				goto out;
+		}
+		sigset_from_compat(&sigset, &csigset);
+		r = kvm_vcpu_ioctl_set_sigmask(vcpu, &sigset);
+		break;
+	}
+	default:
+		r = kvm_vcpu_ioctl(filp, ioctl, arg);
+	}
+
+out:
+	return r;
+}
+#endif
 
 static long kvm_vm_ioctl(struct file *filp,
 			   unsigned int ioctl, unsigned long arg)

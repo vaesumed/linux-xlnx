@@ -48,7 +48,7 @@
 	(~(unsigned long)(X86_CR4_VME | X86_CR4_PVI | X86_CR4_TSD | X86_CR4_DE\
 			  | X86_CR4_PSE | X86_CR4_PAE | X86_CR4_MCE     \
 			  | X86_CR4_PGE | X86_CR4_PCE | X86_CR4_OSFXSR  \
-			  | X86_CR4_OSXSAVE \
+			  | X86_CR4_OSXSAVE | X86_CR4_SMEP | X86_CR4_RDWRGSFS \
 			  | X86_CR4_OSXMMEXCPT | X86_CR4_VMXE))
 
 #define CR8_RESERVED_BITS (~(unsigned long)X86_CR8_TPR)
@@ -205,6 +205,7 @@ union kvm_mmu_page_role {
 		unsigned invalid:1;
 		unsigned nxe:1;
 		unsigned cr0_wp:1;
+		unsigned smep_andnot_wp:1;
 	};
 };
 
@@ -227,14 +228,10 @@ struct kvm_mmu_page {
 	 * in this shadow page.
 	 */
 	DECLARE_BITMAP(slot_bitmap, KVM_MEMORY_SLOTS + KVM_PRIVATE_MEM_SLOTS);
-	bool multimapped;         /* More than one parent_pte? */
 	bool unsync;
 	int root_count;          /* Currently serving as active root */
 	unsigned int unsync_children;
-	union {
-		u64 *parent_pte;               /* !multimapped */
-		struct hlist_head parent_ptes; /* multimapped, kvm_pte_chain */
-	};
+	unsigned long parent_ptes;	/* Reverse mapping for parent_pte */
 	DECLARE_BITMAP(unsync_child_bitmap, 512);
 };
 
@@ -346,8 +343,7 @@ struct kvm_vcpu_arch {
 	 * put it here to avoid allocation */
 	struct kvm_pv_mmu_op_buffer mmu_op_buffer;
 
-	struct kvm_mmu_memory_cache mmu_pte_chain_cache;
-	struct kvm_mmu_memory_cache mmu_rmap_desc_cache;
+	struct kvm_mmu_memory_cache mmu_pte_list_desc_cache;
 	struct kvm_mmu_memory_cache mmu_page_cache;
 	struct kvm_mmu_memory_cache mmu_page_header_cache;
 
@@ -441,6 +437,7 @@ struct kvm_arch {
 	unsigned int n_used_mmu_pages;
 	unsigned int n_requested_mmu_pages;
 	unsigned int n_max_mmu_pages;
+	unsigned int indirect_shadow_pages;
 	atomic_t invlpg_counter;
 	struct hlist_head mmu_page_hash[KVM_NUM_MMU_PAGES];
 	/*
@@ -559,7 +556,7 @@ struct kvm_x86_ops {
 	void (*decache_cr4_guest_bits)(struct kvm_vcpu *vcpu);
 	void (*set_cr0)(struct kvm_vcpu *vcpu, unsigned long cr0);
 	void (*set_cr3)(struct kvm_vcpu *vcpu, unsigned long cr3);
-	void (*set_cr4)(struct kvm_vcpu *vcpu, unsigned long cr4);
+	int (*set_cr4)(struct kvm_vcpu *vcpu, unsigned long cr4);
 	void (*set_efer)(struct kvm_vcpu *vcpu, u64 efer);
 	void (*get_idt)(struct kvm_vcpu *vcpu, struct desc_ptr *dt);
 	void (*set_idt)(struct kvm_vcpu *vcpu, struct desc_ptr *dt);
@@ -830,11 +827,12 @@ enum {
 asmlinkage void kvm_spurious_fault(void);
 extern bool kvm_rebooting;
 
-#define __kvm_handle_fault_on_reboot(insn) \
+#define ____kvm_handle_fault_on_reboot(insn, cleanup_insn)	\
 	"666: " insn "\n\t" \
 	"668: \n\t"                           \
 	".pushsection .fixup, \"ax\" \n" \
 	"667: \n\t" \
+	cleanup_insn "\n\t"		      \
 	"cmpb $0, kvm_rebooting \n\t"	      \
 	"jne 668b \n\t"      		      \
 	__ASM_SIZE(push) " $666b \n\t"	      \
@@ -843,6 +841,9 @@ extern bool kvm_rebooting;
 	".pushsection __ex_table, \"a\" \n\t" \
 	_ASM_PTR " 666b, 667b \n\t" \
 	".popsection"
+
+#define __kvm_handle_fault_on_reboot(insn)		\
+	____kvm_handle_fault_on_reboot(insn, "")
 
 #define KVM_ARCH_WANT_MMU_NOTIFIER
 int kvm_unmap_hva(struct kvm *kvm, unsigned long hva);

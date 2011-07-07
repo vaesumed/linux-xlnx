@@ -1143,15 +1143,10 @@ Assigns an IRQ to a passed-through device.
 
 struct kvm_assigned_irq {
 	__u32 assigned_dev_id;
-	__u32 host_irq;
+	__u32 host_irq; /* ignored (legacy field) */
 	__u32 guest_irq;
 	__u32 flags;
 	union {
-		struct {
-			__u32 addr_lo;
-			__u32 addr_hi;
-			__u32 data;
-		} guest_msi;
 		__u32 reserved[12];
 	};
 };
@@ -1239,8 +1234,10 @@ Type: vm ioctl
 Parameters: struct kvm_assigned_msix_nr (in)
 Returns: 0 on success, -1 on error
 
-Set the number of MSI-X interrupts for an assigned device. This service can
-only be called once in the lifetime of an assigned device.
+Set the number of MSI-X interrupts for an assigned device. The number is
+reset again by terminating the MSI-X assignment of the device via
+KVM_DEASSIGN_DEV_IRQ. Calling this service more than once at any earlier
+point will fail.
 
 struct kvm_assigned_msix_nr {
 	__u32 assigned_dev_id;
@@ -1290,6 +1287,68 @@ Returns: virtual tsc-khz on success, negative value on error
 Returns the tsc frequency of the guest. The unit of the return value is
 KHz. If the host has unstable tsc this ioctl returns -EIO instead as an
 error.
+
+4.56 KVM_GET_LAPIC
+
+Capability: KVM_CAP_IRQCHIP
+Architectures: x86
+Type: vcpu ioctl
+Parameters: struct kvm_lapic_state (out)
+Returns: 0 on success, -1 on error
+
+#define KVM_APIC_REG_SIZE 0x400
+struct kvm_lapic_state {
+	char regs[KVM_APIC_REG_SIZE];
+};
+
+Reads the Local APIC registers and copies them into the input argument.  The
+data format and layout are the same as documented in the architecture manual.
+
+4.57 KVM_SET_LAPIC
+
+Capability: KVM_CAP_IRQCHIP
+Architectures: x86
+Type: vcpu ioctl
+Parameters: struct kvm_lapic_state (in)
+Returns: 0 on success, -1 on error
+
+#define KVM_APIC_REG_SIZE 0x400
+struct kvm_lapic_state {
+	char regs[KVM_APIC_REG_SIZE];
+};
+
+Copies the input argument into the the Local APIC registers.  The data format
+and layout are the same as documented in the architecture manual.
+
+4.58 KVM_IOEVENTFD
+
+Capability: KVM_CAP_IOEVENTFD
+Architectures: all
+Type: vm ioctl
+Parameters: struct kvm_ioeventfd (in)
+Returns: 0 on success, !0 on error
+
+This ioctl attaches or detaches an ioeventfd to a legal pio/mmio address
+within the guest.  A guest write in the registered address will signal the
+provided event instead of triggering an exit.
+
+struct kvm_ioeventfd {
+	__u64 datamatch;
+	__u64 addr;        /* legal pio/mmio address */
+	__u32 len;         /* 1, 2, 4, or 8 bytes    */
+	__s32 fd;
+	__u32 flags;
+	__u8  pad[36];
+};
+
+The following flags are defined:
+
+#define KVM_IOEVENTFD_FLAG_DATAMATCH (1 << kvm_ioeventfd_flag_nr_datamatch)
+#define KVM_IOEVENTFD_FLAG_PIO       (1 << kvm_ioeventfd_flag_nr_pio)
+#define KVM_IOEVENTFD_FLAG_DEASSIGN  (1 << kvm_ioeventfd_flag_nr_deassign)
+
+If datamatch flag is set, the event will be signaled only if the written value
+to the registered address is equal to datamatch in struct kvm_ioeventfd.
 
 5. The kvm_run structure
 
