@@ -1564,11 +1564,11 @@ static bool test_mem_cgroup_node_reclaimable(struct mem_cgroup *mem,
 {
 	if (mem_cgroup_node_nr_file_lru_pages(mem, nid))
 		return true;
-        if (noswap || !total_swap_pages)
-                return false;
-        if (mem_cgroup_node_nr_anon_lru_pages(mem, nid))
-                return true;
-        return false;
+	if (noswap || !total_swap_pages)
+		return false;
+	if (mem_cgroup_node_nr_anon_lru_pages(mem, nid))
+		return true;
+	return false;
 
 }
 #if MAX_NUMNODES > 1
@@ -1656,13 +1656,13 @@ bool mem_cgroup_reclaimable(struct mem_cgroup *mem, bool noswap)
 		}
 	}
 	/*
- 	 * Check rest of nodes.
- 	 */
+	 * Check rest of nodes.
+	 */
 	for_each_node_state(nid, N_HIGH_MEMORY) {
 		if (node_isset(nid, mem->scan_nodes))
 			continue;
 		if (test_mem_cgroup_node_reclaimable(mem, nid, noswap))
-			return true;	
+			return true;
 	}
 	return false;
 }
