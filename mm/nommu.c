@@ -1816,6 +1816,7 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long from,
 		unsigned long to, unsigned long size, pgprot_t prot)
 {
 	vma->vm_start = vma->vm_pgoff << PAGE_SHIFT;
+	vma->vm_end = vma->vm_start + size;
 	return 0;
 }
 EXPORT_SYMBOL(remap_pfn_range);
