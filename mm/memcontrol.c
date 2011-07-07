@@ -704,10 +704,10 @@ static void memcg_check_events(struct mem_cgroup *mem, struct page *page)
 		mem_cgroup_threshold(mem);
 		__mem_cgroup_target_update(mem, MEM_CGROUP_TARGET_THRESH);
 		if (unlikely(__memcg_event_check(mem,
-			MEM_CGROUP_TARGET_SOFTLIMIT))){
+			     MEM_CGROUP_TARGET_SOFTLIMIT))) {
 			mem_cgroup_update_tree(mem, page);
 			__mem_cgroup_target_update(mem,
-				MEM_CGROUP_TARGET_SOFTLIMIT);
+						   MEM_CGROUP_TARGET_SOFTLIMIT);
 		}
 #if MAX_NUMNODES > 1
 		if (unlikely(__memcg_event_check(mem,
