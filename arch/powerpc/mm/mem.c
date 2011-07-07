@@ -337,8 +337,9 @@ void __init mem_init(void)
 
 		highmem_mapnr = lowmem_end_addr >> PAGE_SHIFT;
 		for (pfn = highmem_mapnr; pfn < max_mapnr; ++pfn) {
+			phys_addr_t paddr = (phys_addr_t)pfn << PAGE_SHIFT;
 			struct page *page = pfn_to_page(pfn);
-			if (memblock_is_reserved(pfn << PAGE_SHIFT))
+			if (memblock_is_reserved(paddr))
 				continue;
 			ClearPageReserved(page);
 			init_page_count(page);
@@ -380,6 +381,25 @@ void __init mem_init(void)
 #endif /* CONFIG_PPC32 */
 
 	mem_init_done = 1;
+}
+
+void free_initmem(void)
+{
+	unsigned long addr;
+
+	ppc_md.progress = ppc_printk_progress;
+
+	addr = (unsigned long)__init_begin;
+	for (; addr < (unsigned long)__init_end; addr += PAGE_SIZE) {
+		memset((void *)addr, POISON_FREE_INITMEM, PAGE_SIZE);
+		ClearPageReserved(virt_to_page(addr));
+		init_page_count(virt_to_page(addr));
+		free_page(addr);
+		totalram_pages++;
+	}
+	pr_info("Freeing unused kernel memory: %luk freed\n",
+		((unsigned long)__init_end -
+		(unsigned long)__init_begin) >> 10);
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD

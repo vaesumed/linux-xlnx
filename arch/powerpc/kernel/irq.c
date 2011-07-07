@@ -157,12 +157,6 @@ notrace void arch_local_irq_restore(unsigned long en)
 	if (get_hard_enabled())
 		return;
 
-#if defined(CONFIG_BOOKE) && defined(CONFIG_SMP)
-	/* Check for pending doorbell interrupts and resend to ourself */
-	if (cpu_has_feature(CPU_FTR_DBELL))
-		smp_muxed_ipi_resend();
-#endif
-
 	/*
 	 * Need to hard-enable interrupts here.  Since currently disabled,
 	 * no need to take further asm precautions against preemption; but
@@ -882,6 +876,41 @@ unsigned int irq_find_mapping(struct irq_host *host,
 }
 EXPORT_SYMBOL_GPL(irq_find_mapping);
 
+#ifdef CONFIG_SMP
+int irq_choose_cpu(const struct cpumask *mask)
+{
+	int cpuid;
+
+	if (cpumask_equal(mask, cpu_all_mask)) {
+		static int irq_rover;
+		static DEFINE_RAW_SPINLOCK(irq_rover_lock);
+		unsigned long flags;
+
+		/* Round-robin distribution... */
+do_round_robin:
+		raw_spin_lock_irqsave(&irq_rover_lock, flags);
+
+		irq_rover = cpumask_next(irq_rover, cpu_online_mask);
+		if (irq_rover >= nr_cpu_ids)
+			irq_rover = cpumask_first(cpu_online_mask);
+
+		cpuid = irq_rover;
+
+		raw_spin_unlock_irqrestore(&irq_rover_lock, flags);
+	} else {
+		cpuid = cpumask_first_and(mask, cpu_online_mask);
+		if (cpuid >= nr_cpu_ids)
+			goto do_round_robin;
+	}
+
+	return get_hard_smp_processor_id(cpuid);
+}
+#else
+int irq_choose_cpu(const struct cpumask *mask)
+{
+	return hard_smp_processor_id();
+}
+#endif
 
 unsigned int irq_radix_revmap_lookup(struct irq_host *host,
 				     irq_hw_number_t hwirq)
