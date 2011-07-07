@@ -415,7 +415,7 @@ static int __devinit gpio_keys_setup_key(struct platform_device *pdev,
 	if (!button->can_disable)
 		irqflags |= IRQF_SHARED;
 
-	error = request_any_context_irq(irq, gpio_keys_isr, irqflags, desc, bdata);
+	error = request_threaded_irq(irq, NULL, gpio_keys_isr, irqflags, desc, bdata);
 	if (error < 0) {
 		dev_err(dev, "Unable to claim irq %d; error %d\n",
 			irq, error);
@@ -569,6 +569,7 @@ static int __devexit gpio_keys_remove(struct platform_device *pdev)
 	}
 
 	input_unregister_device(input);
+	kfree(ddata);
 
 	return 0;
 }
@@ -644,10 +645,10 @@ static void __exit gpio_keys_exit(void)
 	platform_driver_unregister(&gpio_keys_device_driver);
 }
 
-module_init(gpio_keys_init);
+late_initcall(gpio_keys_init);
 module_exit(gpio_keys_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Phil Blundell <pb@handhelds.org>");
-MODULE_DESCRIPTION("Keyboard driver for CPU GPIOs");
+MODULE_DESCRIPTION("Keyboard driver for GPIOs");
 MODULE_ALIAS("platform:gpio-keys");

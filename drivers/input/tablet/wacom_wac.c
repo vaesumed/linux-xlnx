@@ -15,6 +15,7 @@
 #include "wacom_wac.h"
 #include "wacom.h"
 #include <linux/input/mt.h>
+#include <linux/hid.h>
 
 /* resolution for penabled devices */
 #define WACOM_PL_RES		20
@@ -1129,8 +1130,11 @@ void wacom_setup_input_capabilities(struct input_dev *input_dev,
 			__set_bit(BTN_0 + i, input_dev->keybit);
 		__set_bit(BTN_TOOL_FINGER, input_dev->keybit);
 
-		input_set_abs_params(input_dev, ABS_RX, 0, 4096, 0, 0);
-		input_set_abs_params(input_dev, ABS_RY, 0, 4096, 0, 0);
+		if (wacom_wac->features.type != WACOM_21UX2) {
+			input_set_abs_params(input_dev, ABS_RX, 0, 4096, 0, 0);
+			input_set_abs_params(input_dev, ABS_RY, 0, 4096, 0, 0);
+		}
+
 		input_set_abs_params(input_dev, ABS_Z, -900, 899, 0, 0);
 		wacom_setup_cintiq(wacom_wac);
 		break;
@@ -1295,6 +1299,12 @@ static const struct wacom_features wacom_features_0x65 =
 static const struct wacom_features wacom_features_0x69 =
 	{ "Wacom Bamboo1",        WACOM_PKGLEN_GRAPHIRE,   5104,  3712,  511,
 	  63, GRAPHIRE, WACOM_PENPRTN_RES, WACOM_PENPRTN_RES };
+static const struct wacom_features wacom_features_0x6A =
+	{ "Wacom Bamboo1 4x6",    WACOM_PKGLEN_GRAPHIRE,  14760,  9225, 1023,
+	  63, GRAPHIRE, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
+static const struct wacom_features wacom_features_0x6B =
+	{ "Wacom Bamboo1 5x8",    WACOM_PKGLEN_GRAPHIRE,  21648, 13530, 1023,
+	  63, GRAPHIRE, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
 static const struct wacom_features wacom_features_0x20 =
 	{ "Wacom Intuos 4x5",     WACOM_PKGLEN_INTUOS,    12700, 10600, 1023,
 	  31, INTUOS, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
@@ -1427,6 +1437,9 @@ static const struct wacom_features wacom_features_0x90 =
 static const struct wacom_features wacom_features_0x93 =
 	{ "Wacom ISDv4 93",       WACOM_PKGLEN_GRAPHIRE,  26202, 16325,  255,
 	  0, TABLETPC, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
+static const struct wacom_features wacom_features_0x97 =
+	{ "Wacom ISDv4 97",       WACOM_PKGLEN_GRAPHIRE,  26202, 16325,  511,
+	  0, TABLETPC, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
 static const struct wacom_features wacom_features_0x9A =
 	{ "Wacom ISDv4 9A",       WACOM_PKGLEN_GRAPHIRE,  26202, 16325,  255,
 	  0, TABLETPC, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
@@ -1458,7 +1471,7 @@ static const struct wacom_features wacom_features_0xD3 =
 	{ "Wacom Bamboo 2FG 6x8", WACOM_PKGLEN_BBFUN,     21648, 13530, 1023,
 	  63, BAMBOO_PT, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
 static const struct wacom_features wacom_features_0xD4 =
-	{ "Wacom Bamboo Pen",     WACOM_PKGLEN_BBFUN,     14720,  9200,  255,
+	{ "Wacom Bamboo Pen",     WACOM_PKGLEN_BBFUN,     14720,  9200, 1023,
 	  63, BAMBOO_PT, WACOM_INTUOS_RES, WACOM_INTUOS_RES };
 static const struct wacom_features wacom_features_0xD6 =
 	{ "Wacom BambooPT 2FG 4x5", WACOM_PKGLEN_BBFUN,   14720,  9200, 1023,
@@ -1481,6 +1494,11 @@ static const struct wacom_features wacom_features_0x6004 =
 
 #define USB_DEVICE_WACOM(prod)					\
 	USB_DEVICE(USB_VENDOR_ID_WACOM, prod),			\
+	.driver_info = (kernel_ulong_t)&wacom_features_##prod
+
+#define USB_DEVICE_DETAILED(prod, class, sub, proto)			\
+	USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_WACOM, prod, class,	\
+				      sub, proto),			\
 	.driver_info = (kernel_ulong_t)&wacom_features_##prod
 
 #define USB_DEVICE_LENOVO(prod)					\
@@ -1506,6 +1524,8 @@ const struct usb_device_id wacom_ids[] = {
 	{ USB_DEVICE_WACOM(0x64) },
 	{ USB_DEVICE_WACOM(0x65) },
 	{ USB_DEVICE_WACOM(0x69) },
+	{ USB_DEVICE_WACOM(0x6A) },
+	{ USB_DEVICE_WACOM(0x6B) },
 	{ USB_DEVICE_WACOM(0x20) },
 	{ USB_DEVICE_WACOM(0x21) },
 	{ USB_DEVICE_WACOM(0x22) },
@@ -1545,7 +1565,13 @@ const struct usb_device_id wacom_ids[] = {
 	{ USB_DEVICE_WACOM(0xC5) },
 	{ USB_DEVICE_WACOM(0xC6) },
 	{ USB_DEVICE_WACOM(0xC7) },
-	{ USB_DEVICE_WACOM(0xCE) },
+	/*
+	 * DTU-2231 has two interfaces on the same configuration,
+	 * only one is used.
+	 */
+	{ USB_DEVICE_DETAILED(0xCE, USB_CLASS_HID,
+			      USB_INTERFACE_SUBCLASS_BOOT,
+			      USB_INTERFACE_PROTOCOL_MOUSE) },
 	{ USB_DEVICE_WACOM(0xD0) },
 	{ USB_DEVICE_WACOM(0xD1) },
 	{ USB_DEVICE_WACOM(0xD2) },
@@ -1560,6 +1586,7 @@ const struct usb_device_id wacom_ids[] = {
 	{ USB_DEVICE_WACOM(0xCC) },
 	{ USB_DEVICE_WACOM(0x90) },
 	{ USB_DEVICE_WACOM(0x93) },
+	{ USB_DEVICE_WACOM(0x97) },
 	{ USB_DEVICE_WACOM(0x9A) },
 	{ USB_DEVICE_WACOM(0x9F) },
 	{ USB_DEVICE_WACOM(0xE2) },
