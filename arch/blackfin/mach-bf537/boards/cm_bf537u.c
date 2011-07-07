@@ -62,15 +62,6 @@ static struct flash_platform_data bfin_spi_flash_data = {
 /* SPI flash chip (m25p64) */
 static struct bfin5xx_spi_chip spi_flash_chip_info = {
 	.enable_dma = 0,         /* use dma transfer with this chip*/
-	.bits_per_word = 8,
-};
-#endif
-
-#if defined(CONFIG_BFIN_SPI_ADC) || defined(CONFIG_BFIN_SPI_ADC_MODULE)
-/* SPI ADC chip */
-static struct bfin5xx_spi_chip spi_adc_chip_info = {
-	.enable_dma = 1,         /* use dma transfer with this chip*/
-	.bits_per_word = 16,
 };
 #endif
 
@@ -84,7 +75,6 @@ static struct bfin5xx_spi_chip ad1836_spi_chip_info = {
 #if defined(CONFIG_MMC_SPI) || defined(CONFIG_MMC_SPI_MODULE)
 static struct bfin5xx_spi_chip  mmc_spi_chip_info = {
 	.enable_dma = 0,
-	.bits_per_word = 8,
 };
 #endif
 
@@ -99,17 +89,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 		.platform_data = &bfin_spi_flash_data,
 		.controller_data = &spi_flash_chip_info,
 		.mode = SPI_MODE_3,
-	},
-#endif
-
-#if defined(CONFIG_BFIN_SPI_ADC) || defined(CONFIG_BFIN_SPI_ADC_MODULE)
-	{
-		.modalias = "bfin_spi_adc", /* Name of spi_driver for this device */
-		.max_speed_hz = 6250000,     /* max spi clock (SCK) speed in HZ */
-		.bus_num = 0, /* Framework bus number */
-		.chip_select = 1, /* Framework chip select. */
-		.platform_data = NULL, /* No spi_driver specific config */
-		.controller_data = &spi_adc_chip_info,
 	},
 #endif
 
@@ -731,6 +710,36 @@ static struct platform_device *cm_bf537u_devices[] __initdata = {
 #endif
 };
 
+static int __init net2272_init(void)
+{
+#if defined(CONFIG_USB_NET2272) || defined(CONFIG_USB_NET2272_MODULE)
+	int ret;
+
+	ret = gpio_request(GPIO_47, driver_name);
+	if (ret)
+		return ret;
+
+	ret = gpio_request(GPIO_45, "net2272");
+	if (ret) {
+		gpio_free(GPIO_47);
+		return ret;
+	}
+
+	/* Set PH15 Low make /AMS2 work properly */
+	gpio_direction_output(GPIO_47, 0);
+
+	/* enable CLKBUF output */
+	bfin_write_VR_CTL(bfin_read_VR_CTL() | CLKBUFOE);
+
+	/* Reset the USB chip */
+	gpio_direction_output(GPIO_45, 0);
+	mdelay(2);
+	gpio_set_value(GPIO_45, 1);
+#endif
+
+	return 0;
+}
+
 static int __init cm_bf537u_init(void)
 {
 	printk(KERN_INFO "%s(): registering device resources\n", __func__);
@@ -742,6 +751,10 @@ static int __init cm_bf537u_init(void)
 #if defined(CONFIG_PATA_PLATFORM) || defined(CONFIG_PATA_PLATFORM_MODULE)
 	irq_set_status_flags(PATA_INT, IRQ_NOAUTOEN);
 #endif
+
+	if (net2272_init())
+		pr_warning("unable to configure net2272; it probably won't work\n");
+
 	return 0;
 }
 
