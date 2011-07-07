@@ -14,28 +14,178 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/string.h>
 #include <linux/pci.h>
-#include <bcmdefs.h>
-#include <bcmutils.h>
-#include <bcmnvram.h>
-#include <aiutils.h>
-#include <hndsoc.h>
-#include <bcmdevs.h>
-#include <sbchipc.h>
-#include <pci_core.h>
-#include <pcie_core.h>
-#include <nicpci.h>
-#include <pcicfg.h>
 
-typedef struct {
+#include <defs.h>
+#include <soc.h>
+#include <chipcommon.h>
+#include "aiutils.h"
+#include "pub.h"
+#include "nicpci.h"
+
+/* SPROM offsets */
+#define SRSH_ASPM_OFFSET		4	/* word 4 */
+#define SRSH_ASPM_ENB			0x18	/* bit 3, 4 */
+#define SRSH_ASPM_L1_ENB		0x10	/* bit 4 */
+#define SRSH_ASPM_L0s_ENB		0x8	/* bit 3 */
+
+#define SRSH_PCIE_MISC_CONFIG		5	/* word 5 */
+#define SRSH_L23READY_EXIT_NOPERST	0x8000	/* bit 15 */
+#define SRSH_CLKREQ_OFFSET_REV5		20	/* word 20 for srom rev <= 5 */
+#define SRSH_CLKREQ_ENB			0x0800	/* bit 11 */
+#define SRSH_BD_OFFSET                  6	/* word 6 */
+
+/* chipcontrol */
+#define CHIPCTRL_4321_PLL_DOWN	0x800000	/* serdes PLL down override */
+
+/* MDIO control */
+#define MDIOCTL_DIVISOR_MASK		0x7f	/* clock to be used on MDIO */
+#define MDIOCTL_DIVISOR_VAL		0x2
+#define MDIOCTL_PREAM_EN		0x80	/* Enable preamble sequnce */
+#define MDIOCTL_ACCESS_DONE		0x100	/* Tranaction complete */
+
+/* MDIO Data */
+#define MDIODATA_MASK			0x0000ffff	/* data 2 bytes */
+#define MDIODATA_TA			0x00020000	/* Turnaround */
+#define MDIODATA_REGADDR_SHF_OLD	18	/* Regaddr shift (rev < 10) */
+#define MDIODATA_REGADDR_MASK_OLD	0x003c0000	/* Regaddr Mask (rev < 10) */
+#define MDIODATA_DEVADDR_SHF_OLD	22	/* Physmedia devaddr shift (rev < 10) */
+#define MDIODATA_DEVADDR_MASK_OLD	0x0fc00000	/* Physmedia devaddr Mask (rev < 10) */
+#define MDIODATA_REGADDR_SHF		18	/* Regaddr shift */
+#define MDIODATA_REGADDR_MASK		0x007c0000	/* Regaddr Mask */
+#define MDIODATA_DEVADDR_SHF		23	/* Physmedia devaddr shift */
+#define MDIODATA_DEVADDR_MASK		0x0f800000	/* Physmedia devaddr Mask */
+#define MDIODATA_WRITE			0x10000000	/* write Transaction */
+#define MDIODATA_READ			0x20000000	/* Read Transaction */
+#define MDIODATA_START			0x40000000	/* start of Transaction */
+
+#define MDIODATA_DEV_ADDR		0x0	/* dev address for serdes */
+#define	MDIODATA_BLK_ADDR		0x1F	/* blk address for serdes */
+
+/* serdes regs (rev < 10) */
+#define MDIODATA_DEV_PLL		0x1d	/* SERDES PLL Dev */
+#define MDIODATA_DEV_TX			0x1e	/* SERDES TX Dev */
+#define MDIODATA_DEV_RX			0x1f	/* SERDES RX Dev */
+
+	/* SERDES RX registers */
+#define SERDES_RX_CTRL			1	/* Rx cntrl */
+#define SERDES_RX_TIMER1		2	/* Rx Timer1 */
+#define SERDES_RX_CDR			6	/* CDR */
+#define SERDES_RX_CDRBW			7	/* CDR BW */
+	/* SERDES RX control register */
+#define SERDES_RX_CTRL_FORCE		0x80	/* rxpolarity_force */
+#define SERDES_RX_CTRL_POLARITY		0x40	/* rxpolarity_value */
+
+	/* SERDES PLL registers */
+#define SERDES_PLL_CTRL                 1	/* PLL control reg */
+#define PLL_CTRL_FREQDET_EN             0x4000	/* bit 14 is FREQDET on */
+
+/* Linkcontrol reg offset in PCIE Cap */
+#define PCIE_CAP_LINKCTRL_OFFSET	16	/* linkctrl offset in pcie cap */
+#define PCIE_CAP_LCREG_ASPML0s		0x01	/* ASPM L0s in linkctrl */
+#define PCIE_CAP_LCREG_ASPML1		0x02	/* ASPM L1 in linkctrl */
+#define PCIE_CLKREQ_ENAB		0x100	/* CLKREQ Enab in linkctrl */
+
+#define PCIE_ASPM_ENAB			3	/* ASPM L0s & L1 in linkctrl */
+#define PCIE_ASPM_L1_ENAB		2	/* ASPM L0s & L1 in linkctrl */
+#define PCIE_ASPM_L0s_ENAB		1	/* ASPM L0s & L1 in linkctrl */
+#define PCIE_ASPM_DISAB			0	/* ASPM L0s & L1 in linkctrl */
+
+/* Power management threshold */
+#define PCIE_L1THRESHOLDTIME_MASK       0xFF00	/* bits 8 - 15 */
+#define PCIE_L1THRESHOLDTIME_SHIFT      8	/* PCIE_L1THRESHOLDTIME_SHIFT */
+#define PCIE_L1THRESHOLD_WARVAL         0x72	/* WAR value */
+#define PCIE_ASPMTIMER_EXTEND		0x01000000	/* > rev7: enable extend ASPM timer */
+
+/* different register spaces to access thr'u pcie indirect access */
+#define PCIE_CONFIGREGS		1	/* Access to config space */
+#define PCIE_PCIEREGS		2	/* Access to pcie registers */
+
+/* PCIE protocol PHY diagnostic registers */
+#define	PCIE_PLP_STATUSREG		0x204	/* Status */
+
+/* Status reg PCIE_PLP_STATUSREG */
+#define PCIE_PLP_POLARITYINV_STAT	0x10
+
+/* PCIE protocol DLLP diagnostic registers */
+#define PCIE_DLLP_LCREG			0x100	/* Link Control */
+#define PCIE_DLLP_PMTHRESHREG		0x128	/* Power Management Threshold */
+
+/* PCIE protocol TLP diagnostic registers */
+#define PCIE_TLP_WORKAROUNDSREG		0x004	/* TLP Workarounds */
+
+/* Sonics side: PCI core and host control registers */
+struct sbpciregs {
+	u32 control;		/* PCI control */
+	u32 PAD[3];
+	u32 arbcontrol;	/* PCI arbiter control */
+	u32 clkrun;		/* Clkrun Control (>=rev11) */
+	u32 PAD[2];
+	u32 intstatus;	/* Interrupt status */
+	u32 intmask;		/* Interrupt mask */
+	u32 sbtopcimailbox;	/* Sonics to PCI mailbox */
+	u32 PAD[9];
+	u32 bcastaddr;	/* Sonics broadcast address */
+	u32 bcastdata;	/* Sonics broadcast data */
+	u32 PAD[2];
+	u32 gpioin;		/* ro: gpio input (>=rev2) */
+	u32 gpioout;		/* rw: gpio output (>=rev2) */
+	u32 gpioouten;	/* rw: gpio output enable (>= rev2) */
+	u32 gpiocontrol;	/* rw: gpio control (>= rev2) */
+	u32 PAD[36];
+	u32 sbtopci0;	/* Sonics to PCI translation 0 */
+	u32 sbtopci1;	/* Sonics to PCI translation 1 */
+	u32 sbtopci2;	/* Sonics to PCI translation 2 */
+	u32 PAD[189];
+	u32 pcicfg[4][64];	/* 0x400 - 0x7FF, PCI Cfg Space (>=rev8) */
+	u16 sprom[36];	/* SPROM shadow Area */
+	u32 PAD[46];
+};
+
+/* SB side: PCIE core and host control registers */
+struct sbpcieregs {
+	u32 control;		/* host mode only */
+	u32 PAD[2];
+	u32 biststatus;	/* bist Status: 0x00C */
+	u32 gpiosel;		/* PCIE gpio sel: 0x010 */
+	u32 gpioouten;	/* PCIE gpio outen: 0x14 */
+	u32 PAD[2];
+	u32 intstatus;	/* Interrupt status: 0x20 */
+	u32 intmask;		/* Interrupt mask: 0x24 */
+	u32 sbtopcimailbox;	/* sb to pcie mailbox: 0x028 */
+	u32 PAD[53];
+	u32 sbtopcie0;	/* sb to pcie translation 0: 0x100 */
+	u32 sbtopcie1;	/* sb to pcie translation 1: 0x104 */
+	u32 sbtopcie2;	/* sb to pcie translation 2: 0x108 */
+	u32 PAD[5];
+
+	/* pcie core supports in direct access to config space */
+	u32 configaddr;	/* pcie config space access: Address field: 0x120 */
+	u32 configdata;	/* pcie config space access: Data field: 0x124 */
+
+	/* mdio access to serdes */
+	u32 mdiocontrol;	/* controls the mdio access: 0x128 */
+	u32 mdiodata;	/* Data to the mdio access: 0x12c */
+
+	/* pcie protocol phy/dllp/tlp register indirect access mechanism */
+	u32 pcieindaddr;	/* indirect access to the internal register: 0x130 */
+	u32 pcieinddata;	/* Data to/from the internal regsiter: 0x134 */
+
+	u32 clkreqenctrl;	/* >= rev 6, Clkreq rdma control : 0x138 */
+	u32 PAD[177];
+	u32 pciecfg[4][64];	/* 0x400 - 0x7FF, PCIE Cfg Space */
+	u16 sprom[64];	/* SPROM shadow Area */
+};
+
+struct pcicore_info {
 	union {
-		sbpcieregs_t *pcieregs;
+		struct sbpcieregs *pcieregs;
 		struct sbpciregs *pciregs;
 	} regs;			/* Memory mapped register to the core */
 
-	si_t *sih;		/* System interconnect handle */
+	struct si_pub *sih;		/* System interconnect handle */
 	struct pci_dev *dev;
 	u8 pciecap_lcreg_offset;	/* PCIE capability LCreg offset in the config space */
 	bool pcie_pr42767;
@@ -44,7 +194,7 @@ typedef struct {
 
 	u8 pmecap_offset;	/* PM Capability offset in the config space */
 	bool pmecap;		/* Capable of generating PME */
-} pcicore_info_t;
+};
 
 /* debug/trace */
 #define	PCI_ERROR(args)
@@ -52,24 +202,22 @@ typedef struct {
 	(((sih)->bustype == PCI_BUS) && ((sih)->buscoretype == PCIE_CORE_ID))
 
 /* routines to access mdio slave device registers */
-static bool pcie_mdiosetblock(pcicore_info_t *pi, uint blk);
-static int pcie_mdioop(pcicore_info_t *pi, uint physmedia, uint regaddr,
+static bool pcie_mdiosetblock(struct pcicore_info *pi, uint blk);
+static int pcie_mdioop(struct pcicore_info *pi, uint physmedia, uint regaddr,
 		       bool write, uint *val);
-static int pcie_mdiowrite(pcicore_info_t *pi, uint physmedia, uint readdr,
+static int pcie_mdiowrite(struct pcicore_info *pi, uint physmedia, uint readdr,
 			  uint val);
-static int pcie_mdioread(pcicore_info_t *pi, uint physmedia, uint readdr,
+static int pcie_mdioread(struct pcicore_info *pi, uint physmedia, uint readdr,
 			 uint *ret_val);
 
-static void pcie_extendL1timer(pcicore_info_t *pi, bool extend);
-static void pcie_clkreq_upd(pcicore_info_t *pi, uint state);
+static void pcie_extendL1timer(struct pcicore_info *pi, bool extend);
+static void pcie_clkreq_upd(struct pcicore_info *pi, uint state);
 
-static void pcie_war_aspm_clkreq(pcicore_info_t *pi);
-static void pcie_war_serdes(pcicore_info_t *pi);
-static void pcie_war_noplldown(pcicore_info_t *pi);
-static void pcie_war_polarity(pcicore_info_t *pi);
-static void pcie_war_pci_setup(pcicore_info_t *pi);
-
-static bool pcicore_pmecap(pcicore_info_t *pi);
+static void pcie_war_aspm_clkreq(struct pcicore_info *pi);
+static void pcie_war_serdes(struct pcicore_info *pi);
+static void pcie_war_noplldown(struct pcicore_info *pi);
+static void pcie_war_polarity(struct pcicore_info *pi);
+static void pcie_war_pci_setup(struct pcicore_info *pi);
 
 #define PCIE_ASPM(sih)	((PCIE_PUB(sih)) && (((sih)->buscorerev >= 3) && ((sih)->buscorerev <= 5)))
 
@@ -80,12 +228,12 @@ static bool pcicore_pmecap(pcicore_info_t *pi);
 /* Initialize the PCI core. It's caller's responsibility to make sure that this is done
  * only once
  */
-void *pcicore_init(si_t *sih, void *pdev, void *regs)
+void *pcicore_init(struct si_pub *sih, void *pdev, void *regs)
 {
-	pcicore_info_t *pi;
+	struct pcicore_info *pi;
 
-	/* alloc pcicore_info_t */
-	pi = kzalloc(sizeof(pcicore_info_t), GFP_ATOMIC);
+	/* alloc struct pcicore_info */
+	pi = kzalloc(sizeof(struct pcicore_info), GFP_ATOMIC);
 	if (pi == NULL) {
 		PCI_ERROR(("pci_attach: malloc failed!\n"));
 		return NULL;
@@ -96,7 +244,7 @@ void *pcicore_init(si_t *sih, void *pdev, void *regs)
 
 	if (sih->buscoretype == PCIE_CORE_ID) {
 		u8 cap_ptr;
-		pi->regs.pcieregs = (sbpcieregs_t *) regs;
+		pi->regs.pcieregs = (struct sbpcieregs *) regs;
 		cap_ptr = pcicore_find_pci_capability(pi->dev, PCI_CAP_ID_EXP,
 						      NULL, NULL);
 		pi->pciecap_lcreg_offset = cap_ptr + PCIE_CAP_LINKCTRL_OFFSET;
@@ -108,7 +256,7 @@ void *pcicore_init(si_t *sih, void *pdev, void *regs)
 
 void pcicore_deinit(void *pch)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
 
 	if (pi == NULL)
 		return;
@@ -178,8 +326,8 @@ pcicore_find_pci_capability(void *dev, u8 req_cap_id,
 }
 
 /* ***** Register Access API */
-uint
-pcie_readreg(sbpcieregs_t *pcieregs, uint addrtype,
+static uint
+pcie_readreg(struct sbpcieregs *pcieregs, uint addrtype,
 	     uint offset)
 {
 	uint retval = 0xFFFFFFFF;
@@ -202,8 +350,8 @@ pcie_readreg(sbpcieregs_t *pcieregs, uint addrtype,
 	return retval;
 }
 
-uint
-pcie_writereg(sbpcieregs_t *pcieregs, uint addrtype,
+static uint
+pcie_writereg(struct sbpcieregs *pcieregs, uint addrtype,
 	      uint offset, uint val)
 {
 	switch (addrtype) {
@@ -221,9 +369,9 @@ pcie_writereg(sbpcieregs_t *pcieregs, uint addrtype,
 	return 0;
 }
 
-static bool pcie_mdiosetblock(pcicore_info_t *pi, uint blk)
+static bool pcie_mdiosetblock(struct pcicore_info *pi, uint blk)
 {
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
 	uint mdiodata, i = 0;
 	uint pcie_serdes_spinwait = 200;
 
@@ -254,10 +402,10 @@ static bool pcie_mdiosetblock(pcicore_info_t *pi, uint blk)
 }
 
 static int
-pcie_mdioop(pcicore_info_t *pi, uint physmedia, uint regaddr, bool write,
+pcie_mdioop(struct pcicore_info *pi, uint physmedia, uint regaddr, bool write,
 	    uint *val)
 {
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
 	uint mdiodata;
 	uint i = 0;
 	uint pcie_serdes_spinwait = 10;
@@ -314,22 +462,23 @@ pcie_mdioop(pcicore_info_t *pi, uint physmedia, uint regaddr, bool write,
 
 /* use the mdio interface to read from mdio slaves */
 static int
-pcie_mdioread(pcicore_info_t *pi, uint physmedia, uint regaddr, uint *regval)
+pcie_mdioread(struct pcicore_info *pi, uint physmedia, uint regaddr,
+	      uint *regval)
 {
 	return pcie_mdioop(pi, physmedia, regaddr, false, regval);
 }
 
 /* use the mdio interface to write to mdio slaves */
 static int
-pcie_mdiowrite(pcicore_info_t *pi, uint physmedia, uint regaddr, uint val)
+pcie_mdiowrite(struct pcicore_info *pi, uint physmedia, uint regaddr, uint val)
 {
 	return pcie_mdioop(pi, physmedia, regaddr, true, &val);
 }
 
 /* ***** Support functions ***** */
-u8 pcie_clkreq(void *pch, u32 mask, u32 val)
+static u8 pcie_clkreq(void *pch, u32 mask, u32 val)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
 	u32 reg_val;
 	u8 offset;
 
@@ -353,11 +502,11 @@ u8 pcie_clkreq(void *pch, u32 mask, u32 val)
 		return 0;
 }
 
-static void pcie_extendL1timer(pcicore_info_t *pi, bool extend)
+static void pcie_extendL1timer(struct pcicore_info *pi, bool extend)
 {
 	u32 w;
-	si_t *sih = pi->sih;
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
+	struct si_pub *sih = pi->sih;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
 
 	if (!PCIE_PUB(sih) || sih->buscorerev < 7)
 		return;
@@ -372,9 +521,9 @@ static void pcie_extendL1timer(pcicore_info_t *pi, bool extend)
 }
 
 /* centralized clkreq control policy */
-static void pcie_clkreq_upd(pcicore_info_t *pi, uint state)
+static void pcie_clkreq_upd(struct pcicore_info *pi, uint state)
 {
-	si_t *sih = pi->sih;
+	struct si_pub *sih = pi->sih;
 
 	switch (state) {
 	case SI_DOATTACH:
@@ -412,7 +561,7 @@ static void pcie_clkreq_upd(pcicore_info_t *pi, uint state)
 
 /* ***** PCI core WARs ***** */
 /* Done only once at attach time */
-static void pcie_war_polarity(pcicore_info_t *pi)
+static void pcie_war_polarity(struct pcicore_info *pi)
 {
 	u32 w;
 
@@ -437,10 +586,10 @@ static void pcie_war_polarity(pcicore_info_t *pi)
  *   : Coming out of 'standby'/'hibernate'
  *   : If pcie_war_aspm_ovr state changed
  */
-static void pcie_war_aspm_clkreq(pcicore_info_t *pi)
+static void pcie_war_aspm_clkreq(struct pcicore_info *pi)
 {
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
-	si_t *sih = pi->sih;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
+	struct si_pub *sih = pi->sih;
 	u16 val16, *reg16;
 	u32 w;
 
@@ -448,28 +597,23 @@ static void pcie_war_aspm_clkreq(pcicore_info_t *pi)
 		return;
 
 	/* bypass this on QT or VSIM */
-	if (!ISSIM_ENAB(sih)) {
+	reg16 = &pcieregs->sprom[SRSH_ASPM_OFFSET];
+	val16 = R_REG(reg16);
 
-		reg16 = &pcieregs->sprom[SRSH_ASPM_OFFSET];
-		val16 = R_REG(reg16);
+	val16 &= ~SRSH_ASPM_ENB;
+	if (pi->pcie_war_aspm_ovr == PCIE_ASPM_ENAB)
+		val16 |= SRSH_ASPM_ENB;
+	else if (pi->pcie_war_aspm_ovr == PCIE_ASPM_L1_ENAB)
+		val16 |= SRSH_ASPM_L1_ENB;
+	else if (pi->pcie_war_aspm_ovr == PCIE_ASPM_L0s_ENAB)
+		val16 |= SRSH_ASPM_L0s_ENB;
 
-		val16 &= ~SRSH_ASPM_ENB;
-		if (pi->pcie_war_aspm_ovr == PCIE_ASPM_ENAB)
-			val16 |= SRSH_ASPM_ENB;
-		else if (pi->pcie_war_aspm_ovr == PCIE_ASPM_L1_ENAB)
-			val16 |= SRSH_ASPM_L1_ENB;
-		else if (pi->pcie_war_aspm_ovr == PCIE_ASPM_L0s_ENAB)
-			val16 |= SRSH_ASPM_L0s_ENB;
+	W_REG(reg16, val16);
 
-		W_REG(reg16, val16);
-
-		pci_read_config_dword(pi->dev, pi->pciecap_lcreg_offset,
-					&w);
-		w &= ~PCIE_ASPM_ENAB;
-		w |= pi->pcie_war_aspm_ovr;
-		pci_write_config_dword(pi->dev,
-					pi->pciecap_lcreg_offset, w);
-	}
+	pci_read_config_dword(pi->dev, pi->pciecap_lcreg_offset, &w);
+	w &= ~PCIE_ASPM_ENAB;
+	w |= pi->pcie_war_aspm_ovr;
+	pci_write_config_dword(pi->dev, pi->pciecap_lcreg_offset, w);
 
 	reg16 = &pcieregs->sprom[SRSH_CLKREQ_OFFSET_REV5];
 	val16 = R_REG(reg16);
@@ -485,7 +629,7 @@ static void pcie_war_aspm_clkreq(pcicore_info_t *pi)
 
 /* Apply the polarity determined at the start */
 /* Needs to happen when coming out of 'standby'/'hibernate' */
-static void pcie_war_serdes(pcicore_info_t *pi)
+static void pcie_war_serdes(struct pcicore_info *pi)
 {
 	u32 w = 0;
 
@@ -502,9 +646,9 @@ static void pcie_war_serdes(pcicore_info_t *pi)
 
 /* Fix MISC config to allow coming out of L2/L3-Ready state w/o PRST */
 /* Needs to happen when coming out of 'standby'/'hibernate' */
-static void pcie_misc_config_fixup(pcicore_info_t *pi)
+static void pcie_misc_config_fixup(struct pcicore_info *pi)
 {
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
 	u16 val16, *reg16;
 
 	reg16 = &pcieregs->sprom[SRSH_PCIE_MISC_CONFIG];
@@ -518,9 +662,9 @@ static void pcie_misc_config_fixup(pcicore_info_t *pi)
 
 /* quick hack for testing */
 /* Needs to happen when coming out of 'standby'/'hibernate' */
-static void pcie_war_noplldown(pcicore_info_t *pi)
+static void pcie_war_noplldown(struct pcicore_info *pi)
 {
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
 	u16 *reg16;
 
 	/* turn off serdes PLL down */
@@ -533,10 +677,10 @@ static void pcie_war_noplldown(pcicore_info_t *pi)
 }
 
 /* Needs to happen when coming out of 'standby'/'hibernate' */
-static void pcie_war_pci_setup(pcicore_info_t *pi)
+static void pcie_war_pci_setup(struct pcicore_info *pi)
 {
-	si_t *sih = pi->sih;
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
+	struct si_pub *sih = pi->sih;
+	struct sbpcieregs *pcieregs = pi->regs.pcieregs;
 	u32 w;
 
 	if ((sih->buscorerev == 0) || (sih->buscorerev == 1)) {
@@ -577,28 +721,11 @@ static void pcie_war_pci_setup(pcicore_info_t *pi)
 		pcie_misc_config_fixup(pi);
 }
 
-void pcie_war_ovr_aspm_update(void *pch, u8 aspm)
-{
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-
-	if (!PCIE_ASPM(pi->sih))
-		return;
-
-	/* Validate */
-	if (aspm > PCIE_ASPM_ENAB)
-		return;
-
-	pi->pcie_war_aspm_ovr = aspm;
-
-	/* Update the current state */
-	pcie_war_aspm_clkreq(pi);
-}
-
 /* ***** Functions called during driver state changes ***** */
 void pcicore_attach(void *pch, char *pvars, int state)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-	si_t *sih = pi->sih;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
+	struct si_pub *sih = pi->sih;
 
 	/* Determine if this board needs override */
 	if (PCIE_ASPM(sih)) {
@@ -622,7 +749,7 @@ void pcicore_attach(void *pch, char *pvars, int state)
 
 void pcicore_hwup(void *pch)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
 
 	if (!pi || !PCIE_PUB(pi->sih))
 		return;
@@ -632,7 +759,7 @@ void pcicore_hwup(void *pch)
 
 void pcicore_up(void *pch, int state)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
 
 	if (!pi || !PCIE_PUB(pi->sih))
 		return;
@@ -646,7 +773,7 @@ void pcicore_up(void *pch, int state)
 /* When the device is going to enter D3 state (or the system is going to enter S3/S4 states */
 void pcicore_sleep(void *pch)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
 	u32 w;
 
 	if (!pi || !PCIE_ASPM(pi->sih))
@@ -661,7 +788,7 @@ void pcicore_sleep(void *pch)
 
 void pcicore_down(void *pch, int state)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
 
 	if (!pi || !PCIE_PUB(pi->sih))
 		return;
@@ -672,165 +799,52 @@ void pcicore_down(void *pch, int state)
 	pcie_extendL1timer(pi, false);
 }
 
-/* ***** Wake-on-wireless-LAN (WOWL) support functions ***** */
-/* Just uses PCI config accesses to find out, when needed before sb_attach is done */
-bool pcicore_pmecap_fast(void *pch)
-{
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-	u8 cap_ptr;
-	u32 pmecap;
-
-	cap_ptr = pcicore_find_pci_capability(pi->dev, PCI_CAP_ID_PM, NULL,
-					      NULL);
-
-	if (!cap_ptr)
-		return false;
-
-	pci_read_config_dword(pi->dev, cap_ptr, &pmecap);
-
-	return (pmecap & (PCI_PM_CAP_PME_MASK << 16)) != 0;
-}
-
-/* return true if PM capability exists in the pci config space
- * Uses and caches the information using core handle
+/*
+ * precondition: current core is sii->buscoretype
  */
-static bool pcicore_pmecap(pcicore_info_t *pi)
+void pcicore_fixcfg(void *pch, void *regs)
 {
-	u8 cap_ptr;
-	u32 pmecap;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
+	struct si_info *sii = SI_INFO(pi->sih);
+	struct sbpciregs *pciregs = regs;
+	struct sbpcieregs *pcieregs = regs;
+	u16 val16, *reg16 = NULL;
+	uint pciidx;
 
-	if (!pi->pmecap_offset) {
-		cap_ptr = pcicore_find_pci_capability(pi->dev,
-						      PCI_CAP_ID_PM,
-						      NULL, NULL);
-		if (!cap_ptr)
-			return false;
-
-		pi->pmecap_offset = cap_ptr;
-
-		pci_read_config_dword(pi->dev, pi->pmecap_offset,
-					&pmecap);
-
-		/* At least one state can generate PME */
-		pi->pmecap = (pmecap & (PCI_PM_CAP_PME_MASK << 16)) != 0;
+	/* check 'pi' is correct and fix it if not */
+	if (sii->pub.buscoretype == PCIE_CORE_ID) {
+		reg16 = &pcieregs->sprom[SRSH_PI_OFFSET];
+	} else if (sii->pub.buscoretype == PCI_CORE_ID) {
+		reg16 = &pciregs->sprom[SRSH_PI_OFFSET];
 	}
-
-	return pi->pmecap;
-}
-
-/* Enable PME generation */
-void pcicore_pmeen(void *pch)
-{
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-	u32 w;
-
-	/* if not pmecapable return */
-	if (!pcicore_pmecap(pi))
-		return;
-
-	pci_read_config_dword(pi->dev, pi->pmecap_offset + PCI_PM_CTRL,
-				&w);
-	w |= (PCI_PM_CTRL_PME_ENABLE);
-	pci_write_config_dword(pi->dev,
-				pi->pmecap_offset + PCI_PM_CTRL, w);
+	pciidx = ai_coreidx(&sii->pub);
+	val16 = R_REG(reg16);
+	if (((val16 & SRSH_PI_MASK) >> SRSH_PI_SHIFT) != (u16) pciidx) {
+		val16 =
+		    (u16) (pciidx << SRSH_PI_SHIFT) | (val16 &
+							  ~SRSH_PI_MASK);
+		W_REG(reg16, val16);
+	}
 }
 
 /*
- * Return true if PME status set
+ * precondition: current core is pci core
  */
-bool pcicore_pmestat(void *pch)
+void pcicore_pci_setup(void *pch, void *regs)
 {
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
+	struct pcicore_info *pi = (struct pcicore_info *) pch;
+	struct sbpciregs *pciregs = regs;
 	u32 w;
 
-	if (!pcicore_pmecap(pi))
-		return false;
+	OR_REG(&pciregs->sbtopci2,
+	       (SBTOPCI_PREF | SBTOPCI_BURST));
 
-	pci_read_config_dword(pi->dev, pi->pmecap_offset + PCI_PM_CTRL,
-				&w);
-
-	return (w & PCI_PM_CTRL_PME_STATUS) == PCI_PM_CTRL_PME_STATUS;
-}
-
-/* Disable PME generation, clear the PME status bit if set
- */
-void pcicore_pmeclr(void *pch)
-{
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-	u32 w;
-
-	if (!pcicore_pmecap(pi))
-		return;
-
-	pci_read_config_dword(pi->dev, pi->pmecap_offset + PCI_PM_CTRL,
-				&w);
-
-	PCI_ERROR(("pcicore_pci_pmeclr PMECSR : 0x%x\n", w));
-
-	/* PMESTAT is cleared by writing 1 to it */
-	w &= ~(PCI_PM_CTRL_PME_ENABLE);
-
-	pci_write_config_dword(pi->dev,
-				pi->pmecap_offset + PCI_PM_CTRL, w);
-}
-
-u32 pcie_lcreg(void *pch, u32 mask, u32 val)
-{
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-	u8 offset;
-	u32 tmpval;
-
-	offset = pi->pciecap_lcreg_offset;
-	if (!offset)
-		return 0;
-
-	/* set operation */
-	if (mask)
-		pci_write_config_dword(pi->dev, offset, val);
-
-	pci_read_config_dword(pi->dev, offset, &tmpval);
-	return tmpval;
-}
-
-u32
-pcicore_pciereg(void *pch, u32 offset, u32 mask, u32 val, uint type)
-{
-	u32 reg_val = 0;
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-	sbpcieregs_t *pcieregs = pi->regs.pcieregs;
-
-	if (mask) {
-		PCI_ERROR(("PCIEREG: 0x%x writeval  0x%x\n", offset, val));
-		pcie_writereg(pcieregs, type, offset, val);
+	if (SI_INFO(pi->sih)->pub.buscorerev >= 11) {
+		OR_REG(&pciregs->sbtopci2,
+		       SBTOPCI_RC_READMULTI);
+		w = R_REG(&pciregs->clkrun);
+		W_REG(&pciregs->clkrun,
+		      (w | PCI_CLKRUN_DSBL));
+		w = R_REG(&pciregs->clkrun);
 	}
-
-	/* Should not read register 0x154 */
-	if (pi->sih->buscorerev <= 5 && offset == PCIE_DLLP_PCIE11
-	    && type == PCIE_PCIEREGS)
-		return reg_val;
-
-	reg_val = pcie_readreg(pcieregs, type, offset);
-	PCI_ERROR(("PCIEREG: 0x%x readval is 0x%x\n", offset, reg_val));
-
-	return reg_val;
-}
-
-u32
-pcicore_pcieserdesreg(void *pch, u32 mdioslave, u32 offset, u32 mask,
-		      u32 val)
-{
-	u32 reg_val = 0;
-	pcicore_info_t *pi = (pcicore_info_t *) pch;
-
-	if (mask) {
-		PCI_ERROR(("PCIEMDIOREG: 0x%x writeval  0x%x\n", offset, val));
-		pcie_mdiowrite(pi, mdioslave, offset, val);
-	}
-
-	if (pcie_mdioread(pi, mdioslave, offset, &reg_val))
-		reg_val = 0xFFFFFFFF;
-	PCI_ERROR(("PCIEMDIOREG: dev 0x%x offset 0x%x read 0x%x\n", mdioslave,
-		   offset, reg_val));
-
-	return reg_val;
 }

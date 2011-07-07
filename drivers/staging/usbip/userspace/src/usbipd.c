@@ -7,9 +7,10 @@
 #include "../config.h"
 #endif
 
+#include <errno.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <strings.h>
+#include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -23,15 +24,14 @@
 
 #define _GNU_SOURCE
 #include <getopt.h>
+#include <glib.h>
 #include <signal.h>
 
-#include "usbip.h"
+#include "usbip_host_driver.h"
+#include "usbip_common.h"
 #include "usbip_network.h"
 
-#include <glib.h>
-
 static const char version[] = PACKAGE_STRING;
-
 
 static int send_reply_devlist(int sockfd)
 {
@@ -43,7 +43,7 @@ static int send_reply_devlist(int sockfd)
 	reply.ndev = 0;
 
 	/* how many devices are exported ? */
-	dlist_for_each_data(stub_driver->edev_list, edev, struct usbip_exported_device) {
+	dlist_for_each_data(host_driver->edev_list, edev, struct usbip_exported_device) {
 		reply.ndev += 1;
 	}
 
@@ -63,8 +63,8 @@ static int send_reply_devlist(int sockfd)
 		return ret;
 	}
 
-	dlist_for_each_data(stub_driver->edev_list, edev, struct usbip_exported_device) {
-		struct usb_device pdu_udev;
+	dlist_for_each_data(host_driver->edev_list, edev, struct usbip_exported_device) {
+		struct usbip_usb_device pdu_udev;
 
 		dump_usb_device(&edev->udev);
 		memcpy(&pdu_udev, &edev->udev, sizeof(pdu_udev));
@@ -77,7 +77,7 @@ static int send_reply_devlist(int sockfd)
 		}
 
 		for (int i=0; i < edev->udev.bNumInterfaces; i++) {
-			struct usb_interface pdu_uinf;
+			struct usbip_usb_interface pdu_uinf;
 
 			dump_usb_interface(&edev->uinf[i]);
 			memcpy(&pdu_uinf, &edev->uinf[i], sizeof(pdu_uinf));
@@ -100,7 +100,7 @@ static int recv_request_devlist(int sockfd)
 	int ret;
 	struct op_devlist_request req;
 
-	bzero(&req, sizeof(req));
+	memset(&req, 0, sizeof(req));
 
 	ret = usbip_recv(sockfd, (void *) &req, sizeof(req));
 	if (ret < 0) {
@@ -127,8 +127,8 @@ static int recv_request_import(int sockfd)
 	int found = 0;
 	int error = 0;
 
-	bzero(&req, sizeof(req));
-	bzero(&reply, sizeof(reply));
+	memset(&req, 0, sizeof(req));
+	memset(&reply, 0, sizeof(reply));
 
 	ret = usbip_recv(sockfd, (void *) &req, sizeof(req));
 	if (ret < 0) {
@@ -138,7 +138,7 @@ static int recv_request_import(int sockfd)
 
 	PACK_OP_IMPORT_REQUEST(0, &req);
 
-	dlist_for_each_data(stub_driver->edev_list, edev, struct usbip_exported_device) {
+	dlist_for_each_data(host_driver->edev_list, edev, struct usbip_exported_device) {
 		if (!strncmp(req.busid, edev->udev.busid, SYSFS_BUS_ID_SIZE)) {
 			dbg("found requested device %s", req.busid);
 			found = 1;
@@ -151,7 +151,7 @@ static int recv_request_import(int sockfd)
 		usbip_set_nodelay(sockfd);
 
 		/* export_device needs a TCP/IP socket descriptor */
-		ret = usbip_stub_export_device(edev, sockfd);
+		ret = usbip_host_export_device(edev, sockfd);
 		if (ret < 0)
 			error = 1;
 	} else {
@@ -167,7 +167,7 @@ static int recv_request_import(int sockfd)
 	}
 
 	if (!error) {
-		struct usb_device pdu_udev;
+		struct usbip_usb_device pdu_udev;
 
 		memcpy(&pdu_udev, &edev->udev, sizeof(pdu_udev));
 		pack_usb_device(1, &pdu_udev);
@@ -197,7 +197,7 @@ static int recv_pdu(int sockfd)
 	}
 
 
-	ret = usbip_stub_refresh_device_list();
+	ret = usbip_host_refresh_device_list();
 	if (ret < 0)
 		return -1;
 
@@ -244,7 +244,7 @@ static struct addrinfo *my_getaddrinfo(char *host, int ai_family)
 	int ret;
 	struct addrinfo hints, *ai_head;
 
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 
 	hints.ai_family   = ai_family;
 	hints.ai_socktype = SOCK_STREAM;
@@ -337,7 +337,7 @@ static int my_accept(int lsock)
 	char host[NI_MAXHOST], port[NI_MAXSERV];
 	int ret;
 
-	bzero(&ss, sizeof(ss));
+	memset(&ss, 0, sizeof(ss));
 
 	csock = accept(lsock, (struct sockaddr *) &ss, &len);
 	if (csock < 0) {
@@ -380,7 +380,7 @@ static void set_signal(void)
 {
 	struct sigaction act;
 
-	bzero(&act, sizeof(act));
+	memset(&act, 0, sizeof(act));
 	act.sa_handler = signal_handler;
 	sigemptyset(&act.sa_mask);
 	sigaction(SIGTERM, &act, NULL);
@@ -409,7 +409,7 @@ gboolean process_comming_request(GIOChannel *gio, GIOCondition condition,
 
 		ret = recv_pdu(csock);
 		if (ret < 0)
-			err("process recieved pdu");
+			err("process received pdu");
 
 		close(csock);
 	}
@@ -431,7 +431,7 @@ static void do_standalone_mode(gboolean daemonize)
 	if (ret)
 		err("open usb.ids");
 
-	ret = usbip_stub_driver_open();
+	ret = usbip_host_driver_open();
 	if (ret < 0)
 		g_error("driver open failed");
 
@@ -471,7 +471,7 @@ static void do_standalone_mode(gboolean daemonize)
 
 	freeaddrinfo(ai_head);
 	usbip_names_free();
-	usbip_stub_driver_close();
+	usbip_host_driver_close();
 
 	return;
 }

@@ -21,15 +21,13 @@
  */
 
 #include <linux/i2c.h>
-/* #include <drm/drm_crtc.h> */
-/* #include <drm/drm_edid.h> */
 #include <drm/drmP.h>
 
-#include "psb_intel_bios.h"
+#include "intel_bios.h"
 #include "psb_drv.h"
 #include "psb_intel_drv.h"
 #include "psb_intel_reg.h"
-#include "psb_powermgmt.h"
+#include "power.h"
 #include <linux/pm_runtime.h>
 
 u32 CoreClock;
@@ -126,13 +124,13 @@ static int psb_lvds_i2c_set_brightness(struct drm_device *dev,
 	out_buf[1] = (u8)blc_i2c_brightness;
 
 	if (i2c_transfer(&lvds_i2c_bus->adapter, msgs, 1) == 1) {
-		DRM_DEBUG("I2C set brightness.(command, value) (%d, %d)\n",
+		dev_dbg(dev->dev, "I2C set brightness.(command, value) (%d, %d)\n",
 			dev_priv->lvds_bl->brightnesscmd,
 			blc_i2c_brightness);
 		return 0;
 	}
 
-	DRM_ERROR("I2C transfer error\n");
+	dev_err(dev->dev, "I2C transfer error\n");
 	return -1;
 }
 
@@ -172,10 +170,10 @@ void psb_intel_lvds_set_brightness(struct drm_device *dev, int level)
 	struct drm_psb_private *dev_priv =
 			(struct drm_psb_private *)dev->dev_private;
 
-	DRM_DEBUG("backlight level is %d\n", level);
+	dev_dbg(dev->dev, "backlight level is %d\n", level);
 
 	if (!dev_priv->lvds_bl) {
-		DRM_ERROR("NO LVDS Backlight Info\n");
+		dev_err(dev->dev, "NO LVDS Backlight Info\n");
 		return;
 	}
 
@@ -289,7 +287,7 @@ static void psb_intel_lvds_save(struct drm_connector *connector)
 		dev_priv->backlight_duty_cycle =
 		psb_intel_lvds_get_max_backlight(dev);
 
-	DRM_DEBUG("(0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
+	dev_dbg(dev->dev, "(0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
 			lvds_priv->savePP_ON,
 			lvds_priv->savePP_OFF,
 			lvds_priv->saveLVDS,
@@ -310,7 +308,7 @@ static void psb_intel_lvds_restore(struct drm_connector *connector)
 	struct psb_intel_lvds_priv *lvds_priv =
 		(struct psb_intel_lvds_priv *)psb_intel_output->dev_priv;
 
-	DRM_DEBUG("(0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
+	dev_dbg(dev->dev, "(0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
 			lvds_priv->savePP_ON,
 			lvds_priv->savePP_OFF,
 			lvds_priv->saveLVDS,
@@ -351,8 +349,6 @@ int psb_intel_lvds_mode_valid(struct drm_connector *connector,
 	struct drm_display_mode *fixed_mode =
 	    psb_intel_output->mode_dev->panel_fixed_mode;
 
-	PSB_DEBUG_ENTRY("\n");
-
 	if (psb_intel_output->type == INTEL_OUTPUT_MIPI2)
 		fixed_mode = psb_intel_output->mode_dev->panel_fixed_mode2;
 
@@ -387,12 +383,10 @@ bool psb_intel_lvds_mode_fixup(struct drm_encoder *encoder,
 	struct psb_intel_output *psb_intel_output =
 					enc_to_psb_intel_output(encoder);
 
-	PSB_DEBUG_ENTRY("type = 0x%x, pipe = %d.\n",
-			psb_intel_output->type, psb_intel_crtc->pipe);
-
 	if (psb_intel_output->type == INTEL_OUTPUT_MIPI2)
 		panel_fixed_mode = mode_dev->panel_fixed_mode2;
 
+	/* FIXME: review for Medfield */
 	/* PSB requires the LVDS is on pipe B, MRST has only one pipe anyway */
 	if (!IS_MRST(dev) && psb_intel_crtc->pipe == 0) {
 		printk(KERN_ERR "Can't support LVDS on pipe A\n");
@@ -448,8 +442,6 @@ void psb_intel_lvds_prepare(struct drm_encoder *encoder)
 	struct psb_intel_output *output = enc_to_psb_intel_output(encoder);
 	struct psb_intel_mode_device *mode_dev = output->mode_dev;
 
-	PSB_DEBUG_ENTRY("\n");
-
 	if (!gma_power_begin(dev, true))
 		return;
 
@@ -467,8 +459,6 @@ void psb_intel_lvds_commit(struct drm_encoder *encoder)
 	struct drm_device *dev = encoder->dev;
 	struct psb_intel_output *output = enc_to_psb_intel_output(encoder);
 	struct psb_intel_mode_device *mode_dev = output->mode_dev;
-
-	PSB_DEBUG_ENTRY("\n");
 
 	if (mode_dev->backlight_duty_cycle == 0)
 		mode_dev->backlight_duty_cycle =
@@ -583,16 +573,13 @@ int psb_intel_lvds_set_property(struct drm_connector *connector,
 				       struct drm_property *property,
 				       uint64_t value)
 {
-	struct drm_encoder *pEncoder = connector->encoder;
+	struct drm_encoder *encoder = connector->encoder;
+	struct drm_psb_private *dev_priv = encoder->dev->dev_private;
 
-	PSB_DEBUG_ENTRY("\n");
-
-	if (!strcmp(property->name, "scaling mode") && pEncoder) {
+	if (!strcmp(property->name, "scaling mode") && encoder) {
 		struct psb_intel_crtc *pPsbCrtc =
-					to_psb_intel_crtc(pEncoder->crtc);
+					to_psb_intel_crtc(encoder->crtc);
 		uint64_t curValue;
-
-		PSB_DEBUG_ENTRY("scaling mode\n");
 
 		if (!pPsbCrtc)
 			goto set_prop_error;
@@ -623,32 +610,31 @@ int psb_intel_lvds_set_property(struct drm_connector *connector,
 
 		if (pPsbCrtc->saved_mode.hdisplay != 0 &&
 		    pPsbCrtc->saved_mode.vdisplay != 0) {
-			if (!drm_crtc_helper_set_mode(pEncoder->crtc,
+			if (!drm_crtc_helper_set_mode(encoder->crtc,
 						      &pPsbCrtc->saved_mode,
-						      pEncoder->crtc->x,
-						      pEncoder->crtc->y,
-						      pEncoder->crtc->fb))
+						      encoder->crtc->x,
+						      encoder->crtc->y,
+						      encoder->crtc->fb))
 				goto set_prop_error;
 		}
-	} else if (!strcmp(property->name, "backlight") && pEncoder) {
-		PSB_DEBUG_ENTRY("backlight\n");
-
+	} else if (!strcmp(property->name, "backlight") && encoder) {
 		if (drm_connector_property_set_value(connector,
 							property,
 							value))
 			goto set_prop_error;
 		else {
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-			struct backlight_device bd;
-			bd.props.brightness = value;
-			psb_set_brightness(&bd);
+			struct backlight_device *bd = dev_priv->backlight_device;
+			if (bd) {
+        			bd->props.brightness = value;
+	        		backlight_update_status(bd);
+                        }
 #endif
 		}
-	} else if (!strcmp(property->name, "DPMS") && pEncoder) {
+	} else if (!strcmp(property->name, "DPMS") && encoder) {
 		struct drm_encoder_helper_funcs *pEncHFuncs
-						= pEncoder->helper_private;
-		PSB_DEBUG_ENTRY("DPMS\n");
-		pEncHFuncs->dpms(pEncoder, value);
+						= encoder->helper_private;
+		pEncHFuncs->dpms(encoder, value);
 	}
 
 set_prop_done:
@@ -722,7 +708,7 @@ void psb_intel_lvds_init(struct drm_device *dev,
 	lvds_priv = kzalloc(sizeof(struct psb_intel_lvds_priv), GFP_KERNEL);
 	if (!lvds_priv) {
 		kfree(psb_intel_output);
-		DRM_DEBUG("LVDS private allocation error\n");
+		dev_err(dev->dev, "LVDS private allocation error\n");
 		return;
 	}
 
@@ -838,8 +824,7 @@ void psb_intel_lvds_init(struct drm_device *dev,
 
 	/* If we still don't have a mode after all that, give up. */
 	if (!mode_dev->panel_fixed_mode) {
-		DRM_DEBUG
-			("Found no modes on the lvds, ignoring the LVDS\n");
+		dev_err(dev->dev, "Found no modes on the lvds, ignoring the LVDS\n");
 		goto failed_find;
 	}
 
@@ -849,26 +834,6 @@ void psb_intel_lvds_init(struct drm_device *dev,
 	 */
 out:
 	drm_sysfs_connector_add(connector);
-
-	PSB_DEBUG_ENTRY("hdisplay = %d\n",
-		 mode_dev->panel_fixed_mode->hdisplay);
-	PSB_DEBUG_ENTRY(" vdisplay = %d\n",
-		 mode_dev->panel_fixed_mode->vdisplay);
-	PSB_DEBUG_ENTRY(" hsync_start = %d\n",
-		 mode_dev->panel_fixed_mode->hsync_start);
-	PSB_DEBUG_ENTRY(" hsync_end = %d\n",
-		 mode_dev->panel_fixed_mode->hsync_end);
-	PSB_DEBUG_ENTRY(" htotal = %d\n",
-		 mode_dev->panel_fixed_mode->htotal);
-	PSB_DEBUG_ENTRY(" vsync_start = %d\n",
-		 mode_dev->panel_fixed_mode->vsync_start);
-	PSB_DEBUG_ENTRY(" vsync_end = %d\n",
-		 mode_dev->panel_fixed_mode->vsync_end);
-	PSB_DEBUG_ENTRY(" vtotal = %d\n",
-		 mode_dev->panel_fixed_mode->vtotal);
-	PSB_DEBUG_ENTRY(" clock = %d\n",
-		 mode_dev->panel_fixed_mode->clock);
-
 	return;
 
 failed_find:

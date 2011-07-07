@@ -62,7 +62,6 @@
 #include <linux/uaccess.h>
 
 #include <linux/i2c.h>
-#include <linux/version.h>
 #include <linux/workqueue.h>
 #include <linux/poll.h>
 #include <linux/mm.h>
@@ -84,10 +83,6 @@
 #include <media/v4l2-device.h>
 #include <linux/videodev2.h>
 #include <linux/soundcard.h>
-
-#ifndef PAGE_SIZE
-#error "PAGE_SIZE not defined"
-#endif /* PAGE_SIZE */
 
 /*---------------------------------------------------------------------------*/
 /*  VENDOR, PRODUCT:  Syntek Semiconductor Co., Ltd
@@ -285,8 +280,6 @@ struct inputset {
  */
 /*---------------------------------------------------------------------------*/
 struct easycap {
-#define TELLTALE "expectedstring"
-	char telltale[16];
 	int isdongle;
 	int minor;
 
