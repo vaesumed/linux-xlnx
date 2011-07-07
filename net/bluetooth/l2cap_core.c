@@ -223,18 +223,18 @@ static u16 l2cap_alloc_cid(struct l2cap_conn *conn)
 
 static void l2cap_set_timer(struct l2cap_chan *chan, struct timer_list *timer, long timeout)
 {
-       BT_DBG("chan %p state %d timeout %ld", chan->sk, chan->state, timeout);
+	BT_DBG("chan %p state %d timeout %ld", chan->sk, chan->state, timeout);
 
-       if (!mod_timer(timer, jiffies + timeout))
-	       chan_hold(chan);
+	if (!mod_timer(timer, jiffies + msecs_to_jiffies(timeout)))
+		chan_hold(chan);
 }
 
 static void l2cap_clear_timer(struct l2cap_chan *chan, struct timer_list *timer)
 {
-       BT_DBG("chan %p state %d", chan, chan->state);
+	BT_DBG("chan %p state %d", chan, chan->state);
 
-       if (timer_pending(timer) && del_timer(timer))
-	       chan_put(chan);
+	if (timer_pending(timer) && del_timer(timer))
+		chan_put(chan);
 }
 
 static void l2cap_state_change(struct l2cap_chan *chan, int state)
@@ -741,9 +741,9 @@ static void l2cap_conn_start(struct l2cap_conn *conn)
 					&chan->conf_state)) {
 				/* l2cap_chan_close() calls list_del(chan)
 				 * so release the lock */
-				read_unlock_bh(&conn->chan_lock);
+				read_unlock(&conn->chan_lock);
 				l2cap_chan_close(chan, ECONNRESET);
-				read_lock_bh(&conn->chan_lock);
+				read_lock(&conn->chan_lock);
 				bh_unlock_sock(sk);
 				continue;
 			}
@@ -3523,9 +3523,6 @@ static inline int l2cap_data_channel_iframe(struct l2cap_chan *chan, u16 rx_cont
 	chan->expected_ack_seq = req_seq;
 	l2cap_drop_acked_frames(chan);
 
-	if (tx_seq == chan->expected_tx_seq)
-		goto expected;
-
 	tx_seq_offset = (tx_seq - chan->buffer_seq) % 64;
 	if (tx_seq_offset < 0)
 		tx_seq_offset += 64;
@@ -3538,6 +3535,9 @@ static inline int l2cap_data_channel_iframe(struct l2cap_chan *chan, u16 rx_cont
 
 	if (test_bit(CONN_LOCAL_BUSY, &chan->conn_state))
 		goto drop;
+
+	if (tx_seq == chan->expected_tx_seq)
+		goto expected;
 
 	if (test_bit(CONN_SREJ_SENT, &chan->conn_state)) {
 		struct srej_list *first;
@@ -4108,7 +4108,7 @@ static int l2cap_connect_cfm(struct hci_conn *hcon, u8 status)
 		if (conn)
 			l2cap_conn_ready(conn);
 	} else
-		l2cap_conn_del(hcon, bt_err(status));
+		l2cap_conn_del(hcon, bt_to_errno(status));
 
 	return 0;
 }
@@ -4132,7 +4132,7 @@ static int l2cap_disconn_cfm(struct hci_conn *hcon, u8 reason)
 	if (!(hcon->type == ACL_LINK || hcon->type == LE_LINK))
 		return -EINVAL;
 
-	l2cap_conn_del(hcon, bt_err(reason));
+	l2cap_conn_del(hcon, bt_to_errno(reason));
 
 	return 0;
 }
