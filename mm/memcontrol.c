@@ -1550,7 +1550,8 @@ mem_cgroup_select_victim(struct mem_cgroup *root_mem)
 	return ret;
 }
 
-/** test_mem_cgroup_node_reclaimable
+/**
+ * test_mem_cgroup_node_reclaimable
  * @mem: the target memcg
  * @nid: the node ID to be checked.
  * @noswap : specify true here if the user wants flle only information.
