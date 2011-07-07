@@ -674,8 +674,11 @@ static void sta_apply_parameters(struct ieee80211_local *local,
 
 	if (mask & BIT(NL80211_STA_FLAG_WME)) {
 		sta->flags &= ~WLAN_STA_WME;
-		if (set & BIT(NL80211_STA_FLAG_WME))
+		sta->sta.wme = false;
+		if (set & BIT(NL80211_STA_FLAG_WME)) {
 			sta->flags |= WLAN_STA_WME;
+			sta->sta.wme = true;
+		}
 	}
 
 	if (mask & BIT(NL80211_STA_FLAG_MFP)) {
@@ -1554,6 +1557,19 @@ static int ieee80211_testmode_cmd(struct wiphy *wiphy, void *data, int len)
 
 	return local->ops->testmode_cmd(&local->hw, data, len);
 }
+
+static int ieee80211_testmode_dump(struct wiphy *wiphy,
+				   struct sk_buff *skb,
+				   struct netlink_callback *cb,
+				   void *data, int len)
+{
+	struct ieee80211_local *local = wiphy_priv(wiphy);
+
+	if (!local->ops->testmode_dump)
+		return -EOPNOTSUPP;
+
+	return local->ops->testmode_dump(&local->hw, skb, cb, data, len);
+}
 #endif
 
 int __ieee80211_request_smps(struct ieee80211_sub_if_data *sdata,
@@ -2134,6 +2150,7 @@ struct cfg80211_ops mac80211_config_ops = {
 	.set_wds_peer = ieee80211_set_wds_peer,
 	.rfkill_poll = ieee80211_rfkill_poll,
 	CFG80211_TESTMODE_CMD(ieee80211_testmode_cmd)
+	CFG80211_TESTMODE_DUMP(ieee80211_testmode_dump)
 	.set_power_mgmt = ieee80211_set_power_mgmt,
 	.set_bitrate_mask = ieee80211_set_bitrate_mask,
 	.remain_on_channel = ieee80211_remain_on_channel,

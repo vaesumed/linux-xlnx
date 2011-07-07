@@ -418,10 +418,8 @@ qlcnic_setup_intr(struct qlcnic_adapter *adapter)
 	int num_msix;
 
 	if (adapter->msix_supported) {
-		num_msix = (num_online_cpus() >=
-			QLCNIC_DEF_NUM_STS_DESC_RINGS) ?
-			QLCNIC_DEF_NUM_STS_DESC_RINGS :
-			QLCNIC_MIN_NUM_RSS_RINGS;
+		num_msix = rounddown_pow_of_two(min_t(int, num_online_cpus(),
+				QLCNIC_DEF_NUM_STS_DESC_RINGS));
 	} else
 		num_msix = 1;
 
@@ -1393,6 +1391,12 @@ int qlcnic_diag_alloc_res(struct net_device *netdev, int test)
 			qlcnic_enable_int(sds_ring);
 		}
 	}
+
+	if (adapter->diag_test == QLCNIC_LOOPBACK_TEST) {
+		adapter->ahw->loopback_state = 0;
+		qlcnic_linkevent_request(adapter, 1);
+	}
+
 	set_bit(__QLCNIC_DEV_UP, &adapter->state);
 
 	return 0;
@@ -1486,8 +1490,6 @@ qlcnic_setup_netdev(struct qlcnic_adapter *adapter,
 		NETIF_F_HW_VLAN_RX | NETIF_F_HW_VLAN_FILTER;
 
 	netdev->irq = adapter->msix_entries[0].vector;
-
-	netif_carrier_off(netdev);
 
 	err = register_netdev(netdev);
 	if (err) {
@@ -1590,10 +1592,6 @@ qlcnic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	/* This will be reset for mezz cards  */
 	adapter->portnum = adapter->ahw->pci_func;
 
-	/* Get FW dump template and store it */
-	if (adapter->op_mode != QLCNIC_NON_PRIV_FUNC)
-		qlcnic_fw_cmd_get_minidump_temp(adapter);
-
 	err = qlcnic_get_board_info(adapter);
 	if (err) {
 		dev_err(&pdev->dev, "Error getting board config info.\n");
@@ -1611,6 +1609,12 @@ qlcnic_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		dev_err(&pdev->dev, "Loading fw failed.Please Reboot\n");
 		goto err_out_decr_ref;
 	}
+
+	/* Get FW dump template and store it */
+	if (adapter->op_mode != QLCNIC_NON_PRIV_FUNC)
+		if (!qlcnic_fw_cmd_get_minidump_temp(adapter))
+			dev_info(&pdev->dev,
+				"Supports FW dump capability\n");
 
 	if (qlcnic_read_mac_addr(adapter))
 		dev_warn(&pdev->dev, "failed to read mac addr\n");
@@ -1816,6 +1820,8 @@ static int qlcnic_open(struct net_device *netdev)
 	struct qlcnic_adapter *adapter = netdev_priv(netdev);
 	int err;
 
+	netif_carrier_off(netdev);
+
 	err = qlcnic_attach(adapter);
 	if (err)
 		return err;
@@ -1861,7 +1867,7 @@ qlcnic_alloc_lb_filters_mem(struct qlcnic_adapter *adapter)
 		return;
 
 	adapter->fhash.fmax = QLCNIC_LB_MAX_FILTERS;
-	adapter->fhash.fhead = (struct hlist_head *)head;
+	adapter->fhash.fhead = head;
 
 	for (i = 0; i < adapter->fhash.fmax; i++)
 		INIT_HLIST_HEAD(&adapter->fhash.fhead[i]);
@@ -2683,10 +2689,15 @@ err:
 static int
 qlcnic_check_drv_state(struct qlcnic_adapter *adapter)
 {
-	int act, state;
+	int act, state, active_mask;
 
 	state = QLCRD32(adapter, QLCNIC_CRB_DRV_STATE);
 	act = QLCRD32(adapter, QLCNIC_CRB_DRV_ACTIVE);
+
+	if (adapter->flags & QLCNIC_FW_RESET_OWNER) {
+		active_mask = (~(1 << (adapter->ahw->pci_func * 4)));
+		act = act & active_mask;
+	}
 
 	if (((state & 0x11111111) == (act & 0x11111111)) ||
 			((act & 0x11111111) == ((state >> 1) & 0x11111111)))
@@ -2826,6 +2837,11 @@ qlcnic_fwinit_work(struct work_struct *work)
 
 	if (!qlcnic_check_drv_state(adapter)) {
 skip_ack_check:
+		if (!(adapter->flags & QLCNIC_FW_RESET_OWNER)) {
+			qlcnic_api_unlock(adapter);
+			goto wait_npar;
+		}
+
 		dev_state = QLCRD32(adapter, QLCNIC_CRB_DEV_STATE);
 
 		if (dev_state == QLCNIC_DEV_NEED_RESET) {
@@ -2834,12 +2850,17 @@ skip_ack_check:
 			set_bit(__QLCNIC_START_FW, &adapter->state);
 			QLCDB(adapter, DRV, "Restarting fw\n");
 			qlcnic_idc_debug_info(adapter, 0);
-			QLCDB(adapter, DRV, "Take FW dump\n");
-			qlcnic_dump_fw(adapter);
 		}
 
 		qlcnic_api_unlock(adapter);
 
+		rtnl_lock();
+		if (adapter->ahw->fw_dump.enable) {
+			QLCDB(adapter, DRV, "Take FW dump\n");
+			qlcnic_dump_fw(adapter);
+			adapter->flags &= ~QLCNIC_FW_RESET_OWNER;
+		}
+		rtnl_unlock();
 		if (!adapter->nic_ops->start_firmware(adapter)) {
 			qlcnic_schedule_work(adapter, qlcnic_attach_work, 0);
 			adapter->fw_wait_cnt = 0;
@@ -2900,9 +2921,11 @@ qlcnic_detach_work(struct work_struct *work)
 
 	if (adapter->temp == QLCNIC_TEMP_PANIC)
 		goto err_ret;
-
-	if (qlcnic_set_drv_state(adapter, adapter->dev_state))
-		goto err_ret;
+	/* Dont ack if this instance is the reset owner */
+	if (!(adapter->flags & QLCNIC_FW_RESET_OWNER)) {
+		if (qlcnic_set_drv_state(adapter, adapter->dev_state))
+			goto err_ret;
+	}
 
 	adapter->fw_wait_cnt = 0;
 
@@ -2947,6 +2970,7 @@ qlcnic_dev_request_reset(struct qlcnic_adapter *adapter)
 
 	if (state == QLCNIC_DEV_READY) {
 		QLCWR32(adapter, QLCNIC_CRB_DEV_STATE, QLCNIC_DEV_NEED_RESET);
+		adapter->flags |= QLCNIC_FW_RESET_OWNER;
 		QLCDB(adapter, DRV, "NEED_RESET state set\n");
 		qlcnic_idc_debug_info(adapter, 0);
 	}

@@ -933,6 +933,7 @@ enum set_key_cmd {
  * @aid: AID we assigned to the station if we're an AP
  * @supp_rates: Bitmap of supported rates (per band)
  * @ht_cap: HT capabilities of this STA; restricted to our own TX capabilities
+ * @wme: indicates whether the STA supports WME. Only valid during AP-mode.
  * @drv_priv: data area for driver use, will always be aligned to
  *	sizeof(void *), size is determined in hw information.
  */
@@ -941,6 +942,7 @@ struct ieee80211_sta {
 	u8 addr[ETH_ALEN];
 	u16 aid;
 	struct ieee80211_sta_ht_cap ht_cap;
+	bool wme;
 
 	/* must be last */
 	u8 drv_priv[0] __attribute__((__aligned__(sizeof(void *))));
@@ -1708,6 +1710,14 @@ enum ieee80211_ampdu_mlme_action {
  *	any error unless this callback returned a negative error code.
  *	The callback can sleep.
  *
+ * @cancel_hw_scan: Ask the low-level tp cancel the active hw scan.
+ *	The driver should ask the hardware to cancel the scan (if possible),
+ *	but the scan will be completed only after the driver will call
+ *	ieee80211_scan_completed().
+ *	This callback is needed for wowlan, to prevent enqueueing a new
+ *	scan_work after the low-level driver was already suspended.
+ *	The callback can sleep.
+ *
  * @sched_scan_start: Ask the hardware to start scanning repeatedly at
  *	specific intervals.  The driver must call the
  *	ieee80211_sched_scan_results() function whenever it finds results.
@@ -1816,6 +1826,7 @@ enum ieee80211_ampdu_mlme_action {
  *
  * @testmode_cmd: Implement a cfg80211 test mode command.
  *	The callback can sleep.
+ * @testmode_dump: Implement a cfg80211 test mode dump. The callback can sleep.
  *
  * @flush: Flush all pending frames from the hardware queue, making sure
  *	that the hardware queues are empty. If the parameter @drop is set
@@ -1899,6 +1910,8 @@ struct ieee80211_ops {
 				u32 iv32, u16 *phase1key);
 	int (*hw_scan)(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		       struct cfg80211_scan_request *req);
+	void (*cancel_hw_scan)(struct ieee80211_hw *hw,
+			       struct ieee80211_vif *vif);
 	int (*sched_scan_start)(struct ieee80211_hw *hw,
 				struct ieee80211_vif *vif,
 				struct cfg80211_sched_scan_request *req,
@@ -1936,6 +1949,9 @@ struct ieee80211_ops {
 	void (*set_coverage_class)(struct ieee80211_hw *hw, u8 coverage_class);
 #ifdef CONFIG_NL80211_TESTMODE
 	int (*testmode_cmd)(struct ieee80211_hw *hw, void *data, int len);
+	int (*testmode_dump)(struct ieee80211_hw *hw, struct sk_buff *skb,
+			     struct netlink_callback *cb,
+			     void *data, int len);
 #endif
 	void (*flush)(struct ieee80211_hw *hw, bool drop);
 	void (*channel_switch)(struct ieee80211_hw *hw,
@@ -2916,6 +2932,16 @@ void ieee80211_cqm_rssi_notify(struct ieee80211_vif *vif,
 			       gfp_t gfp);
 
 /**
+ * ieee80211_get_operstate - get the operstate of the vif
+ *
+ * @vif: &struct ieee80211_vif pointer from the add_interface callback.
+ *
+ * The driver might need to know the operstate of the net_device
+ * (specifically, whether the link is IF_OPER_UP after resume)
+ */
+unsigned char ieee80211_get_operstate(struct ieee80211_vif *vif);
+
+/**
  * ieee80211_chswitch_done - Complete channel switch process
  * @vif: &struct ieee80211_vif pointer from the add_interface callback.
  * @success: make the channel switch successful or not
@@ -2964,6 +2990,23 @@ void ieee80211_ready_on_channel(struct ieee80211_hw *hw);
  * @hw: pointer as obtained from ieee80211_alloc_hw()
  */
 void ieee80211_remain_on_channel_expired(struct ieee80211_hw *hw);
+
+/**
+ * ieee80211_stop_rx_ba_session - callback to stop existing BA sessions
+ *
+ * in order not to harm the system performance and user experience, the device
+ * may request not to allow any rx ba session and tear down existing rx ba
+ * sessions based on system constraints such as periodic BT activity that needs
+ * to limit wlan activity (eg.sco or a2dp)."
+ * in such cases, the intention is to limit the duration of the rx ppdu and
+ * therefore prevent the peer device to use a-mpdu aggregation.
+ *
+ * @vif: &struct ieee80211_vif pointer from the add_interface callback.
+ * @ba_rx_bitmap: Bit map of open rx ba per tid
+ * @addr: & to bssid mac address
+ */
+void ieee80211_stop_rx_ba_session(struct ieee80211_vif *vif, u16 ba_rx_bitmap,
+				  const u8 *addr);
 
 /* Rate control API */
 

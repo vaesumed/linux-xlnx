@@ -36,8 +36,8 @@
 
 #define _QLCNIC_LINUX_MAJOR 5
 #define _QLCNIC_LINUX_MINOR 0
-#define _QLCNIC_LINUX_SUBVERSION 18
-#define QLCNIC_LINUX_VERSIONID  "5.0.18"
+#define _QLCNIC_LINUX_SUBVERSION 20
+#define QLCNIC_LINUX_VERSIONID  "5.0.20"
 #define QLCNIC_DRV_IDC_VER  0x01
 #define QLCNIC_DRIVER_VERSION  ((_QLCNIC_LINUX_MAJOR << 16) |\
 		 (_QLCNIC_LINUX_MINOR << 8) | (_QLCNIC_LINUX_SUBVERSION))
@@ -429,6 +429,7 @@ struct qlcnic_dump_template_hdr {
 
 struct qlcnic_fw_dump {
 	u8	clr;	/* flag to indicate if dump is cleared */
+	u8	enable; /* enable/disable dump */
 	u32	size;	/* total size of the dump */
 	void	*data;	/* dump data area */
 	struct	qlcnic_dump_template_hdr *tmpl_hdr;
@@ -450,6 +451,7 @@ struct qlcnic_hardware_context {
 	u8 revision_id;
 	u8 pci_func;
 	u8 linkup;
+	u8 loopback_state;
 	u16 port_type;
 	u16 board_type;
 
@@ -779,6 +781,14 @@ struct qlcnic_mac_list_s {
 #define QLCNIC_IP_UP		2
 #define QLCNIC_IP_DOWN		3
 
+#define QLCNIC_ILB_MODE		0x1
+#define QLCNIC_ELB_MODE		0x2
+
+#define QLCNIC_LINKEVENT	0x1
+#define QLCNIC_LB_RESPONSE	0x2
+#define QLCNIC_IS_LB_CONFIGURED(VAL)	\
+		(VAL == (QLCNIC_LINKEVENT | QLCNIC_LB_RESPONSE))
+
 /*
  * Driver --> Firmware
  */
@@ -788,13 +798,17 @@ struct qlcnic_mac_list_s {
 #define QLCNIC_H2C_OPCODE_LRO_REQUEST			0x7
 #define QLCNIC_H2C_OPCODE_SET_MAC_RECEIVE_MODE		0xc
 #define QLCNIC_H2C_OPCODE_CONFIG_IPADDR		0x12
+
 #define QLCNIC_H2C_OPCODE_GET_LINKEVENT		0x15
 #define QLCNIC_H2C_OPCODE_CONFIG_BRIDGING		0x17
 #define QLCNIC_H2C_OPCODE_CONFIG_HW_LRO		0x18
+#define QLCNIC_H2C_OPCODE_CONFIG_LOOPBACK		0x13
+
 /*
  * Firmware --> Driver
  */
 
+#define QLCNIC_C2H_OPCODE_CONFIG_LOOPBACK		0x8f
 #define QLCNIC_C2H_OPCODE_GET_LINKEVENT_RESPONSE	141
 
 #define VPORT_MISS_MODE_DROP		0 /* drop all unmatched */
@@ -895,11 +909,11 @@ struct qlcnic_ipaddr {
 #define QLCNIC_MAC_OVERRIDE_DISABLED	0x400
 #define QLCNIC_PROMISC_DISABLED		0x800
 #define QLCNIC_NEED_FLR			0x1000
+#define QLCNIC_FW_RESET_OWNER		0x2000
 #define QLCNIC_IS_MSI_FAMILY(adapter) \
 	((adapter)->flags & (QLCNIC_MSI_ENABLED | QLCNIC_MSIX_ENABLED))
 
 #define QLCNIC_DEF_NUM_STS_DESC_RINGS	4
-#define QLCNIC_MIN_NUM_RSS_RINGS	2
 #define QLCNIC_MSIX_TBL_SPACE		8192
 #define QLCNIC_PCI_REG_MSIX_TBL 	0x44
 #define QLCNIC_MSIX_TBL_PGSIZE		4096
@@ -1219,8 +1233,7 @@ struct __ctrl {
 
 struct __cache {
 	__le32	addr;
-	u8	stride;
-	u8	rsvd;
+	__le16	stride;
 	__le16	init_tag_val;
 	__le32	size;
 	__le32	no_ops;
@@ -1318,9 +1331,11 @@ enum op_codes {
 #define QLCNIC_DUMP_SKIP	BIT_7
 
 #define QLCNIC_DUMP_MASK_MIN		3
-#define QLCNIC_DUMP_MASK_DEF		0x0f
+#define QLCNIC_DUMP_MASK_DEF		0x7f
 #define QLCNIC_DUMP_MASK_MAX		0xff
 #define QLCNIC_FORCE_FW_DUMP_KEY	0xdeadfeed
+#define QLCNIC_ENABLE_FW_DUMP		0xaddfeed
+#define QLCNIC_DISABLE_FW_DUMP		0xbadfeed
 
 struct qlcnic_dump_operations {
 	enum op_codes opcode;
@@ -1428,6 +1443,12 @@ int qlcnic_send_lro_cleanup(struct qlcnic_adapter *adapter);
 void qlcnic_update_cmd_producer(struct qlcnic_adapter *adapter,
 		struct qlcnic_host_tx_ring *tx_ring);
 void qlcnic_fetch_mac(struct qlcnic_adapter *, u32, u32, u8, u8 *);
+void qlcnic_process_rcv_ring_diag(struct qlcnic_host_sds_ring *sds_ring);
+void qlcnic_clear_lb_mode(struct qlcnic_adapter *adapter);
+int qlcnic_set_lb_mode(struct qlcnic_adapter *adapter, u8 mode);
+
+/* Functions from qlcnic_ethtool.c */
+int qlcnic_check_loopback_buff(unsigned char *data, u8 mac[]);
 
 /* Functions from qlcnic_main.c */
 int qlcnic_reset_context(struct qlcnic_adapter *);

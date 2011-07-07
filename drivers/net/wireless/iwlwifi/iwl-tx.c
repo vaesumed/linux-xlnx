@@ -126,9 +126,8 @@ static inline u8 iwl_tfd_get_num_tbs(struct iwl_tfd *tfd)
 }
 
 static void iwlagn_unmap_tfd(struct iwl_priv *priv, struct iwl_cmd_meta *meta,
-			     struct iwl_tfd *tfd, int dma_dir)
+			     struct iwl_tfd *tfd, enum dma_data_direction dma_dir)
 {
-	struct pci_dev *dev = priv->pci_dev;
 	int i;
 	int num_tbs;
 
@@ -143,14 +142,14 @@ static void iwlagn_unmap_tfd(struct iwl_priv *priv, struct iwl_cmd_meta *meta,
 
 	/* Unmap tx_cmd */
 	if (num_tbs)
-		pci_unmap_single(dev,
+		dma_unmap_single(priv->bus.dev,
 				dma_unmap_addr(meta, mapping),
 				dma_unmap_len(meta, len),
-				PCI_DMA_BIDIRECTIONAL);
+				DMA_BIDIRECTIONAL);
 
 	/* Unmap chunks, if any. */
 	for (i = 1; i < num_tbs; i++)
-		pci_unmap_single(dev, iwl_tfd_tb_get_addr(tfd, i),
+		dma_unmap_single(priv->bus.dev, iwl_tfd_tb_get_addr(tfd, i),
 				iwl_tfd_tb_get_len(tfd, i), dma_dir);
 }
 
@@ -168,7 +167,7 @@ void iwlagn_txq_free_tfd(struct iwl_priv *priv, struct iwl_tx_queue *txq)
 	int index = txq->q.read_ptr;
 
 	iwlagn_unmap_tfd(priv, &txq->meta[index], &tfd_tmp[index],
-			 PCI_DMA_TODEVICE);
+			 DMA_TO_DEVICE);
 
 	/* free SKB */
 	if (txq->txb) {
@@ -267,7 +266,7 @@ void iwl_tx_queue_unmap(struct iwl_priv *priv, int txq_id)
 void iwl_tx_queue_free(struct iwl_priv *priv, int txq_id)
 {
 	struct iwl_tx_queue *txq = &priv->txq[txq_id];
-	struct device *dev = &priv->pci_dev->dev;
+	struct device *dev = priv->bus.dev;
 	int i;
 
 	iwl_tx_queue_unmap(priv, txq_id);
@@ -312,7 +311,7 @@ void iwl_cmd_queue_unmap(struct iwl_priv *priv)
 
 		if (txq->meta[i].flags & CMD_MAPPED) {
 			iwlagn_unmap_tfd(priv, &txq->meta[i], &txq->tfds[i],
-					 PCI_DMA_BIDIRECTIONAL);
+					 DMA_BIDIRECTIONAL);
 			txq->meta[i].flags = 0;
 		}
 
@@ -331,7 +330,7 @@ void iwl_cmd_queue_unmap(struct iwl_priv *priv)
 void iwl_cmd_queue_free(struct iwl_priv *priv)
 {
 	struct iwl_tx_queue *txq = &priv->txq[priv->cmd_queue];
-	struct device *dev = &priv->pci_dev->dev;
+	struct device *dev = priv->bus.dev;
 	int i;
 
 	iwl_cmd_queue_unmap(priv);
@@ -433,7 +432,7 @@ static int iwl_queue_init(struct iwl_priv *priv, struct iwl_queue *q,
 static int iwl_tx_queue_alloc(struct iwl_priv *priv,
 			      struct iwl_tx_queue *txq, u32 id)
 {
-	struct device *dev = &priv->pci_dev->dev;
+	struct device *dev = priv->bus.dev;
 	size_t tfd_sz = priv->hw_params.tfd_size * TFD_QUEUE_SIZE_MAX;
 
 	/* Driver private data, only for Tx (not command) queues,
@@ -455,7 +454,7 @@ static int iwl_tx_queue_alloc(struct iwl_priv *priv,
 	txq->tfds = dma_alloc_coherent(dev, tfd_sz, &txq->q.dma_addr,
 				       GFP_KERNEL);
 	if (!txq->tfds) {
-		IWL_ERR(priv, "pci_alloc_consistent(%zd) failed\n", tfd_sz);
+		IWL_ERR(priv, "dma_alloc_coherent(%zd) failed\n", tfd_sz);
 		goto error;
 	}
 	txq->q.id = id;
@@ -671,9 +670,9 @@ int iwl_enqueue_hcmd(struct iwl_priv *priv, struct iwl_host_cmd *cmd)
 			le16_to_cpu(out_cmd->hdr.sequence), cmd_size,
 			q->write_ptr, idx, priv->cmd_queue);
 
-	phys_addr = pci_map_single(priv->pci_dev, &out_cmd->hdr,
-				   copy_size, PCI_DMA_BIDIRECTIONAL);
-	if (unlikely(pci_dma_mapping_error(priv->pci_dev, phys_addr))) {
+	phys_addr = dma_map_single(priv->bus.dev, &out_cmd->hdr, copy_size,
+				DMA_BIDIRECTIONAL);
+	if (unlikely(dma_mapping_error(priv->bus.dev, phys_addr))) {
 		idx = -ENOMEM;
 		goto out;
 	}
@@ -693,12 +692,12 @@ int iwl_enqueue_hcmd(struct iwl_priv *priv, struct iwl_host_cmd *cmd)
 			continue;
 		if (!(cmd->dataflags[i] & IWL_HCMD_DFL_NOCOPY))
 			continue;
-		phys_addr = pci_map_single(priv->pci_dev, (void *)cmd->data[i],
-					   cmd->len[i], PCI_DMA_BIDIRECTIONAL);
-		if (pci_dma_mapping_error(priv->pci_dev, phys_addr)) {
+		phys_addr = dma_map_single(priv->bus.dev, (void *)cmd->data[i],
+					   cmd->len[i], DMA_BIDIRECTIONAL);
+		if (dma_mapping_error(priv->bus.dev, phys_addr)) {
 			iwlagn_unmap_tfd(priv, out_meta,
 					 &txq->tfds[q->write_ptr],
-					 PCI_DMA_BIDIRECTIONAL);
+					 DMA_BIDIRECTIONAL);
 			idx = -ENOMEM;
 			goto out;
 		}
@@ -748,9 +747,9 @@ static void iwl_hcmd_queue_reclaim(struct iwl_priv *priv, int txq_id, int idx)
 	int nfreed = 0;
 
 	if ((idx >= q->n_bd) || (iwl_queue_used(q, idx) == 0)) {
-		IWL_ERR(priv, "Read index for DMA queue txq id (%d), index %d, "
-			  "is out of range [0-%d] %d %d.\n", txq_id,
-			  idx, q->n_bd, q->write_ptr, q->read_ptr);
+		IWL_ERR(priv, "%s: Read index for DMA queue txq id (%d), "
+			  "index %d is out of range [0-%d] %d %d.\n", __func__,
+			  txq_id, idx, q->n_bd, q->write_ptr, q->read_ptr);
 		return;
 	}
 
@@ -802,7 +801,7 @@ void iwl_tx_cmd_complete(struct iwl_priv *priv, struct iwl_rx_mem_buffer *rxb)
 	cmd = txq->cmd[cmd_index];
 	meta = &txq->meta[cmd_index];
 
-	iwlagn_unmap_tfd(priv, meta, &txq->tfds[index], PCI_DMA_BIDIRECTIONAL);
+	iwlagn_unmap_tfd(priv, meta, &txq->tfds[index], DMA_BIDIRECTIONAL);
 
 	/* Input error checking is done when commands are added to queue. */
 	if (meta->flags & CMD_WANT_SKB) {

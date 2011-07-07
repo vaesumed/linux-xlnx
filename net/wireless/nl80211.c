@@ -3632,7 +3632,8 @@ static int nl80211_stop_sched_scan(struct sk_buff *skb,
 	return err;
 }
 
-static int nl80211_send_bss(struct sk_buff *msg, u32 pid, u32 seq, int flags,
+static int nl80211_send_bss(struct sk_buff *msg, struct netlink_callback *cb,
+			    u32 seq, int flags,
 			    struct cfg80211_registered_device *rdev,
 			    struct wireless_dev *wdev,
 			    struct cfg80211_internal_bss *intbss)
@@ -3644,10 +3645,12 @@ static int nl80211_send_bss(struct sk_buff *msg, u32 pid, u32 seq, int flags,
 
 	ASSERT_WDEV_LOCK(wdev);
 
-	hdr = nl80211hdr_put(msg, pid, seq, flags,
+	hdr = nl80211hdr_put(msg, NETLINK_CB(cb->skb).pid, seq, flags,
 			     NL80211_CMD_NEW_SCAN_RESULTS);
 	if (!hdr)
 		return -1;
+
+	genl_dump_check_consistent(cb, hdr, &nl80211_fam);
 
 	NLA_PUT_U32(msg, NL80211_ATTR_GENERATION, rdev->bss_generation);
 	NLA_PUT_U32(msg, NL80211_ATTR_IFINDEX, wdev->netdev->ifindex);
@@ -3737,11 +3740,12 @@ static int nl80211_dump_scan(struct sk_buff *skb,
 	spin_lock_bh(&rdev->bss_lock);
 	cfg80211_bss_expire(rdev);
 
+	cb->seq = rdev->bss_generation;
+
 	list_for_each_entry(scan, &rdev->bss_list, list) {
 		if (++idx <= start)
 			continue;
-		if (nl80211_send_bss(skb,
-				NETLINK_CB(cb->skb).pid,
+		if (nl80211_send_bss(skb, cb,
 				cb->nlh->nlmsg_seq, NLM_F_MULTI,
 				rdev, wdev, scan) < 0) {
 			idx--;
@@ -3764,10 +3768,6 @@ static int nl80211_send_survey(struct sk_buff *msg, u32 pid, u32 seq,
 {
 	void *hdr;
 	struct nlattr *infoattr;
-
-	/* Survey without a channel doesn't make sense */
-	if (!survey->channel)
-		return -EINVAL;
 
 	hdr = nl80211hdr_put(msg, pid, seq, flags,
 			     NL80211_CMD_NEW_SURVEY_RESULTS);
@@ -3831,12 +3831,27 @@ static int nl80211_dump_survey(struct sk_buff *skb,
 	}
 
 	while (1) {
+		struct ieee80211_channel *chan;
+
 		res = dev->ops->dump_survey(&dev->wiphy, netdev, survey_idx,
 					    &survey);
 		if (res == -ENOENT)
 			break;
 		if (res)
 			goto out_err;
+
+		/* Survey without a channel doesn't make sense */
+		if (!survey.channel) {
+			res = -EINVAL;
+			goto out;
+		}
+
+		chan = ieee80211_get_channel(&dev->wiphy,
+					     survey.channel->center_freq);
+		if (!chan || chan->flags & IEEE80211_CHAN_DISABLED) {
+			survey_idx++;
+			continue;
+		}
 
 		if (nl80211_send_survey(skb,
 				NETLINK_CB(cb->skb).pid,
@@ -4369,6 +4384,93 @@ static int nl80211_testmode_do(struct sk_buff *skb, struct genl_info *info)
 		rdev->testmode_info = NULL;
 	}
 
+	return err;
+}
+
+static int nl80211_testmode_dump(struct sk_buff *skb,
+				 struct netlink_callback *cb)
+{
+	struct cfg80211_registered_device *dev;
+	int err;
+	long phy_idx;
+	void *data = NULL;
+	int data_len = 0;
+
+	if (cb->args[0]) {
+		/*
+		 * 0 is a valid index, but not valid for args[0],
+		 * so we need to offset by 1.
+		 */
+		phy_idx = cb->args[0] - 1;
+	} else {
+		err = nlmsg_parse(cb->nlh, GENL_HDRLEN + nl80211_fam.hdrsize,
+				  nl80211_fam.attrbuf, nl80211_fam.maxattr,
+				  nl80211_policy);
+		if (err)
+			return err;
+		if (!nl80211_fam.attrbuf[NL80211_ATTR_WIPHY])
+			return -EINVAL;
+		phy_idx = nla_get_u32(nl80211_fam.attrbuf[NL80211_ATTR_WIPHY]);
+		if (nl80211_fam.attrbuf[NL80211_ATTR_TESTDATA])
+			cb->args[1] =
+				(long)nl80211_fam.attrbuf[NL80211_ATTR_TESTDATA];
+	}
+
+	if (cb->args[1]) {
+		data = nla_data((void *)cb->args[1]);
+		data_len = nla_len((void *)cb->args[1]);
+	}
+
+	mutex_lock(&cfg80211_mutex);
+	dev = cfg80211_rdev_by_wiphy_idx(phy_idx);
+	if (!dev) {
+		mutex_unlock(&cfg80211_mutex);
+		return -ENOENT;
+	}
+	cfg80211_lock_rdev(dev);
+	mutex_unlock(&cfg80211_mutex);
+
+	if (!dev->ops->testmode_dump) {
+		err = -EOPNOTSUPP;
+		goto out_err;
+	}
+
+	while (1) {
+		void *hdr = nl80211hdr_put(skb, NETLINK_CB(cb->skb).pid,
+					   cb->nlh->nlmsg_seq, NLM_F_MULTI,
+					   NL80211_CMD_TESTMODE);
+		struct nlattr *tmdata;
+
+		if (nla_put_u32(skb, NL80211_ATTR_WIPHY, dev->wiphy_idx) < 0) {
+			genlmsg_cancel(skb, hdr);
+			break;
+		}
+
+		tmdata = nla_nest_start(skb, NL80211_ATTR_TESTDATA);
+		if (!tmdata) {
+			genlmsg_cancel(skb, hdr);
+			break;
+		}
+		err = dev->ops->testmode_dump(&dev->wiphy, skb, cb,
+					      data, data_len);
+		nla_nest_end(skb, tmdata);
+
+		if (err == -ENOBUFS || err == -ENOENT) {
+			genlmsg_cancel(skb, hdr);
+			break;
+		} else if (err) {
+			genlmsg_cancel(skb, hdr);
+			goto out_err;
+		}
+
+		genlmsg_end(skb, hdr);
+	}
+
+	err = skb->len;
+	/* see above */
+	cb->args[0] = phy_idx + 1;
+ out_err:
+	cfg80211_unlock_rdev(dev);
 	return err;
 }
 
@@ -5669,6 +5771,7 @@ static struct genl_ops nl80211_ops[] = {
 	{
 		.cmd = NL80211_CMD_TESTMODE,
 		.doit = nl80211_testmode_do,
+		.dumpit = nl80211_testmode_dump,
 		.policy = nl80211_policy,
 		.flags = GENL_ADMIN_PERM,
 		.internal_flags = NL80211_FLAG_NEED_WIPHY |

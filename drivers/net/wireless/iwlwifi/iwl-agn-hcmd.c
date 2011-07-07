@@ -111,10 +111,8 @@ static void iwlagn_gain_computation(struct iwl_priv *priv,
 
 		memset(&cmd, 0, sizeof(cmd));
 
-		cmd.hdr.op_code = priv->_agn.phy_calib_chain_noise_gain_cmd;
-		cmd.hdr.first_group = 0;
-		cmd.hdr.groups_num = 1;
-		cmd.hdr.data_valid = 1;
+		iwl_set_calib_hdr(&cmd.hdr,
+			priv->_agn.phy_calib_chain_noise_gain_cmd);
 		cmd.delta_gain_1 = data->delta_gain_code[1];
 		cmd.delta_gain_2 = data->delta_gain_code[2];
 		iwl_send_cmd_pdu_async(priv, REPLY_PHY_CALIBRATION_CMD,
@@ -144,10 +142,8 @@ static void iwlagn_chain_noise_reset(struct iwl_priv *priv)
 		data->beacon_count = 0;
 
 		memset(&cmd, 0, sizeof(cmd));
-		cmd.hdr.op_code = priv->_agn.phy_calib_chain_noise_reset_cmd;
-		cmd.hdr.first_group = 0;
-		cmd.hdr.groups_num = 1;
-		cmd.hdr.data_valid = 1;
+		iwl_set_calib_hdr(&cmd.hdr,
+			priv->_agn.phy_calib_chain_noise_reset_cmd);
 		ret = iwl_send_cmd_pdu(priv, REPLY_PHY_CALIBRATION_CMD,
 					sizeof(cmd), &cmd);
 		if (ret)
@@ -302,7 +298,6 @@ static int iwlagn_set_pan_params(struct iwl_priv *priv)
 }
 
 struct iwl_hcmd_ops iwlagn_hcmd = {
-	.commit_rxon = iwlagn_commit_rxon,
 	.set_rxon_chain = iwlagn_set_rxon_chain,
 	.set_tx_ant = iwlagn_send_tx_ant_config,
 	.send_bt_config = iwl_send_bt_config,
@@ -310,7 +305,6 @@ struct iwl_hcmd_ops iwlagn_hcmd = {
 };
 
 struct iwl_hcmd_ops iwlagn_bt_hcmd = {
-	.commit_rxon = iwlagn_commit_rxon,
 	.set_rxon_chain = iwlagn_set_rxon_chain,
 	.set_tx_ant = iwlagn_send_tx_ant_config,
 	.send_bt_config = iwlagn_send_advance_bt_config,
@@ -324,5 +318,4 @@ struct iwl_hcmd_utils_ops iwlagn_hcmd_utils = {
 	.tx_cmd_protection = iwlagn_tx_cmd_protection,
 	.calc_rssi = iwlagn_calc_rssi,
 	.request_scan = iwlagn_request_scan,
-	.post_scan = iwlagn_post_scan,
 };
