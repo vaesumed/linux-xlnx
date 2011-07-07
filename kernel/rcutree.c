@@ -52,13 +52,16 @@
 #include <linux/prefetch.h>
 
 #include "rcutree.h"
+#include <trace/events/rcu.h>
+
+#include "rcu.h"
 
 /* Data structures. */
 
 static struct lock_class_key rcu_node_class[NUM_RCU_LVLS];
 
 #define RCU_STATE_INITIALIZER(structname) { \
-	.level = { &structname.node[0] }, \
+	.level = { &structname##_state.node[0] }, \
 	.levelcnt = { \
 		NUM_RCU_LVL_0,  /* root of hierarchy. */ \
 		NUM_RCU_LVL_1, \
@@ -69,17 +72,17 @@ static struct lock_class_key rcu_node_class[NUM_RCU_LVLS];
 	.signaled = RCU_GP_IDLE, \
 	.gpnum = -300, \
 	.completed = -300, \
-	.onofflock = __RAW_SPIN_LOCK_UNLOCKED(&structname.onofflock), \
-	.fqslock = __RAW_SPIN_LOCK_UNLOCKED(&structname.fqslock), \
+	.onofflock = __RAW_SPIN_LOCK_UNLOCKED(&structname##_state.onofflock), \
+	.fqslock = __RAW_SPIN_LOCK_UNLOCKED(&structname##_state.fqslock), \
 	.n_force_qs = 0, \
 	.n_force_qs_ngp = 0, \
 	.name = #structname, \
 }
 
-struct rcu_state rcu_sched_state = RCU_STATE_INITIALIZER(rcu_sched_state);
+struct rcu_state rcu_sched_state = RCU_STATE_INITIALIZER(rcu_sched);
 DEFINE_PER_CPU(struct rcu_data, rcu_sched_data);
 
-struct rcu_state rcu_bh_state = RCU_STATE_INITIALIZER(rcu_bh_state);
+struct rcu_state rcu_bh_state = RCU_STATE_INITIALIZER(rcu_bh);
 DEFINE_PER_CPU(struct rcu_data, rcu_bh_data);
 
 static struct rcu_state *rcu_state;
@@ -159,8 +162,10 @@ void rcu_bh_qs(int cpu)
  */
 void rcu_note_context_switch(int cpu)
 {
+	trace_rcu_utilization("Start context switch");
 	rcu_sched_qs(cpu);
 	rcu_preempt_note_context_switch(cpu);
+	trace_rcu_utilization("End context switch");
 }
 EXPORT_SYMBOL_GPL(rcu_note_context_switch);
 
@@ -171,7 +176,7 @@ DEFINE_PER_CPU(struct rcu_dynticks, rcu_dynticks) = {
 };
 #endif /* #ifdef CONFIG_NO_HZ */
 
-static int blimit = 10;		/* Maximum callbacks per softirq. */
+static int blimit = 10;		/* Maximum callbacks per rcu_do_batch. */
 static int qhimark = 10000;	/* If this many pending, ignore blimit. */
 static int qlowmark = 100;	/* Once only this many pending, use blimit. */
 
@@ -327,8 +332,10 @@ void rcu_enter_nohz(void)
 	struct rcu_dynticks *rdtp;
 
 	local_irq_save(flags);
+	trace_rcu_utilization("Start enter nohz");
 	rdtp = &__get_cpu_var(rcu_dynticks);
 	if (--rdtp->dynticks_nesting) {
+		trace_rcu_utilization("End enter nohz");
 		local_irq_restore(flags);
 		return;
 	}
@@ -345,6 +352,7 @@ void rcu_enter_nohz(void)
 	     __get_cpu_var(rcu_bh_data).nxtlist ||
 	     rcu_preempt_needs_cpu(smp_processor_id())))
 		set_need_resched();
+	trace_rcu_utilization("End enter nohz");
 }
 
 /*
@@ -359,8 +367,10 @@ void rcu_exit_nohz(void)
 	struct rcu_dynticks *rdtp;
 
 	local_irq_save(flags);
+	trace_rcu_utilization("Start exit nohz");
 	rdtp = &__get_cpu_var(rcu_dynticks);
 	if (rdtp->dynticks_nesting++) {
+		trace_rcu_utilization("End exit nohz");
 		local_irq_restore(flags);
 		return;
 	}
@@ -369,6 +379,7 @@ void rcu_exit_nohz(void)
 	/* CPUs seeing atomic_inc() must see later RCU read-side crit sects */
 	smp_mb__after_atomic_inc();  /* See above. */
 	WARN_ON_ONCE(!(atomic_read(&rdtp->dynticks) & 0x1));
+	trace_rcu_utilization("End exit nohz");
 	local_irq_restore(flags);
 }
 
@@ -438,6 +449,21 @@ void rcu_irq_exit(void)
 	rcu_enter_nohz();
 }
 
+#ifdef CONFIG_PROVE_RCU
+
+bool rcu_check_extended_qs(void)
+{
+	struct rcu_dynticks *rdtp = &__get_cpu_var(rcu_dynticks);
+
+	if (atomic_read(&rdtp->dynticks) & 0x1)
+		return false;
+
+	return true;
+}
+EXPORT_SYMBOL_GPL(rcu_check_extended_qs);
+
+#endif /* CONFIG_PROVE_RCU */
+
 #ifdef CONFIG_SMP
 
 /*
@@ -484,6 +510,57 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 
 #endif /* #ifdef CONFIG_SMP */
 
+#ifndef CONFIG_64BIT
+
+/*
+ * Wrapper function to allow smp_call_function_single() to invoke RCU
+ * core processing on some other CPU.
+ */
+static void invoke_rcu_core_remote(void *unused)
+{
+	invoke_rcu_core();
+}
+
+/*
+ * Check a CPU to see if it is online, in dyntick-idle mode, and
+ * in danger of being too far behind the current grace period.
+ * If so, wake it up so as to make it catch up to the current
+ * grace period.  On a 32-bit system running through 500 grace
+ * periods per second, a given CPU would be awakened about once
+ * every 50 days.  On a 64-bit system, a given CPU would be
+ * awakened about every 500 million years, so we don't bother
+ * in that case.  If you happen to be manufacturing an extremely
+ * durable 64-bit SMP computer system, obtain a patch from the
+ * RCU maintainer.
+ */
+static void rcu_dyntick_kick_cpu(struct rcu_state *rsp)
+{
+	int cpu;
+	struct rcu_data *rdp;
+
+	cpu = rsp->dyntick_ovf_cpu;
+	rdp = per_cpu_ptr(rsp->rda, cpu);
+	if (cpu_online(cpu) && ULONG_CMP_LT(rsp->completed, rdp->completed)) {
+		if (smp_processor_id() == cpu)
+			invoke_rcu_core();
+		else
+			smp_call_function_single(cpu, invoke_rcu_core_remote,
+						 NULL, 1);
+	}
+	cpu = cpumask_next(cpu, cpu_online_mask);
+	if (cpu >= NR_CPUS)
+		cpu = cpumask_first(cpu_online_mask);
+	rsp->dyntick_ovf_cpu = cpu;
+}
+
+#else /* #ifndef CONFIG_64BIT */
+
+static void rcu_dyntick_kick_cpu(struct rcu_state *rsp)
+{
+}
+
+#endif /* #else #ifndef CONFIG_64BIT */
+
 #else /* #ifdef CONFIG_NO_HZ */
 
 #ifdef CONFIG_SMP
@@ -499,6 +576,10 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 }
 
 #endif /* #ifdef CONFIG_SMP */
+
+static void rcu_dyntick_kick_cpu(struct rcu_state *rsp)
+{
+}
 
 #endif /* #else #ifdef CONFIG_NO_HZ */
 
@@ -833,6 +914,7 @@ rcu_start_gp(struct rcu_state *rsp, unsigned long flags)
 	rsp->signaled = RCU_GP_INIT; /* Hold off force_quiescent_state. */
 	rsp->jiffies_force_qs = jiffies + RCU_JIFFIES_TILL_FORCE_QS;
 	record_gp_stall_check_time(rsp);
+	rcu_dyntick_kick_cpu(rsp);
 
 	/* Special-case the common single-level case. */
 	if (NUM_RCU_NODES == 1) {
@@ -1168,17 +1250,22 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 {
 	unsigned long flags;
 	struct rcu_head *next, *list, **tail;
-	int count;
+	int bl, count;
 
 	/* If no callbacks are ready, just return.*/
-	if (!cpu_has_callbacks_ready_to_invoke(rdp))
+	if (!cpu_has_callbacks_ready_to_invoke(rdp)) {
+		trace_rcu_batch_start(rsp->name, 0, 0);
+		trace_rcu_batch_end(rsp->name, 0);
 		return;
+	}
 
 	/*
 	 * Extract the list of ready callbacks, disabling to prevent
 	 * races with call_rcu() from interrupt handlers.
 	 */
 	local_irq_save(flags);
+	bl = rdp->blimit;
+	trace_rcu_batch_start(rsp->name, rdp->qlen, bl);
 	list = rdp->nxtlist;
 	rdp->nxtlist = *rdp->nxttail[RCU_DONE_TAIL];
 	*rdp->nxttail[RCU_DONE_TAIL] = NULL;
@@ -1196,11 +1283,12 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 		debug_rcu_head_unqueue(list);
 		__rcu_reclaim(list);
 		list = next;
-		if (++count >= rdp->blimit)
+		if (++count >= bl)
 			break;
 	}
 
 	local_irq_save(flags);
+	trace_rcu_batch_end(rsp->name, count);
 
 	/* Update count, and requeue any remaining callbacks. */
 	rdp->qlen -= count;
@@ -1228,7 +1316,7 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 
 	local_irq_restore(flags);
 
-	/* Re-raise the RCU softirq if there are callbacks remaining. */
+	/* Re-invoke RCU core processing if there are callbacks remaining. */
 	if (cpu_has_callbacks_ready_to_invoke(rdp))
 		invoke_rcu_core();
 }
@@ -1236,7 +1324,7 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
 /*
  * Check to see if this CPU is in a non-context-switch quiescent state
  * (user mode or idle loop for rcu, non-softirq execution for rcu_bh).
- * Also schedule the RCU softirq handler.
+ * Also schedule RCU core processing.
  *
  * This function must be called with hardirqs disabled.  It is normally
  * invoked from the scheduling-clock interrupt.  If rcu_pending returns
@@ -1244,6 +1332,7 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
  */
 void rcu_check_callbacks(int cpu, int user)
 {
+	trace_rcu_utilization("Start scheduler-tick");
 	if (user ||
 	    (idle_cpu(cpu) && rcu_scheduler_active &&
 	     !in_softirq() && hardirq_count() <= (1 << HARDIRQ_SHIFT))) {
@@ -1277,6 +1366,7 @@ void rcu_check_callbacks(int cpu, int user)
 	rcu_preempt_check_callbacks(cpu);
 	if (rcu_pending(cpu))
 		invoke_rcu_core();
+	trace_rcu_utilization("End scheduler-tick");
 }
 
 #ifdef CONFIG_SMP
@@ -1338,10 +1428,14 @@ static void force_quiescent_state(struct rcu_state *rsp, int relaxed)
 	unsigned long flags;
 	struct rcu_node *rnp = rcu_get_root(rsp);
 
-	if (!rcu_gp_in_progress(rsp))
+	trace_rcu_utilization("Start fqs");
+	if (!rcu_gp_in_progress(rsp)) {
+		trace_rcu_utilization("End fqs");
 		return;  /* No grace period in progress, nothing to force. */
+	}
 	if (!raw_spin_trylock_irqsave(&rsp->fqslock, flags)) {
 		rsp->n_force_qs_lh++; /* Inexact, can lose counts.  Tough! */
+		trace_rcu_utilization("End fqs");
 		return;	/* Someone else is already on the job. */
 	}
 	if (relaxed && ULONG_CMP_GE(rsp->jiffies_force_qs, jiffies))
@@ -1390,11 +1484,13 @@ static void force_quiescent_state(struct rcu_state *rsp, int relaxed)
 		raw_spin_unlock(&rsp->fqslock); /* irqs remain disabled */
 		rsp->fqs_need_gp = 0;
 		rcu_start_gp(rsp, flags); /* releases rnp->lock */
+		trace_rcu_utilization("End fqs");
 		return;
 	}
 	raw_spin_unlock(&rnp->lock);  /* irqs remain disabled */
 unlock_fqs_ret:
 	raw_spin_unlock_irqrestore(&rsp->fqslock, flags);
+	trace_rcu_utilization("End fqs");
 }
 
 #else /* #ifdef CONFIG_SMP */
@@ -1407,9 +1503,9 @@ static void force_quiescent_state(struct rcu_state *rsp, int relaxed)
 #endif /* #else #ifdef CONFIG_SMP */
 
 /*
- * This does the RCU processing work from softirq context for the
- * specified rcu_state and rcu_data structures.  This may be called
- * only from the CPU to whom the rdp belongs.
+ * This does the RCU core processing work for the specified rcu_state
+ * and rcu_data structures.  This may be called only from the CPU to
+ * whom the rdp belongs.
  */
 static void
 __rcu_process_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
@@ -1446,10 +1542,11 @@ __rcu_process_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
 }
 
 /*
- * Do softirq processing for the current CPU.
+ * Do RCU core processing for the current CPU.
  */
 static void rcu_process_callbacks(struct softirq_action *unused)
 {
+	trace_rcu_utilization("Start RCU core");
 	__rcu_process_callbacks(&rcu_sched_state,
 				&__get_cpu_var(rcu_sched_data));
 	__rcu_process_callbacks(&rcu_bh_state, &__get_cpu_var(rcu_bh_data));
@@ -1457,13 +1554,15 @@ static void rcu_process_callbacks(struct softirq_action *unused)
 
 	/* If we are last CPU on way to dyntick-idle mode, accelerate it. */
 	rcu_needs_cpu_flush();
+	trace_rcu_utilization("End RCU core");
 }
 
 /*
- * Wake up the current CPU's kthread.  This replaces raise_softirq()
- * in earlier versions of RCU.  Note that because we are running on
- * the current CPU with interrupts disabled, the rcu_cpu_kthread_task
- * cannot disappear out from under us.
+ * Schedule RCU callback invocation.  If the specified type of RCU
+ * does not support RCU priority boosting, just do a direct call,
+ * otherwise wake up the per-CPU kernel kthread.  Note that because we
+ * are running on the current CPU with interrupts disabled, the
+ * rcu_cpu_kthread_task cannot disappear out from under us.
  */
 static void invoke_rcu_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
 {
@@ -1589,18 +1688,9 @@ EXPORT_SYMBOL_GPL(call_rcu_bh);
  */
 void synchronize_sched(void)
 {
-	struct rcu_synchronize rcu;
-
 	if (rcu_blocking_is_gp())
 		return;
-
-	init_rcu_head_on_stack(&rcu.head);
-	init_completion(&rcu.completion);
-	/* Will wake me after RCU finished. */
-	call_rcu_sched(&rcu.head, wakeme_after_rcu);
-	/* Wait for it. */
-	wait_for_completion(&rcu.completion);
-	destroy_rcu_head_on_stack(&rcu.head);
+	wait_rcu_gp(call_rcu_sched);
 }
 EXPORT_SYMBOL_GPL(synchronize_sched);
 
@@ -1615,18 +1705,9 @@ EXPORT_SYMBOL_GPL(synchronize_sched);
  */
 void synchronize_rcu_bh(void)
 {
-	struct rcu_synchronize rcu;
-
 	if (rcu_blocking_is_gp())
 		return;
-
-	init_rcu_head_on_stack(&rcu.head);
-	init_completion(&rcu.completion);
-	/* Will wake me after RCU finished. */
-	call_rcu_bh(&rcu.head, wakeme_after_rcu);
-	/* Wait for it. */
-	wait_for_completion(&rcu.completion);
-	destroy_rcu_head_on_stack(&rcu.head);
+	wait_rcu_gp(call_rcu_bh);
 }
 EXPORT_SYMBOL_GPL(synchronize_rcu_bh);
 
@@ -1895,6 +1976,7 @@ static int __cpuinit rcu_cpu_notify(struct notifier_block *self,
 	struct rcu_data *rdp = per_cpu_ptr(rcu_state->rda, cpu);
 	struct rcu_node *rnp = rdp->mynode;
 
+	trace_rcu_utilization("Start CPU hotplug");
 	switch (action) {
 	case CPU_UP_PREPARE:
 	case CPU_UP_PREPARE_FROZEN:
@@ -1930,6 +2012,7 @@ static int __cpuinit rcu_cpu_notify(struct notifier_block *self,
 	default:
 		break;
 	}
+	trace_rcu_utilization("End CPU hotplug");
 	return NOTIFY_OK;
 }
 

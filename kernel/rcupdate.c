@@ -46,6 +46,11 @@
 #include <linux/module.h>
 #include <linux/hardirq.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/rcu.h>
+
+#include "rcu.h"
+
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 static struct lock_class_key rcu_lock_key;
 struct lockdep_map rcu_lock_map =
@@ -88,23 +93,46 @@ int rcu_read_lock_bh_held(void)
 {
 	if (!debug_lockdep_rcu_enabled())
 		return 1;
+
+	if (rcu_check_extended_qs())
+		return 0;
+
 	return in_softirq() || irqs_disabled();
 }
 EXPORT_SYMBOL_GPL(rcu_read_lock_bh_held);
 
 #endif /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
 
+struct rcu_synchronize {
+	struct rcu_head head;
+	struct completion completion;
+};
+
 /*
  * Awaken the corresponding synchronize_rcu() instance now that a
  * grace period has elapsed.
  */
-void wakeme_after_rcu(struct rcu_head  *head)
+static void wakeme_after_rcu(struct rcu_head  *head)
 {
 	struct rcu_synchronize *rcu;
 
 	rcu = container_of(head, struct rcu_synchronize, head);
 	complete(&rcu->completion);
 }
+
+void wait_rcu_gp(call_rcu_func_t crf)
+{
+	struct rcu_synchronize rcu;
+
+	init_rcu_head_on_stack(&rcu.head);
+	init_completion(&rcu.completion);
+	/* Will wake me after RCU finished. */
+	crf(&rcu.head, wakeme_after_rcu);
+	/* Wait for it. */
+	wait_for_completion(&rcu.completion);
+	destroy_rcu_head_on_stack(&rcu.head);
+}
+EXPORT_SYMBOL_GPL(wait_rcu_gp);
 
 #ifdef CONFIG_PROVE_RCU
 /*

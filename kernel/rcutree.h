@@ -372,6 +372,10 @@ struct rcu_state {
 	u8	boost;				/* Subject to priority boost. */
 	unsigned long gpnum;			/* Current gp number. */
 	unsigned long completed;		/* # of last completed gp. */
+#ifdef CONFIG_NO_HZ
+	int dyntick_ovf_cpu;			/* Next CPU to poke if in */
+						/*  danger of GP overflow. */
+#endif /* #ifdef CONFIG_NO_HZ */
 
 	/* End of fields guarded by root rcu_node's lock. */
 
@@ -416,6 +420,13 @@ DECLARE_PER_CPU(struct rcu_data, rcu_bh_data);
 extern struct rcu_state rcu_preempt_state;
 DECLARE_PER_CPU(struct rcu_data, rcu_preempt_data);
 #endif /* #ifdef CONFIG_TREE_PREEMPT_RCU */
+
+#ifdef CONFIG_RCU_BOOST
+DECLARE_PER_CPU(unsigned int, rcu_cpu_kthread_status);
+DECLARE_PER_CPU(int, rcu_cpu_kthread_cpu);
+DECLARE_PER_CPU(unsigned int, rcu_cpu_kthread_loops);
+DECLARE_PER_CPU(char, rcu_cpu_has_work);
+#endif /* #ifdef CONFIG_RCU_BOOST */
 
 #ifndef RCU_TREE_NONCORE
 
