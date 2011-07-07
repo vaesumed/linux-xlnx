@@ -22,6 +22,7 @@
 #include <linux/delay.h>
 #include <linux/blkdev.h>
 #include <linux/seq_file.h>
+#include <linux/ratelimit.h>
 #include "md.h"
 #include "raid10.h"
 #include "raid0.h"
@@ -123,7 +124,14 @@ static void * r10buf_pool_alloc(gfp_t gfp_flags, void *data)
 	for (j = 0 ; j < nalloc; j++) {
 		bio = r10_bio->devs[j].bio;
 		for (i = 0; i < RESYNC_PAGES; i++) {
-			page = alloc_page(gfp_flags);
+			if (j == 1 && !test_bit(MD_RECOVERY_SYNC,
+						&conf->mddev->recovery)) {
+				/* we can share bv_page's during recovery */
+				struct bio *rbio = r10_bio->devs[0].bio;
+				page = rbio->bi_io_vec[i].bv_page;
+				get_page(page);
+			} else
+				page = alloc_page(gfp_flags);
 			if (unlikely(!page))
 				goto out_free_pages;
 
@@ -244,6 +252,23 @@ static inline void update_head_pos(int slot, r10bio_t *r10_bio)
 		r10_bio->devs[slot].addr + (r10_bio->sectors);
 }
 
+/*
+ * Find the disk number which triggered given bio
+ */
+static int find_bio_disk(conf_t *conf, r10bio_t *r10_bio, struct bio *bio)
+{
+	int slot;
+
+	for (slot = 0; slot < conf->copies; slot++)
+		if (r10_bio->devs[slot].bio == bio)
+			break;
+
+	BUG_ON(slot == conf->copies);
+	update_head_pos(slot, r10_bio);
+
+	return r10_bio->devs[slot].devnum;
+}
+
 static void raid10_end_read_request(struct bio *bio, int error)
 {
 	int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
@@ -277,10 +302,11 @@ static void raid10_end_read_request(struct bio *bio, int error)
 		 * oops, read error - keep the refcount on the rdev
 		 */
 		char b[BDEVNAME_SIZE];
-		if (printk_ratelimit())
-			printk(KERN_ERR "md/raid10:%s: %s: rescheduling sector %llu\n",
-			       mdname(conf->mddev),
-			       bdevname(conf->mirrors[dev].rdev->bdev,b), (unsigned long long)r10_bio->sector);
+		printk_ratelimited(KERN_ERR
+				   "md/raid10:%s: %s: rescheduling sector %llu\n",
+				   mdname(conf->mddev),
+				   bdevname(conf->mirrors[dev].rdev->bdev, b),
+				   (unsigned long long)r10_bio->sector);
 		reschedule_retry(r10_bio);
 	}
 }
@@ -289,13 +315,10 @@ static void raid10_end_write_request(struct bio *bio, int error)
 {
 	int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
 	r10bio_t *r10_bio = bio->bi_private;
-	int slot, dev;
+	int dev;
 	conf_t *conf = r10_bio->mddev->private;
 
-	for (slot = 0; slot < conf->copies; slot++)
-		if (r10_bio->devs[slot].bio == bio)
-			break;
-	dev = r10_bio->devs[slot].devnum;
+	dev = find_bio_disk(conf, r10_bio, bio);
 
 	/*
 	 * this branch is our 'one mirror IO has finished' event handler:
@@ -315,8 +338,6 @@ static void raid10_end_write_request(struct bio *bio, int error)
 		 * wait for the 'master' bio.
 		 */
 		set_bit(R10BIO_Uptodate, &r10_bio->state);
-
-	update_head_pos(slot, r10_bio);
 
 	/*
 	 *
@@ -1093,8 +1114,7 @@ static int raid10_add_disk(mddev_t *mddev, mdk_rdev_t *rdev)
 	if (rdev->raid_disk >= 0)
 		first = last = rdev->raid_disk;
 
-	if (rdev->saved_raid_disk >= 0 &&
-	    rdev->saved_raid_disk >= first &&
+	if (rdev->saved_raid_disk >= first &&
 	    conf->mirrors[rdev->saved_raid_disk].rdev == NULL)
 		mirror = rdev->saved_raid_disk;
 	else
@@ -1174,14 +1194,9 @@ static void end_sync_read(struct bio *bio, int error)
 {
 	r10bio_t *r10_bio = bio->bi_private;
 	conf_t *conf = r10_bio->mddev->private;
-	int i,d;
+	int d;
 
-	for (i=0; i<conf->copies; i++)
-		if (r10_bio->devs[i].bio == bio)
-			break;
-	BUG_ON(i == conf->copies);
-	update_head_pos(i, r10_bio);
-	d = r10_bio->devs[i].devnum;
+	d = find_bio_disk(conf, r10_bio, bio);
 
 	if (test_bit(BIO_UPTODATE, &bio->bi_flags))
 		set_bit(R10BIO_Uptodate, &r10_bio->state);
@@ -1212,17 +1227,12 @@ static void end_sync_write(struct bio *bio, int error)
 	r10bio_t *r10_bio = bio->bi_private;
 	mddev_t *mddev = r10_bio->mddev;
 	conf_t *conf = mddev->private;
-	int i,d;
+	int d;
 
-	for (i = 0; i < conf->copies; i++)
-		if (r10_bio->devs[i].bio == bio)
-			break;
-	d = r10_bio->devs[i].devnum;
+	d = find_bio_disk(conf, r10_bio, bio);
 
 	if (!uptodate)
 		md_error(mddev, conf->mirrors[d].rdev);
-
-	update_head_pos(i, r10_bio);
 
 	rdev_dec_pending(conf->mirrors[d].rdev, mddev);
 	while (atomic_dec_and_test(&r10_bio->remaining)) {
@@ -1359,20 +1369,14 @@ done:
 static void recovery_request_write(mddev_t *mddev, r10bio_t *r10_bio)
 {
 	conf_t *conf = mddev->private;
-	int i, d;
-	struct bio *bio, *wbio;
+	int d;
+	struct bio *wbio;
 
-
-	/* move the pages across to the second bio
+	/*
+	 * share the pages with the first bio
 	 * and submit the write request
 	 */
-	bio = r10_bio->devs[0].bio;
 	wbio = r10_bio->devs[1].bio;
-	for (i=0; i < wbio->bi_vcnt; i++) {
-		struct page *p = bio->bi_io_vec[i].bv_page;
-		bio->bi_io_vec[i].bv_page = wbio->bi_io_vec[i].bv_page;
-		wbio->bi_io_vec[i].bv_page = p;
-	}
 	d = r10_bio->devs[1].devnum;
 
 	atomic_inc(&conf->mirrors[d].rdev->nr_pending);
@@ -1667,12 +1671,12 @@ static void raid10d(mddev_t *mddev)
 				bio_put(bio);
 				slot = r10_bio->read_slot;
 				rdev = conf->mirrors[mirror].rdev;
-				if (printk_ratelimit())
-					printk(KERN_ERR "md/raid10:%s: %s: redirecting sector %llu to"
-					       " another mirror\n",
-					       mdname(mddev),
-					       bdevname(rdev->bdev,b),
-					       (unsigned long long)r10_bio->sector);
+				printk_ratelimited(KERN_ERR
+						   "md/raid10:%s: %s: redirecting"
+						   "sector %llu to another mirror\n",
+						   mdname(mddev),
+						   bdevname(rdev->bdev, b),
+						   (unsigned long long)r10_bio->sector);
 				bio = bio_clone_mddev(r10_bio->master_bio,
 						      GFP_NOIO, mddev);
 				r10_bio->devs[slot].bio = bio;
